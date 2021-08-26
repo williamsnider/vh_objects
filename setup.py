@@ -5,5 +5,15 @@ setup(
     packages=find_packages(),
     install_requires=[
         "scipy",
+        "numpy",
+        "trimesh",
+        "splipy",
+        "matplotlib",
+        "open3d",
+        "networkx",
+        "pytest",
+        "rtree",
+        "black"
+
     ],
 )
