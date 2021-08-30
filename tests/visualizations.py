@@ -57,9 +57,7 @@ def plot_tangent_vectors():
 def plot_controlpoints():
     cs0 = CrossSection(base_cp * 0.5, position=0.3, tilt=np.pi / 4)
     cs1 = CrossSection(base_cp * 0.5, position=0.7, rotation=np.pi)
-    ac = AxialComponent(
-        2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1]
-    )
+    ac = AxialComponent(2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1])
 
     # Controlpoints
     ac.get_controlpoints()
@@ -90,9 +88,7 @@ def plot_controlpoints():
 def plot_surface():
     cs0 = CrossSection(base_cp * 0.5, position=0.3, tilt=np.pi / 4)
     cs1 = CrossSection(base_cp * 0.5, position=0.7, rotation=np.pi)
-    ac = AxialComponent(
-        2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1]
-    )
+    ac = AxialComponent(2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1])
     ac.get_controlpoints()
     ac.make_surface()
 
@@ -128,9 +124,7 @@ def plot_surface():
 def plot_face_normals():
     cs0 = CrossSection(base_cp * 0.5, 0.3)
     cs1 = CrossSection(base_cp * 0.5, 0.7)
-    ac = AxialComponent(
-        2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1]
-    )
+    ac = AxialComponent(2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1])
     ac.get_controlpoints()
     ac.make_surface()
     ac.make_mesh()
@@ -176,9 +170,7 @@ def plot_face_normals():
 def plot_vertex_normals():
     cs0 = CrossSection(base_cp * 0.5, 0.3)
     cs1 = CrossSection(base_cp * 0.5, 0.7)
-    ac = AxialComponent(
-        2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1]
-    )
+    ac = AxialComponent(2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1])
     ac.get_controlpoints()
     ac.make_surface()
     ac.make_mesh()
@@ -418,11 +410,11 @@ def plot_meshes_as_shape():
 
 
 if __name__ == "__main__":
-    # plot_tangent_vectors()
-    # plot_controlpoints()
-    # plot_surface()
-    # plot_face_normals()
-    # plot_vertex_normals()
-    # plot_align_axial_components()
-    # plot_euler_angles()
-    plot_meshes_as_shape()
+    plot_tangent_vectors()
+    plot_controlpoints()
+    plot_surface()
+    plot_face_normals()
+    plot_vertex_normals()
+    plot_align_axial_components()
+    plot_euler_angles()
+    # plot_meshes_as_shape()
