@@ -13,7 +13,7 @@ setup(
         "networkx",
         "pytest",
         "rtree",
-        "black"
-
+        "black",
+        "pyglet",
     ],
 )
