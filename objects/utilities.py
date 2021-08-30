@@ -21,6 +21,60 @@ def open_uniform_knot_vector(num_cps, order):
 # Plotting helper functions
 
 
+def plot_projected_vertices_and_NNs_3D(full_slice, closest_NN, mesh_verts, full_path):
+
+    full_slice = full_slice.squeeze()  # Remove singleton dimension
+
+    fig, ax = plt.subplots()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.view_init(elev=-90, azim=90)
+    ax.set_xlim([full_slice.min(), full_slice.max()])
+    ax.set_ylim([full_slice.min(), full_slice.max()])
+    ax.set_zlim([full_slice.min(), full_slice.max()])
+
+    x = full_slice[:, 0]
+    y = full_slice[:, 1]
+    z = full_slice[:, 2]
+    ax.scatter(x, y, z, "b*")
+
+    x = mesh_verts[::25, 0]
+    y = mesh_verts[::25, 1]
+    z = mesh_verts[::25, 2]
+    ax.scatter(x, y, z, "k.")
+
+    # Plot nearest neighbors
+    for slice_i, NN_IDX in enumerate(closest_NN):
+
+        # for mesh_i in NN_IDX:
+        #     p1 = full_slice_yz[slice_i, :]
+        #     p2 = mesh_verts_yz[mesh_i, :]
+
+        #     x, y = zip(p1, p2)
+        #     ax.plot(x, y, "g-")
+
+        p1 = full_slice[slice_i, :]
+        p2 = mesh_verts[NN_IDX, :]
+
+        x, y, z = zip(p1, p2)
+        ax.plot(x, y, z, "g-")
+
+    # # Plot nearest neighbors
+    # x, y = mesh_verts_yz[closest_NN].T
+    # ax.plot(x.ravel(), y.ravel(), "r-")
+
+    # # Plot slice points
+    # x, y = full_slice_yz.T
+    # ax.plot(x.ravel(), y.ravel(), "r-")
+
+    # Plot shortest path
+    x, y, z = mesh_verts[full_path].T
+    ax.plot(x, y, z, "r-")
+    plt.show()
+
+
 def plot_projected_vertices_and_NNs(full_slice_yz, closest_NN, mesh_verts_yz, full_path):
 
     fig, ax = plt.subplots()
@@ -36,8 +90,6 @@ def plot_projected_vertices_and_NNs(full_slice_yz, closest_NN, mesh_verts_yz, fu
     # y = mesh_verts_yz[:, 0]
     # z = mesh_verts_yz[:, 1]
     # ax.plot(y, z, "k.")
-
-    # TODO: Why is 611731 not in full_path
 
     # Plot nearest neighbors
     for slice_i, NN_IDX in enumerate(closest_NN):
