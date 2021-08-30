@@ -2,13 +2,12 @@ import trimesh
 import numpy as np
 from objects.parameters import SAMPLING_DENSITY_V, SAMPLING_DENSITY_U, ORDER
 from objects.utilities import open_uniform_knot_vector
-import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
 import scipy
 import networkx as nx
 from splipy import BSplineBasis, Curve, Surface
 from objects.utilities import (
     plot_projected_vertices_and_NNs,
+    plot_projected_vertices_and_NNs_3D,
     plot_mesh_derivatives,
     plot_surface_linking_axial_components,
 )
@@ -26,6 +25,8 @@ class Shape:
     def fuse_meshes(self, parent_ac, child_ac):
 
         parent_mesh = parent_ac.mesh
+
+        # Define functions to carry out fusion in steps
 
         def find_join_slice_along_child(parent_mesh, child_ac, num_steps_long_axis, num_steps_round_axis):
             """Find slice along the child that is just outside the parent_ac."""
@@ -100,7 +101,7 @@ class Shape:
             self.mesh_verts_yz = mesh_verts_yz
 
             # Identify the 5 nearest neighbors for each point on the slice
-            NUM_NN = 5
+            NUM_NN = 10
             tree = scipy.spatial.KDTree(mesh_verts_yz)
             dd, ii = tree.query(full_slice_yz, k=NUM_NN)
 
@@ -233,16 +234,6 @@ class Shape:
 
             curve = Curve(basis1, c_V, rational=False)
 
-            # Get points
-            t = np.linspace(curve.start(), curve.end(), 100).ravel()
-            x, y, z = curve(t).T
-            cx, cy, cz = curve.controlpoints.T
-            fig = plt.figure()
-            ax = plt.axes(projection="3d")
-            ax.plot3D(x, y, z, ".")
-            ax.plot3D(cx, cy, cz, "rx")
-            plt.show()
-
             # Basis 2 - along the major axis of the axial component
             num_rows = 4  # End termini + 2 intermediate points to determine slope
             knot = open_uniform_knot_vector(num_rows, ORDER)
@@ -263,19 +254,63 @@ class Shape:
 
             return surface, c_V, c_T
 
+        def remove_interior_vertices_from_parent(parent_mesh, full_path):
+
+            parent_verts = parent_mesh.vertices
+            parent_faces = parent_mesh.faces
+
+            # Find middle point (assume this is within region we want to cut out)
+            centerpoint = parent_verts[full_path].mean(axis=0)
+
+            # Find nearest neighbor of actual vertex to this centerpoint
+            tree = scipy.spatial.KDTree(parent_verts)
+            _, vert_idx = tree.query(centerpoint, k=1)
+
+            interior_verts_full = []
+            interior_verts_new = [vert_idx]
+            while interior_verts_new != []:
+                print(len(interior_verts_new))
+                new_verts = []
+
+                # Find neighboring vertices
+                for v_i in interior_verts_new:
+
+                    # Find faces using this vertex
+                    mask_col_0 = parent_faces[:, 0] == v_i
+                    mask_col_1 = parent_faces[:, 1] == v_i
+                    mask_col_2 = parent_faces[:, 2] == v_i
+                    mask_union = np.logical_or(np.logical_or(mask_col_0, mask_col_1), mask_col_2)
+                    neighboring_verts = list(set(parent_faces[mask_union, :].ravel()))
+
+                    # Remove verts in full_path and interior_verts_full
+                    overlap_full_path = set(neighboring_verts) & set(full_path)
+                    overlap_interior_verts_full = set(neighboring_verts) & set(interior_verts_full)
+                    overlap = set.union(overlap_full_path, overlap_interior_verts_full)
+
+                    for o in overlap:
+                        neighboring_verts.remove(o)
+
+                    new_verts.extend(neighboring_verts)
+
+                interior_verts_full.extend(new_verts)
+                interior_verts_new = new_verts
+
+        print("done")
+        # Call the above functions to fuse the child and parent
         unique_NN, closest_NN = project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist)
 
         full_path = find_path_between_projected_vertices(parent_mesh, unique_NN, closest_NN)
-
-        plot_projected_vertices_and_NNs(self.full_slice_yz, closest_NN, self.mesh_verts_yz, full_path)
+        plot_projected_vertices_and_NNs_3D(full_slice, closest_NN, parent_mesh.vertices, full_path)
+        # plot_projected_vertices_and_NNs(self.full_slice_yz, closest_NN, self.mesh_verts_yz, full_path)
 
         surface, c_V, c_T = create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN, u)
 
-        parent_mesh, child_ac, full_path, c_V, c_T
-
-        plot_surface_linking_axial_components(parent_mesh, child_ac, surface)
+        # plot_surface_linking_axial_components(parent_mesh, child_ac, surface)
 
         # Delete the hole in the parent mesh
+        remove_interior_vertices_from_parent(parent_mesh, full_path)
+        # Identify centerpoint that is definitely in the deletable region
+        # Loop out and delete neighboring vertices (but stop once vertices on the full_path are reached). Stop once no more new vertices are reached.
 
         # Stitch together the two
 
