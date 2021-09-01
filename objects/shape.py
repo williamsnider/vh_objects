@@ -1,7 +1,8 @@
+from copy import Error
 import trimesh
 import numpy as np
 from objects.parameters import SAMPLING_DENSITY_V, SAMPLING_DENSITY_U, ORDER
-from objects.utilities import open_uniform_knot_vector
+from objects.utilities import open_uniform_knot_vector, calc_face_normals
 import scipy
 import networkx as nx
 from splipy import BSplineBasis, Curve, Surface
@@ -256,46 +257,78 @@ class Shape:
 
         def remove_interior_vertices_from_parent(parent_mesh, full_path):
 
+            # Strategy 1 - networkx
             parent_verts = parent_mesh.vertices
-            parent_faces = parent_mesh.faces
 
             # Find middle point (assume this is within region we want to cut out)
             centerpoint = parent_verts[full_path].mean(axis=0)
 
             # Find nearest neighbor of actual vertex to this centerpoint
             tree = scipy.spatial.KDTree(parent_verts)
-            _, vert_idx = tree.query(centerpoint, k=1)
+            _, center_vert_idx = tree.query(centerpoint, k=1)
 
-            interior_verts_full = []
-            interior_verts_new = [vert_idx]
-            while interior_verts_new != []:
-                print(len(interior_verts_new))
-                new_verts = []
+            edges = parent_mesh.edges_unique
 
-                # Find neighboring vertices
-                for v_i in interior_verts_new:
+            # create the graph
+            g = nx.Graph()
+            g.add_edges_from(edges)
 
-                    # Find faces using this vertex
-                    mask_col_0 = parent_faces[:, 0] == v_i
-                    mask_col_1 = parent_faces[:, 1] == v_i
-                    mask_col_2 = parent_faces[:, 2] == v_i
-                    mask_union = np.logical_or(np.logical_or(mask_col_0, mask_col_1), mask_col_2)
-                    neighboring_verts = list(set(parent_faces[mask_union, :].ravel()))
+            # Remove nodes comprising full_path
+            g.remove_nodes_from(full_path)
 
-                    # Remove verts in full_path and interior_verts_full
-                    overlap_full_path = set(neighboring_verts) & set(full_path)
-                    overlap_interior_verts_full = set(neighboring_verts) & set(interior_verts_full)
-                    overlap = set.union(overlap_full_path, overlap_interior_verts_full)
+            # Find vertices inside full_path
+            interior = min(nx.connected_components(g), key=len)
 
-                    for o in overlap:
-                        neighboring_verts.remove(o)
+            # Recreate graph, subtract out vertices inside full_path
+            g = nx.Graph()
+            g.add_edges_from(edges)
+            g.remove_nodes_from(interior)
 
-                    new_verts.extend(neighboring_verts)
+            # Confirm center_vert is NOT in subgraph
+            assert (
+                center_vert_idx not in g.nodes
+            ), "Subgraph contains center_vert_idx - possibly chose the wrong subgraph."
 
-                interior_verts_full.extend(new_verts)
-                interior_verts_new = new_verts
+            # Convert subgraph into a mesh
+            verts = parent_mesh.vertices[g.nodes]
 
-        print("done")
+            # TODO: probably a faster way to do this w/o for loop
+            face_indices = []
+            for i, (v1, v2, v3) in enumerate(parent_mesh.faces):
+                if v1 not in g.nodes:
+                    continue
+                elif v2 not in g.nodes:
+                    continue
+                elif v3 not in g.nodes:
+                    continue
+                else:
+                    face_indices.append(i)
+
+            # Renumber vertices in faces
+            old_indices = list(g.nodes)
+            new_indices = np.arange(0, len(g.nodes))
+            renumber_dict = {o: n for o, n in zip(old_indices, new_indices)}
+            faces = parent_mesh.faces[face_indices]
+            faces = faces.ravel()
+            faces = [renumber_dict[v] for v in faces]
+            faces = np.array(faces)
+            faces = faces.reshape((-1, 3))
+            face_norms = calc_face_normals(verts, faces)
+            vert_norms = trimesh.geometry.mean_vertex_normals(verts.shape[0], faces, face_norms)
+
+            mesh = trimesh.Trimesh(
+                vertices=verts,
+                faces=faces,
+                face_normals=face_norms,
+                vertex_normals=vert_norms,
+                process=False,
+            )
+
+            return mesh
+
+        def stitch_parent_and_child(parent_edge_vertices, junction_edge_vertices, parent_mesh, child_mesh):
+            pass
+
         # Call the above functions to fuse the child and parent
         unique_NN, closest_NN = project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist)
 
@@ -308,11 +341,14 @@ class Shape:
         # plot_surface_linking_axial_components(parent_mesh, child_ac, surface)
 
         # Delete the hole in the parent mesh
-        remove_interior_vertices_from_parent(parent_mesh, full_path)
-        # Identify centerpoint that is definitely in the deletable region
-        # Loop out and delete neighboring vertices (but stop once vertices on the full_path are reached). Stop once no more new vertices are reached.
+        new_mesh = remove_interior_vertices_from_parent(parent_mesh, full_path)
+
+        new_mesh = stitch_parent_and_child(parent_edge_vertices, junction_edge_vertices, parent_mesh, child_mesh)
 
         # Stitch together the two
+        # For the smaller sequence, find the nearest neighbor of each vertex to points in the other sequence
+        # Between these pairings, link points in the larger sequence to the first elmeent of each gap in the shorter sequence
+        # Result is a list of edges which we will convert to faces
 
         pass
 

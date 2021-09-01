@@ -11,7 +11,7 @@ from objects.parameters import (
     SAMPLING_DENSITY_U,
     SAMPLING_DENSITY_V,
 )
-from objects.utilities import open_uniform_knot_vector
+from objects.utilities import open_uniform_knot_vector, calc_face_normals
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 import copy
@@ -51,12 +51,8 @@ class AxialComponent:
 
         assert self.length > 0, "axial_component length must be greater than 0."
         assert self.curvature >= 0, "Curvature cannot be negative."
-        assert (
-            self.length * self.curvature <= 2 * np.pi
-        ), "Axial component is too curved and loops back into itself."
-        assert (
-            type(self.cross_sections) is list
-        ), "cross_sections must be input as a list."
+        assert self.length * self.curvature <= 2 * np.pi, "Axial component is too curved and loops back into itself."
+        assert type(self.cross_sections) is list, "cross_sections must be input as a list."
 
         current_position = -1
         for cs in self.cross_sections:
@@ -65,9 +61,7 @@ class AxialComponent:
                 position > current_position
             ), "cross_sections must be ordered by increasing position, and these positions cannot repeat"
 
-        assert (
-            type(self.euler_angles) is np.ndarry
-        ), "Euler angles must be input as a numpy array"
+        assert type(self.euler_angles) is np.ndarry, "Euler angles must be input as a numpy array"
 
         assert self.euler_angles.shape == (
             1,
@@ -105,9 +99,7 @@ class AxialComponent:
 
         else:
             # Translation matrix
-            parent_join_point = self.parent_axial_component.r(
-                self.position_along_parent
-            )
+            parent_join_point = self.parent_axial_component.r(self.position_along_parent)
             child_join_point = self.r(self.position_along_self, local=True)
             self.child_join_point = child_join_point
             self.parent_join_point = parent_join_point
@@ -389,12 +381,7 @@ class AxialComponent:
 
         # Determine size of controlpoint array
         num_cross_sections = len(self.cross_sections)
-        num_rows = (
-            NUM_ENDPOINTS
-            + NUM_ENDPOINTS_SLOPE
-            + NUM_CROSS_SECTION_SLOPE
-            + num_cross_sections
-        )
+        num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + NUM_CROSS_SECTION_SLOPE + num_cross_sections
         self.num_rows = num_rows
         num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
 
@@ -411,12 +398,8 @@ class AxialComponent:
         # (-1, :, :) - controlpoints at endpoint 1.0
         # Assign controlpoints - endpoints
         controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
-        controlpoints[0, :, :] = np.repeat(
-            self.r(0.0), num_cp_per_cross_section, axis=0
-        )  # 0.0 endpoint
-        controlpoints[-1, :, :] = np.repeat(
-            self.r(1.0), num_cp_per_cross_section, axis=0
-        )  # 1.0 endpoint
+        controlpoints[0, :, :] = np.repeat(self.r(0.0), num_cp_per_cross_section, axis=0)  # 0.0 endpoint
+        controlpoints[-1, :, :] = np.repeat(self.r(1.0), num_cp_per_cross_section, axis=0)  # 1.0 endpoint
 
         # Assign controlpoints - cross sections
         idx = 3
@@ -546,9 +529,7 @@ class AxialComponent:
         v = np.linspace(vs, ve, vv)
         verts_array = self.surface(u, v)
         verts = np.zeros(((uu) * (vv - 2) + NUM_ENDPOINTS, 3))
-        verts[:-2, :] = verts_array[:, 1:-1, :].reshape(
-            -1, 3, order="F"
-        )  # Skip endpoints
+        verts[:-2, :] = verts_array[:, 1:-1, :].reshape(-1, 3, order="F")  # Skip endpoints
         verts[-2, :] = self.surface(0, 0)  # Add 0.0 endpoint
         verts[-1, :] = self.surface(1, 1)  # Add 1.0 endpoint
         self.verts = verts
@@ -607,23 +588,11 @@ class AxialComponent:
 
         ####################
         # Face normals
-        p0 = verts[faces[:, 0]]
-        p1 = verts[faces[:, 1]]
-        p2 = verts[faces[:, 2]]
-
-        # Subtract to form vectors
-        vec0 = p1 - p0
-        vec1 = p2 - p0
-
-        # Calculate cross product
-        cross = np.cross(vec0, vec1)
-        cross /= np.linalg.norm(cross, axis=1, keepdims=True)
-        face_norms = cross
-        self.face_norms = face_norms
+        self.face_norms = calc_face_normals(verts, faces)
 
         ####################
         # Vertex normals
-        vert_norms = trimesh.geometry.mean_vertex_normals(num_verts, faces, face_norms)
+        self.vert_norms = trimesh.geometry.mean_vertex_normals(num_verts, self.faces, self.face_norms)
 
         # vert_norms = np.zeros(verts.shape)
 
@@ -701,14 +670,13 @@ class AxialComponent:
         # normal /= np.linalg.norm(normal)
         # vert_norms[endpoint_idx] = normal
 
-        self.vert_norms = vert_norms
         ####################
         # Construct trimesh
         self.mesh = trimesh.Trimesh(
             vertices=verts,
             faces=faces,
-            face_normals=face_norms,
-            vertex_normals=vert_norms,
+            face_normals=self.face_norms,
+            vertex_normals=self.vert_norms,
             process=False,
         )
 

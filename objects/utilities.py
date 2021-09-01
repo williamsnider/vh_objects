@@ -18,6 +18,27 @@ def open_uniform_knot_vector(num_cps, order):
 
 
 ##########
+# Mesh Functions
+
+
+def calc_face_normals(verts, faces):
+    p0 = verts[faces[:, 0]]
+    p1 = verts[faces[:, 1]]
+    p2 = verts[faces[:, 2]]
+
+    # Subtract to form vectors
+    vec0 = p1 - p0
+    vec1 = p2 - p0
+
+    # Calculate cross product
+    cross = np.cross(vec0, vec1)
+    cross /= np.linalg.norm(cross, axis=1, keepdims=True)
+    face_norms = cross
+
+    return face_norms
+
+
+##########
 # Plotting helper functions
 
 
