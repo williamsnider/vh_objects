@@ -66,7 +66,7 @@ class Shape:
             u = np.linspace(us, ue, uu, endpoint=False)
             slice_dist = v[v > slice_dist_approx][0]  # First value of v > slice_dist_approx
             full_slice = child_ac.surface(u, slice_dist)
-            return full_slice, slice_dist, u
+            return full_slice, slice_dist, u, slice_dist_approx
 
         def project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist):
             ### Expand this slice and project it onto the surface of the parent_mesh.
@@ -191,13 +191,6 @@ class Shape:
             full_path.append(full_path[0])  # Add first element to end to close loop
             return full_path
 
-        full_slice, slice_dist, u = find_join_slice_along_child(
-            parent_mesh,
-            child_ac,
-            num_steps_long_axis=10,
-            num_steps_round_axis=6,
-        )
-
         def create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN, u):
 
             # Identify derivatives at points along parent_mesh. mesh
@@ -254,6 +247,28 @@ class Shape:
             self.surface = surface
 
             return surface, c_V, c_T
+
+        def stitch_child_and_junction(child_ac, surface, slice_dist_approx):
+
+            # Sample surface of junction
+            uu = SAMPLING_DENSITY_U
+            vv = SAMPLING_DENSITY_V
+            (us, vs) = surface.start()
+            (ue, ve) = surface.end()
+            u = np.linspace(us, ue, uu, endpoint=False)
+            v = np.linspace(vs, ve, vv)
+            junction_verts_array = surface(u, v)
+
+            # Get vertices of child, starting at the full_slice
+            (us, vs) = child_ac.surface.start()
+            (ue, ve) = child_ac.surface.end()
+            v = np.linspace(vs, ve, vv)
+            u = np.linspace(us, ue, uu, endpoint=False)
+            v_slices = v[v > slice_dist_approx]
+            child_verts_array = child_ac.surface(u, v_slices)
+            child_mesh = None
+
+            return child_mesh
 
         def remove_interior_vertices_from_parent(parent_mesh, full_path):
 
@@ -313,6 +328,9 @@ class Shape:
             faces = [renumber_dict[v] for v in faces]
             faces = np.array(faces)
             faces = faces.reshape((-1, 3))
+
+            # Renumber vertices in full_path
+            full_path_new = [renumber_dict[v] for v in full_path]
             face_norms = calc_face_normals(verts, faces)
             vert_norms = trimesh.geometry.mean_vertex_normals(verts.shape[0], faces, face_norms)
 
@@ -324,12 +342,19 @@ class Shape:
                 process=False,
             )
 
-            return mesh
+            return mesh, full_path_new
 
         def stitch_parent_and_child(parent_edge_vertices, junction_edge_vertices, parent_mesh, child_mesh):
             pass
 
         # Call the above functions to fuse the child and parent
+        full_slice, slice_dist, u, slice_dist_approx = find_join_slice_along_child(
+            parent_mesh,
+            child_ac,
+            num_steps_long_axis=10,
+            num_steps_round_axis=6,
+        )
+
         unique_NN, closest_NN = project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist)
 
         full_path = find_path_between_projected_vertices(parent_mesh, unique_NN, closest_NN)
@@ -337,13 +362,13 @@ class Shape:
         # plot_projected_vertices_and_NNs(self.full_slice_yz, closest_NN, self.mesh_verts_yz, full_path)
 
         surface, c_V, c_T = create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN, u)
-
+        child_mesh = stitch_child_and_junction(child_ac, surface, slice_dist_approx)
         # plot_surface_linking_axial_components(parent_mesh, child_ac, surface)
 
         # Delete the hole in the parent mesh
-        new_mesh = remove_interior_vertices_from_parent(parent_mesh, full_path)
+        new_mesh, full_path_new = remove_interior_vertices_from_parent(parent_mesh, full_path)
 
-        new_mesh = stitch_parent_and_child(parent_edge_vertices, junction_edge_vertices, parent_mesh, child_mesh)
+        # new_mesh = stitch_parent_and_child(parent_edge_vertices, junction_edge_vertices, parent_mesh, child_mesh)
 
         # Stitch together the two
         # For the smaller sequence, find the nearest neighbor of each vertex to points in the other sequence
