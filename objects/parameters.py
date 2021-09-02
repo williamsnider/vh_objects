@@ -6,5 +6,5 @@ NUM_ENDPOINTS_SLOPE = 2  # Extra controlpoints that determine slope of spline at
 NUM_CROSS_SECTION_SLOPE = (
     2  # Extra controlpoints that determine slope of spline at the cross sections closest to the endpoints
 )
-SAMPLING_DENSITY_U = 50  # How densely to sample along round axis of 'cylinder'
-SAMPLING_DENSITY_V = 100  # How densely to sample along long axis of 'cylinder'
+SAMPLING_DENSITY_U = 10  # How densely to sample along round axis of 'cylinder'
+SAMPLING_DENSITY_V = 20  # How densely to sample along long axis of 'cylinder'

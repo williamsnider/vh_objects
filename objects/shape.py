@@ -7,11 +7,13 @@ import scipy
 import networkx as nx
 from splipy import BSplineBasis, Curve, Surface
 from objects.utilities import (
+    remove_subsurface_from_mesh,
     plot_projected_vertices_and_NNs,
     plot_projected_vertices_and_NNs_3D,
     plot_mesh_derivatives,
     plot_surface_linking_axial_components,
 )
+import matplotlib.pyplot as plt
 
 
 class Shape:
@@ -240,7 +242,9 @@ class Shape:
             cp[:, 1, :] = c_V - c_T * SCALE_FACTOR
             cp[:, 2, :] = p_V - p_B * SCALE_FACTOR
             cp[:, 3, :] = p_V
+            # cp = cp.reshape(num_rows * num_cp_per_cross_section, cp.shape[2], order="F")
             cp = cp.reshape(num_rows * num_cp_per_cross_section, cp.shape[2], order="F")
+            # XXX: Possibly above change caused problems
 
             # Surface
             surface = Surface(basis1, basis2, cp, rational=False)
@@ -248,7 +252,7 @@ class Shape:
 
             return surface, c_V, c_T
 
-        def stitch_child_and_junction(child_ac, surface, slice_dist_approx):
+        def stitch_child_and_junction(child_ac, surface, slice_dist, full_slice):
 
             # Sample surface of junction
             uu = SAMPLING_DENSITY_U
@@ -259,15 +263,82 @@ class Shape:
             v = np.linspace(vs, ve, vv)
             junction_verts_array = surface(u, v)
 
-            # Get vertices of child, starting at the full_slice
-            (us, vs) = child_ac.surface.start()
-            (ue, ve) = child_ac.surface.end()
-            v = np.linspace(vs, ve, vv)
-            u = np.linspace(us, ue, uu, endpoint=False)
-            v_slices = v[v > slice_dist_approx]
-            child_verts_array = child_ac.surface(u, v_slices)
-            child_mesh = None
+            v_i = np.where(v == slice_dist)[0] - 1  # SHIFT since first row is deleted for endpoint
+            full_slice_idx = np.arange(uu * v_i, uu * (v_i + 1))
 
+            # # # Plot to figure out what's going on
+            # fig = plt.figure()
+            # ax = plt.axes(projection="3d")
+            # ax.set_xlabel("x")
+            # ax.set_ylabel("y")
+            # ax.set_zlabel("z")
+            # ax.view_init(elev=-90, azim=90)
+            # for i, points in enumerate([np.squeeze(full_slice), child_ac.mesh.vertices[full_slice_idx]]):
+
+            #     x, y, z = points.T
+
+            #     if i == 0:
+            #         ax.plot(x, y, z, "*", color="green")
+            #     if i == 1:
+            #         ax.plot(x, y, z, ".", color="red")
+
+            assert np.all(np.isclose(np.squeeze(full_slice), child_ac.mesh.vertices[full_slice_idx]))
+
+            # Get vertices of child (removing all of those before the full_slice)
+            endpoint_00 = child_ac.verts.shape[0] - 2  # Index of endpoint at 0.0 position along child
+            endpoint_10 = child_ac.verts.shape[0] - 1  # Index of endpoint at 1.0 position along child
+            endpoint_of_subgraph_to_delete = endpoint_00
+            child_mesh, full_slice_idx_new = remove_subsurface_from_mesh(
+                child_ac.mesh, full_slice_idx, endpoint_of_subgraph_to_delete
+            )
+
+            # Fuse junction and child
+            # Since there are the same number of vertices and they already overlap, we just need to renumber the vertices on the child.
+
+            # Verts
+            junction_verts = junction_verts_array.reshape(-1, 3, order="F")
+
+            # Faces - CCW Winding (for consistent normals)
+            # faces = np.zeros((uu * (vv - 2) * 2, 3), dtype="int")
+            faces = np.zeros((uu * (vv - 1) * 2, 3), dtype="int")
+            faces_array = np.zeros((uu * 2, vv - 1, 3), dtype="int")
+            base_column = np.zeros((uu * 2, 3), dtype="int")
+            base_column[::2, 0] = np.arange(0, uu)
+            base_column[1::2, 0] = np.arange(0, uu)
+            base_column[::2, 1] = np.arange(uu, uu * 2)
+            base_column[1::2, 1] = np.arange(uu + 1, uu * 2 + 1)
+            base_column[::2, 2] = np.arange(uu + 1, uu * 2 + 1)
+            base_column[1:-1:2, 2] = np.arange(1, uu)
+            base_column[-2, 2] = uu  # Fix wrapping
+            base_column[-1, 1] = uu  # Fix wrapping
+            base_column[:, 1:] = base_column[:, :-3:-1]  # Reverse for CCW winding
+
+            # Grid faces
+            for i in range(vv - 1):
+                add_to_column = i * uu
+                column = base_column + add_to_column
+                start = uu * i * 2
+                stop = uu * (i + 1) * 2
+                faces[start:stop, :] = column
+                faces_array[:, i, :] = column
+            junction_faces = faces
+
+            junction_face_normals = calc_face_normals(junction_verts, junction_faces)
+            num_verts = uu * vv
+            junction_vert_normals = trimesh.geometry.mean_vertex_normals(
+                num_verts, junction_faces, junction_face_normals
+            )
+            mesh = trimesh.Trimesh(
+                vertices=junction_verts,
+                faces=junction_faces,
+                face_normals=junction_face_normals,
+                vertex_normals=junction_vert_normals,
+                process=False,
+            )
+            mesh.invert()
+            mesh.show()
+
+            # TODO: Why are hte normals improperly oriented?
             return child_mesh
 
         def remove_interior_vertices_from_parent(parent_mesh, full_path):
@@ -282,65 +353,7 @@ class Shape:
             tree = scipy.spatial.KDTree(parent_verts)
             _, center_vert_idx = tree.query(centerpoint, k=1)
 
-            edges = parent_mesh.edges_unique
-
-            # create the graph
-            g = nx.Graph()
-            g.add_edges_from(edges)
-
-            # Remove nodes comprising full_path
-            g.remove_nodes_from(full_path)
-
-            # Find vertices inside full_path
-            interior = min(nx.connected_components(g), key=len)
-
-            # Recreate graph, subtract out vertices inside full_path
-            g = nx.Graph()
-            g.add_edges_from(edges)
-            g.remove_nodes_from(interior)
-
-            # Confirm center_vert is NOT in subgraph
-            assert (
-                center_vert_idx not in g.nodes
-            ), "Subgraph contains center_vert_idx - possibly chose the wrong subgraph."
-
-            # Convert subgraph into a mesh
-            verts = parent_mesh.vertices[g.nodes]
-
-            # TODO: probably a faster way to do this w/o for loop
-            face_indices = []
-            for i, (v1, v2, v3) in enumerate(parent_mesh.faces):
-                if v1 not in g.nodes:
-                    continue
-                elif v2 not in g.nodes:
-                    continue
-                elif v3 not in g.nodes:
-                    continue
-                else:
-                    face_indices.append(i)
-
-            # Renumber vertices in faces
-            old_indices = list(g.nodes)
-            new_indices = np.arange(0, len(g.nodes))
-            renumber_dict = {o: n for o, n in zip(old_indices, new_indices)}
-            faces = parent_mesh.faces[face_indices]
-            faces = faces.ravel()
-            faces = [renumber_dict[v] for v in faces]
-            faces = np.array(faces)
-            faces = faces.reshape((-1, 3))
-
-            # Renumber vertices in full_path
-            full_path_new = [renumber_dict[v] for v in full_path]
-            face_norms = calc_face_normals(verts, faces)
-            vert_norms = trimesh.geometry.mean_vertex_normals(verts.shape[0], faces, face_norms)
-
-            mesh = trimesh.Trimesh(
-                vertices=verts,
-                faces=faces,
-                face_normals=face_norms,
-                vertex_normals=vert_norms,
-                process=False,
-            )
+            mesh, full_path_new = remove_subsurface_from_mesh(parent_mesh, full_path, center_vert_idx)
 
             return mesh, full_path_new
 
@@ -362,7 +375,7 @@ class Shape:
         # plot_projected_vertices_and_NNs(self.full_slice_yz, closest_NN, self.mesh_verts_yz, full_path)
 
         surface, c_V, c_T = create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN, u)
-        child_mesh = stitch_child_and_junction(child_ac, surface, slice_dist_approx)
+        child_mesh = stitch_child_and_junction(child_ac, surface, slice_dist, full_slice)
         # plot_surface_linking_axial_components(parent_mesh, child_ac, surface)
 
         # Delete the hole in the parent mesh
