@@ -2,6 +2,8 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import trimesh
+import networkx as nx
 
 ##########
 # B-Spline Functions
@@ -36,6 +38,70 @@ def calc_face_normals(verts, faces):
     face_norms = cross
 
     return face_norms
+
+
+def remove_subsurface_from_mesh(mesh, closed_path, point_in_subsurface_to_remove):
+
+    edges = mesh.edges_unique
+
+    # Create graph
+    g = nx.Graph()
+    g.add_edges_from(edges)
+    g.remove_nodes_from(closed_path)  # Split along closed path
+    connected_components = [c.copy() for c in nx.connected_components(g)]
+
+    assert len(connected_components) == 2, "Mesh not split into 2 subsurfaces. closed_path likely not truly closed."
+
+    # Choose subsurface containing the point to remove (we will delete this subsurface)
+    for cc in connected_components:
+        if point_in_subsurface_to_remove in cc:
+            break
+    else:
+        raise ValueError("No subsurface contains the point_in_subsurface_to_remove")
+
+    # Recreate graph, subtract out vertices of subsurface we are dleeting
+    g = nx.Graph()
+    g.add_edges_from(edges)
+    g.remove_nodes_from(cc)
+
+    # Convert subgraph into a mesh
+    verts = mesh.vertices[g.nodes]
+
+    # TODO: probably a faster way to do this w/o for loop
+    face_indices = []
+    for i, (v1, v2, v3) in enumerate(mesh.faces):
+        if v1 not in g.nodes:
+            continue
+        elif v2 not in g.nodes:
+            continue
+        elif v3 not in g.nodes:
+            continue
+        else:
+            face_indices.append(i)
+
+    # Renumber vertices in faces
+    old_indices = list(g.nodes)
+    new_indices = np.arange(0, len(g.nodes))
+    renumber_dict = {o: n for o, n in zip(old_indices, new_indices)}
+    faces = mesh.faces[face_indices]
+    faces = faces.ravel()
+    faces = [renumber_dict[v] for v in faces]
+    faces = np.array(faces)
+    faces = faces.reshape((-1, 3))
+
+    # Renumber vertices in closed_path
+    closed_path_renumbered = [renumber_dict[v] for v in closed_path]
+    face_norms = calc_face_normals(verts, faces)
+    vert_norms = trimesh.geometry.mean_vertex_normals(verts.shape[0], faces, face_norms)
+
+    mesh = trimesh.Trimesh(
+        vertices=verts,
+        faces=faces,
+        face_normals=face_norms,
+        vertex_normals=vert_norms,
+        process=False,
+    )
+    return mesh, closed_path_renumbered
 
 
 ##########
