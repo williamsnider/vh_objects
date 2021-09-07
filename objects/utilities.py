@@ -273,3 +273,33 @@ def plot_surface_linking_axial_components(parent_mesh, child_ac, surface):
     ax.plot3D(sx, sy, sz, "b.")
 
     plt.show()
+
+
+def plot_mesh_vertices_and_normals(mesh):
+
+    # Plot mesh vertices and normals
+    verts = mesh.vertices
+    norms = mesh.vertex_normals
+
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.view_init(elev=-90, azim=90)
+
+    # Vertices
+    x, y, z = verts.T
+    ax.plot3D(x, y, z, "k.")
+
+    # Normals
+    for i in range(norms.shape[0]):
+
+        p1 = verts[i]
+        p2 = p1 + norms[i] * 0.1
+
+        x, y, z = zip(p1, p2)
+        ax.plot3D(x, y, z, "b-")
+
+    # Plot parent
+    plt.show()
