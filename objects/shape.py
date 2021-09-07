@@ -2,7 +2,7 @@ from copy import Error
 import trimesh
 import numpy as np
 from objects.parameters import SAMPLING_DENSITY_V, SAMPLING_DENSITY_U, ORDER
-from objects.utilities import open_uniform_knot_vector, calc_face_normals
+from objects.utilities import open_uniform_knot_vector, calc_face_normals, plot_mesh_vertices_and_normals
 import scipy
 import networkx as nx
 from splipy import BSplineBasis, Curve, Surface
@@ -259,7 +259,10 @@ class Shape:
             vv = SAMPLING_DENSITY_V
             (us, vs) = surface.start()
             (ue, ve) = surface.end()
-            u = np.linspace(us, ue, uu, endpoint=False)
+            # u = np.linspace(us, ue, uu, endpoint=False)
+            u = np.linspace(
+                ue, us, uu, endpoint=False
+            )  # Reverse so that normals point outwards - Not 100% sure why this works.
             v = np.linspace(vs, ve, vv)
             junction_verts_array = surface(u, v)
 
@@ -335,10 +338,6 @@ class Shape:
                 vertex_normals=junction_vert_normals,
                 process=False,
             )
-            mesh.invert()
-            mesh.show()
-
-            # TODO: Why are hte normals improperly oriented?
             return child_mesh
 
         def remove_interior_vertices_from_parent(parent_mesh, full_path):
