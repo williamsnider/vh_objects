@@ -2,7 +2,12 @@ from copy import Error
 import trimesh
 import numpy as np
 from objects.parameters import SAMPLING_DENSITY_V, SAMPLING_DENSITY_U, ORDER
-from objects.utilities import open_uniform_knot_vector, calc_face_normals, plot_mesh_vertices_and_normals
+from objects.utilities import (
+    open_uniform_knot_vector,
+    calc_face_normals,
+    plot_mesh_vertices_and_normals,
+    plot_child_and_junction_edges,
+)
 import scipy
 import networkx as nx
 from splipy import BSplineBasis, Curve, Surface
@@ -331,13 +336,68 @@ class Shape:
             junction_vert_normals = trimesh.geometry.mean_vertex_normals(
                 num_verts, junction_faces, junction_face_normals
             )
-            mesh = trimesh.Trimesh(
+            junction_mesh = trimesh.Trimesh(
                 vertices=junction_verts,
                 faces=junction_faces,
                 face_normals=junction_face_normals,
                 vertex_normals=junction_vert_normals,
                 process=False,
             )
+
+            # TODO: Figure out why child and junction are not aligning on edge - they're close enough
+            # TODO:
+            # Stitch junction and child meshes
+            child_edge_idx = full_slice_idx_new
+            junction_edge_idx = np.arange(uu * (0), uu * (1))  # TODO: Adjust for other end
+            junction_edge_idx = junction_edge_idx[::-1]  # Flip order to align with child_mesh ordering
+            junction_edge_idx = np.roll(junction_edge_idx, 1)  # TODO: Figure out why this shift is necessary
+
+            # Plot edges
+            plot_child_and_junction_edges(child_mesh, child_edge_idx, junction_mesh, junction_edge_idx)
+
+            # Shift junction edge vertices to align with child edge
+            junction_mesh.vertices[junction_edge_idx] = child_mesh.vertices[child_edge_idx]
+
+            # Increase idx of each junction vertex to account for child vertices
+            num_child_verts = child_mesh.vertices.shape[0]
+            num_edge_vertices = len(junction_edge_idx)
+            junction_mesh.faces = junction_mesh.faces + num_child_verts - num_edge_vertices
+            junction_edge_idx_shifted = junction_edge_idx + num_child_verts - num_edge_vertices
+
+            # Renumber the junction_edge vertices since they are already in the child vertices
+            for i, junc_idx in enumerate(junction_edge_idx_shifted):
+
+                old_idx = junc_idx
+                new_idx = child_edge_idx[i]
+
+                mask = junction_mesh.faces == old_idx
+                junction_mesh.faces[mask] = new_idx
+
+            # Remove the junction_edge vertices
+            verts_to_keep = [i for i in np.arange(junction_mesh.vertices.shape[0]) if i not in junction_edge_idx]
+            junction_mesh.vertices = junction_mesh.vertices[verts_to_keep]
+
+            # Junction faces containing edge vertices should be renumbered to match child edge vertices
+            combined_verts = np.concatenate([child_mesh.vertices, junction_mesh.vertices], axis=0)
+            combined_faces = np.concatenate([child_mesh.faces, junction_mesh.faces])
+            combined_face_norms = calc_face_normals(combined_verts, combined_faces)
+            combined_vert_norms = trimesh.geometry.mean_vertex_normals(
+                len(combined_verts), combined_faces, combined_face_norms
+            )
+
+            combined_mesh = trimesh.Trimesh(
+                vertices=combined_verts,
+                faces=combined_faces,
+                face_normals=combined_face_norms,
+                vertex_normals=combined_vert_norms,
+                process=False,
+            )
+
+            combined_mesh.show()
+
+            # Plot junction and child meshes
+            # trimesh.Scene([child_mesh, junction_mesh]).show()
+
             return child_mesh
 
         def remove_interior_vertices_from_parent(parent_mesh, full_path):

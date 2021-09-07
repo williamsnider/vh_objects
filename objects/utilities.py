@@ -303,3 +303,35 @@ def plot_mesh_vertices_and_normals(mesh):
 
     # Plot parent
     plt.show()
+
+
+def plot_child_and_junction_edges(child_mesh, child_edge_idx, junction_mesh, junction_edge_idx):
+
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.view_init(elev=-90, azim=90)
+
+    # Child
+    x, y, z = child_mesh.vertices.T
+    ax.plot3D(x, y, z, "g.")
+    x, y, z = child_mesh.vertices[child_edge_idx].T
+    ax.plot3D(x, y, z, "k.")
+
+    # Junction
+    x, y, z = junction_mesh.vertices.T
+    ax.plot3D(x, y, z, "b.")
+    x, y, z = junction_mesh.vertices[junction_edge_idx].T
+    ax.plot3D(x, y, z, "r.")
+
+    # Plot linkages of these points
+    for i in range(len(child_edge_idx)):
+
+        p1 = child_mesh.vertices[child_edge_idx[i]]
+        p2 = junction_mesh.vertices[junction_edge_idx[i]]
+
+        x, y, z = zip(p1, p2)
+        ax.plot3D(x, y, z, "-y")
+    plt.show()
