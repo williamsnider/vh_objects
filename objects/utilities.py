@@ -337,3 +337,97 @@ def plot_child_and_junction_edges(child_mesh, child_edge_idx, junction_mesh, jun
             ax.plot3D(x, y, z, "-y")
 
     plt.show()
+
+
+def plot_parent_and_child_edges(parent_mesh, child_mesh, pairings, plot_linkages=True):
+
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.view_init(elev=-90, azim=90)
+
+    # # Parent
+    # x, y, z = parent_mesh.vertices.T
+    # ax.plot3D(x, y, z, "g.")
+
+    # # Junction
+    # x, y, z = child_mesh.vertices.T
+    # ax.plot3D(x, y, z, "b.")
+
+    # Plot linkages of these points
+    if plot_linkages is True:
+        for [p_i, c_i] in pairings:
+
+            p1 = parent_mesh.vertices[p_i]
+            p2 = child_mesh.vertices[c_i]
+
+            x, y, z = zip(p1, p2)
+            ax.plot3D(x, y, z, "-k")
+
+    # Plot linkages between edges
+    for i in [0, 1]:
+
+        items = pairings[:, i]
+        _, idx = np.unique(items, return_index=True)
+        items = items[np.sort(idx)]
+
+        items_wrapped = np.zeros([items.shape[0] + 1], dtype="int")
+        items_wrapped[:-1] = items
+        items_wrapped[-1] = items[0]
+
+        if i == 0:
+            points = parent_mesh.vertices[items_wrapped]
+        else:
+            points = child_mesh.vertices[items_wrapped]
+
+        x, y, z = points.T
+        ax.plot3D(x, y, z, "-r")
+
+    plt.show()
+
+
+def plot_parent_and_child_faces(s_mesh, l_mesh, faces, s_edge, l_edge):
+
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.view_init(elev=-90, azim=90)
+
+    # Parent
+    x, y, z = s_mesh.vertices.T
+    ax.plot3D(x, y, z, "g.")
+
+    # Junction
+    x, y, z = l_mesh.vertices.T
+    ax.plot3D(x, y, z, "b.")
+
+    for [v1, v2, v3] in faces:
+
+        # Check that indices are not overlapping - sloppy but just to plot quickly
+        for v in [v1, v2, v3]:
+
+            if v in s_edge & v in l_edge:
+                raise NotImplementedError
+
+        if v1 in s_edge:
+            p1 = s_mesh.vertices[v1]
+        else:
+            p1 = l_mesh.vertices[v1]
+
+        if v2 in s_edge:
+            p2 = s_mesh.vertices[v2]
+        else:
+            p2 = l_mesh.vertices[v2]
+
+        if v3 in s_edge:
+            p3 = s_mesh.vertices[v3]
+        else:
+            p3 = l_mesh.vertices[v3]
+
+        x, y, z = np.stack([p1, p2, p3, p1], axis=0).T
+        ax.plot3D(x, y, z, "k-")
+    plt.show()

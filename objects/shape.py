@@ -1,12 +1,16 @@
 from copy import Error
+from numpy.core.fromnumeric import _searchsorted_dispatcher
 import trimesh
 import numpy as np
+from trimesh import parent
 from objects.parameters import SAMPLING_DENSITY_V, SAMPLING_DENSITY_U, ORDER
 from objects.utilities import (
     open_uniform_knot_vector,
     calc_face_normals,
     plot_mesh_vertices_and_normals,
     plot_child_and_junction_edges,
+    plot_parent_and_child_edges,
+    plot_parent_and_child_faces,
 )
 import scipy
 import networkx as nx
@@ -352,7 +356,7 @@ class Shape:
             junc_edge_child_idx = np.arange(uu * (0), uu * (1))  # TODO: Adjust for other end
             junc_edge_child_idx = junc_edge_child_idx[::-1]  # Flip order to align with child_mesh ordering
             junc_edge_child_idx = np.roll(junc_edge_child_idx, 1)  # TODO: Figure out why this shift is necessary
-            junc_edge_parent_idx = np.arange(uu * (vv - 1), uu * (vv))  # Indices of vertices along parent
+            junc_edge_parent_idx = np.arange(uu * (vv - 2), uu * (vv - 1))  # Indices of vertices along parent
 
             # Plot edges
             # plot_child_and_junction_edges(child_mesh, child_edge_idx, junction_mesh, junc_edge_child_idx)
@@ -396,7 +400,7 @@ class Shape:
                 process=False,
             )
 
-            combined_mesh.show()
+            # combined_mesh.show()
 
             # Plot junction and child meshes
             # trimesh.Scene([child_mesh, junction_mesh]).show()
@@ -419,13 +423,110 @@ class Shape:
 
             return mesh, full_path_new
 
-        def stitch_parent_and_child(parent_mesh, parent_edge_vertices, combined_mesh, combined_mesh_edge_vertices):
+        def stitch_parent_and_child(parent_mesh, parent_edge_vertices, combined_mesh, combined_edge_vertices):
 
             # Plot the two edges to make sure things look okay
             plot_child_and_junction_edges(
-                parent_mesh, parent_edge_vertices, combined_mesh, combined_mesh_edge_vertices, plot_linkages=False
+                parent_mesh, parent_edge_vertices, combined_mesh, combined_edge_vertices, plot_linkages=False
             )
 
+            # Label the two meshes as short (s) or long (l)
+            len_parent = len(parent_edge_vertices)
+            len_combined = len(combined_edge_vertices)
+            if len_parent < len_combined:
+                s_mesh = parent_mesh
+                s_edge = parent_edge_vertices
+                l_mesh = combined_mesh
+                l_edge = combined_edge_vertices
+            elif len_combined < len_parent:
+                s_mesh = combined_mesh
+                s_edge = combined_edge_vertices
+                l_mesh = parent_mesh
+                l_edge = parent_edge_vertices
+            else:  # Two lengths are equal
+                s_mesh = parent_mesh
+                s_edge = parent_edge_vertices
+                l_mesh = combined_mesh
+                l_edge = combined_edge_vertices
+
+            ### Evenly distribute short_edge to long_edge
+
+            # Find the nearest neighbor of the 0th element on the short list
+            l_edge = np.flip(l_edge)  # Align order
+            pairings = np.zeros([l_edge.shape[0], 2], dtype="int")
+            tree = scipy.spatial.KDTree(l_mesh.vertices[l_edge])
+            dd, ii = tree.query(s_mesh.vertices[s_edge[0]], k=1)
+            l_edge_rolled = np.roll(l_edge, -ii)  # Roll to align l_edge and s_edge
+
+            s_l_ratio = len(s_edge) / len(l_edge)
+
+            for i, l in enumerate(l_edge_rolled):
+
+                s_i = np.round(i * s_l_ratio).astype("int")
+                s = s_edge[s_i]
+
+                pairings[i] = [s, l]
+
+            assert np.all(pairings[:, 1] == l_edge_rolled), "Missing l_edge vertices."
+            assert set(s_edge) == set(pairings[:, 0]), "Missing s_edge vertices."
+
+            # Construct faces
+            faces = []
+            pairings_wrapped = np.zeros([pairings.shape[0] + 1, pairings.shape[1]], dtype="int")
+            pairings_wrapped[:-1] = pairings
+            pairings_wrapped[-1] = pairings[0]
+
+            for idx, l_i in enumerate(pairings_wrapped[:-1, 1]):
+
+                v1 = pairings_wrapped[idx, 0]
+                v2 = pairings_wrapped[idx, 1]
+                v3 = pairings_wrapped[idx + 1, 0]
+                v4 = pairings_wrapped[idx + 1, 1]
+
+                if v1 != v3:  # If short edge vertices are different
+                    faces.append([v1, v3, v2])
+                    faces.append([v3, v4, v2])
+                else:
+                    faces.append([v1, v4, v2])
+            # Plot edges
+            # TODO: FIgure out why edge of parent and child are overlapping - should not be the case
+            plot_parent_and_child_edges(s_mesh, l_mesh, pairings, plot_linkages=True)
+            # plot_parent_and_child_faces(s_mesh, l_mesh, faces, s_edge, l_edge)
+            pass
+            # # Find the nearest neighbor of the 0th element on the short list
+            # pairings = {}
+            # tree = scipy.spatial.KDTree(l_mesh.vertices[l_edge])
+            # dd, ii = tree.query(s_mesh.vertices[s_edge[0]], k=1)
+            # pairings[s_edge[0]] = l_edge[ii]
+
+            # # Loop through remaining points on short list to identify nearest neighbors
+            # l_edge_rolled = np.roll(l_edge, -ii)
+            # l_start_idx = 0
+            # roll_steps = 0
+
+            # for s_i in s_edge[1:]:
+
+            #     l_edge_rolled = np.roll(l_edge_rolled, -roll_steps)
+            #     prev_dist = np.inf
+            #     prev_idx = np.inf
+
+            #     s_p = s_mesh.vertices[s_i]
+
+            #     for l_i in l_edge_rolled:
+
+            #         l_p = l_mesh.vertices[l_i]
+            #         curr_dist = np.linalg.norm(s_p - l_p)
+
+            #         if curr_dist > prev_dist:
+            #             break
+
+            #         prev_dist = curr_dist  # Update previous distance for comparison in next loop
+            #         prev_idx = l_i
+            #         roll_steps += 1
+
+            #     pairings[s_i] = prev_idx  # Add PREVIOUS point to pairings
+
+            # Link the intermediate points on the other list to that NND
             return None
 
         # Call the above functions to fuse the child and parent
@@ -439,19 +540,17 @@ class Shape:
         unique_NN, closest_NN = project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist)
 
         full_path = find_path_between_projected_vertices(parent_mesh, unique_NN, closest_NN)
-        plot_projected_vertices_and_NNs_3D(full_slice, closest_NN, parent_mesh.vertices, full_path)
+        # plot_projected_vertices_and_NNs_3D(full_slice, closest_NN, parent_mesh.vertices, full_path)
         # plot_projected_vertices_and_NNs(self.full_slice_yz, closest_NN, self.mesh_verts_yz, full_path)
 
         surface, c_V, c_T = create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN, u)
-        combined_mesh, combined_mesh_edge_vertices = stitch_child_and_junction(
-            child_ac, surface, slice_dist, full_slice
-        )
+        combined_mesh, combined_edge_vertices = stitch_child_and_junction(child_ac, surface, slice_dist, full_slice)
         # plot_surface_linking_axial_components(parent_mesh, child_ac, surface)
 
         # Delete the hole in the parent mesh
         parent_mesh_new, full_path_new = remove_interior_vertices_from_parent(parent_mesh, full_path)
 
-        new_mesh = stitch_parent_and_child(parent_mesh_new, full_path_new, combined_mesh, combined_mesh_edge_vertices)
+        new_mesh = stitch_parent_and_child(parent_mesh_new, full_path_new, combined_mesh, combined_edge_vertices)
 
         # Stitch together the two
         # For the smaller sequence, find the nearest neighbor of each vertex to points in the other sequence
