@@ -127,10 +127,10 @@ def plot_projected_vertices_and_NNs_3D(full_slice, closest_NN, mesh_verts, full_
     z = full_slice[:, 2]
     ax.scatter(x, y, z, "b*")
 
-    x = mesh_verts[::25, 0]
-    y = mesh_verts[::25, 1]
-    z = mesh_verts[::25, 2]
-    ax.scatter(x, y, z, "k.")
+    # x = mesh_verts[::25, 0]
+    # y = mesh_verts[::25, 1]
+    # z = mesh_verts[::25, 2]
+    # ax.scatter(x, y, z, "k.")
 
     # Plot nearest neighbors
     for slice_i, NN_IDX in enumerate(closest_NN):
@@ -305,7 +305,7 @@ def plot_mesh_vertices_and_normals(mesh):
     plt.show()
 
 
-def plot_child_and_junction_edges(child_mesh, child_edge_idx, junction_mesh, junction_edge_idx):
+def plot_child_and_junction_edges(child_mesh, child_edge_idx, junction_mesh, junction_edge_idx, plot_linkages=True):
 
     fig = plt.figure()
     ax = plt.axes(projection="3d")
@@ -327,11 +327,13 @@ def plot_child_and_junction_edges(child_mesh, child_edge_idx, junction_mesh, jun
     ax.plot3D(x, y, z, "r.")
 
     # Plot linkages of these points
-    for i in range(len(child_edge_idx)):
+    if plot_linkages is True:
+        for i in range(len(child_edge_idx)):
 
-        p1 = child_mesh.vertices[child_edge_idx[i]]
-        p2 = junction_mesh.vertices[junction_edge_idx[i]]
+            p1 = child_mesh.vertices[child_edge_idx[i]]
+            p2 = junction_mesh.vertices[junction_edge_idx[i]]
 
-        x, y, z = zip(p1, p2)
-        ax.plot3D(x, y, z, "-y")
+            x, y, z = zip(p1, p2)
+            ax.plot3D(x, y, z, "-y")
+
     plt.show()

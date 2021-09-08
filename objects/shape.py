@@ -62,6 +62,8 @@ class Shape:
                 if slice_num == len(v) - 1:
                     raise NotImplementedError
 
+            INCREASE_FACTOR = 0.1  # Move the connection even further up to make it smoother
+            slice_num += np.round(INCREASE_FACTOR * num_steps_long_axis).astype("int")
             slice_dist_approx = np.array(v[slice_num])  # Need to round this up to next highest value in actual v
 
             # Grab the full-size slice
@@ -109,7 +111,7 @@ class Shape:
             self.mesh_verts_yz = mesh_verts_yz
 
             # Identify the 5 nearest neighbors for each point on the slice
-            NUM_NN = 10
+            NUM_NN = 50
             tree = scipy.spatial.KDTree(mesh_verts_yz)
             dd, ii = tree.query(full_slice_yz, k=NUM_NN)
 
@@ -201,6 +203,7 @@ class Shape:
         def create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN, u):
 
             # Identify derivatives at points along parent_mesh. mesh
+            # TODO: Use something smoother than p_V because this causes ripples in the junction mesh
             p_V = parent_mesh.vertices[closest_NN]
             p_T = parent_mesh.vertices[closest_NN] - parent_mesh.vertices[np.roll(closest_NN, -1)]
 
@@ -344,28 +347,28 @@ class Shape:
                 process=False,
             )
 
-            # TODO: Figure out why child and junction are not aligning on edge - they're close enough
-            # TODO:
             # Stitch junction and child meshes
             child_edge_idx = full_slice_idx_new
-            junction_edge_idx = np.arange(uu * (0), uu * (1))  # TODO: Adjust for other end
-            junction_edge_idx = junction_edge_idx[::-1]  # Flip order to align with child_mesh ordering
-            junction_edge_idx = np.roll(junction_edge_idx, 1)  # TODO: Figure out why this shift is necessary
+            junc_edge_child_idx = np.arange(uu * (0), uu * (1))  # TODO: Adjust for other end
+            junc_edge_child_idx = junc_edge_child_idx[::-1]  # Flip order to align with child_mesh ordering
+            junc_edge_child_idx = np.roll(junc_edge_child_idx, 1)  # TODO: Figure out why this shift is necessary
+            junc_edge_parent_idx = np.arange(uu * (vv - 1), uu * (vv))  # Indices of vertices along parent
 
             # Plot edges
-            plot_child_and_junction_edges(child_mesh, child_edge_idx, junction_mesh, junction_edge_idx)
+            # plot_child_and_junction_edges(child_mesh, child_edge_idx, junction_mesh, junc_edge_child_idx)
 
             # Shift junction edge vertices to align with child edge
-            junction_mesh.vertices[junction_edge_idx] = child_mesh.vertices[child_edge_idx]
+            junction_mesh.vertices[junc_edge_child_idx] = child_mesh.vertices[child_edge_idx]
 
             # Increase idx of each junction vertex to account for child vertices
             num_child_verts = child_mesh.vertices.shape[0]
-            num_edge_vertices = len(junction_edge_idx)
+            num_edge_vertices = len(junc_edge_child_idx)
             junction_mesh.faces = junction_mesh.faces + num_child_verts - num_edge_vertices
-            junction_edge_idx_shifted = junction_edge_idx + num_child_verts - num_edge_vertices
+            junc_edge_child_idx_shifted = junc_edge_child_idx + num_child_verts - num_edge_vertices
+            junc_edge_parent_idx_shifted = junc_edge_parent_idx + num_child_verts - num_edge_vertices
 
             # Renumber the junction_edge vertices since they are already in the child vertices
-            for i, junc_idx in enumerate(junction_edge_idx_shifted):
+            for i, junc_idx in enumerate(junc_edge_child_idx_shifted):
 
                 old_idx = junc_idx
                 new_idx = child_edge_idx[i]
@@ -374,7 +377,7 @@ class Shape:
                 junction_mesh.faces[mask] = new_idx
 
             # Remove the junction_edge vertices
-            verts_to_keep = [i for i in np.arange(junction_mesh.vertices.shape[0]) if i not in junction_edge_idx]
+            verts_to_keep = [i for i in np.arange(junction_mesh.vertices.shape[0]) if i not in junc_edge_child_idx]
             junction_mesh.vertices = junction_mesh.vertices[verts_to_keep]
 
             # Junction faces containing edge vertices should be renumbered to match child edge vertices
@@ -398,7 +401,7 @@ class Shape:
             # Plot junction and child meshes
             # trimesh.Scene([child_mesh, junction_mesh]).show()
 
-            return child_mesh
+            return combined_mesh, junc_edge_parent_idx_shifted
 
         def remove_interior_vertices_from_parent(parent_mesh, full_path):
 
@@ -416,8 +419,14 @@ class Shape:
 
             return mesh, full_path_new
 
-        def stitch_parent_and_child(parent_edge_vertices, junction_edge_vertices, parent_mesh, child_mesh):
-            pass
+        def stitch_parent_and_child(parent_mesh, parent_edge_vertices, combined_mesh, combined_mesh_edge_vertices):
+
+            # Plot the two edges to make sure things look okay
+            plot_child_and_junction_edges(
+                parent_mesh, parent_edge_vertices, combined_mesh, combined_mesh_edge_vertices, plot_linkages=False
+            )
+
+            return None
 
         # Call the above functions to fuse the child and parent
         full_slice, slice_dist, u, slice_dist_approx = find_join_slice_along_child(
@@ -434,20 +443,20 @@ class Shape:
         # plot_projected_vertices_and_NNs(self.full_slice_yz, closest_NN, self.mesh_verts_yz, full_path)
 
         surface, c_V, c_T = create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN, u)
-        child_mesh = stitch_child_and_junction(child_ac, surface, slice_dist, full_slice)
+        combined_mesh, combined_mesh_edge_vertices = stitch_child_and_junction(
+            child_ac, surface, slice_dist, full_slice
+        )
         # plot_surface_linking_axial_components(parent_mesh, child_ac, surface)
 
         # Delete the hole in the parent mesh
-        new_mesh, full_path_new = remove_interior_vertices_from_parent(parent_mesh, full_path)
+        parent_mesh_new, full_path_new = remove_interior_vertices_from_parent(parent_mesh, full_path)
 
-        # new_mesh = stitch_parent_and_child(parent_edge_vertices, junction_edge_vertices, parent_mesh, child_mesh)
+        new_mesh = stitch_parent_and_child(parent_mesh_new, full_path_new, combined_mesh, combined_mesh_edge_vertices)
 
         # Stitch together the two
         # For the smaller sequence, find the nearest neighbor of each vertex to points in the other sequence
         # Between these pairings, link points in the larger sequence to the first elmeent of each gap in the shorter sequence
         # Result is a list of edges which we will convert to faces
-
-        pass
 
     def plot_meshes(self):
 
