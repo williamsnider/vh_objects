@@ -167,16 +167,18 @@ def plot_projected_vertices_and_NNs(full_slice_yz, closest_NN, mesh_verts_yz, fu
     fig, ax = plt.subplots()
     ax.set_xlabel("y")
     ax.set_ylabel("z")
-    ax.set_xlim([full_slice_yz.min(), full_slice_yz.max()])
-    ax.set_ylim([full_slice_yz.min(), full_slice_yz.max()])
+    minx = np.min([full_slice_yz.min(), mesh_verts_yz[closest_NN].min()])
+    maxx = np.max([full_slice_yz.max(), mesh_verts_yz[closest_NN].max()])
+    ax.set_xlim([minx, maxx])
+    ax.set_ylim([minx, maxx])
 
     y = full_slice_yz[:, 0]
     z = full_slice_yz[:, 1]
     ax.plot(y, z, "b*")
 
-    # y = mesh_verts_yz[:, 0]
-    # z = mesh_verts_yz[:, 1]
-    # ax.plot(y, z, "k.")
+    y = mesh_verts_yz[:, 0]
+    z = mesh_verts_yz[:, 1]
+    ax.plot(y, z, "k.")
 
     # Plot nearest neighbors
     for slice_i, NN_IDX in enumerate(closest_NN):
@@ -195,8 +197,8 @@ def plot_projected_vertices_and_NNs(full_slice_yz, closest_NN, mesh_verts_yz, fu
         ax.plot(x, y, "g-")
 
     # # Plot nearest neighbors
-    # x, y = mesh_verts_yz[closest_NN].T
-    # ax.plot(x.ravel(), y.ravel(), "r-")
+    x, y = mesh_verts_yz[closest_NN].T
+    ax.plot(x.ravel(), y.ravel(), "r-")
 
     # # Plot slice points
     # x, y = full_slice_yz.T
@@ -379,11 +381,12 @@ def plot_parent_and_child_edges(parent_mesh, child_mesh, pairings, plot_linkages
 
         if i == 0:
             points = parent_mesh.vertices[items_wrapped]
+            x, y, z = points.T
+            ax.plot3D(x, y, z, "-g")
         else:
-            points = child_mesh.vertices[items_wrapped]
-
-        x, y, z = points.T
-        ax.plot3D(x, y, z, "-r")
+            points = child_mesh.vertices[items]
+            x, y, z = points.T
+            ax.plot3D(x, y, z, "-b")
 
     plt.show()
 

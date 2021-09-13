@@ -3,7 +3,7 @@ from numpy.core.fromnumeric import _searchsorted_dispatcher
 import trimesh
 import numpy as np
 from trimesh import parent
-from objects.parameters import SAMPLING_DENSITY_V, SAMPLING_DENSITY_U, ORDER
+from objects.parameters import SAMPLING_DENSITY_V, SAMPLING_DENSITY_U, ORDER, NUM_NN
 from objects.utilities import (
     open_uniform_knot_vector,
     calc_face_normals,
@@ -115,48 +115,50 @@ class Shape:
             self.mesh_verts_yz = mesh_verts_yz
 
             # Identify the 5 nearest neighbors for each point on the slice
-            NUM_NN = 50
             tree = scipy.spatial.KDTree(mesh_verts_yz)
             dd, ii = tree.query(full_slice_yz, k=NUM_NN)
 
             # Choose the NN with the shortest distance in 3D
+            # TODO: Ensure closest_NN have no duplicates (sample without replacement)
             mesh_points = mesh_verts_rotated[ii]
             slice_points = np.repeat(full_slice_rotated, NUM_NN, axis=1)
             dist = np.sqrt(np.sum((mesh_points - slice_points) ** 2, axis=2))
-            min_idx = np.argmin(dist, axis=1)
+            sorted_indices = np.argsort(dist, axis=1)
             closest_NN = np.zeros((len(ii)), dtype="int")
-            for i, _ in enumerate(closest_NN):
-                closest_NN[i] = ii[i, min_idx[i]]
+            already_used = []
 
-            _, unique_idx = np.unique(closest_NN, return_index=True)
-            unique_NN = [closest_NN[i] for i in sorted(unique_idx)]
-            unique_NN.append(unique_NN[0])  # Wrap starting point
+            # Iterate through each of the closest_NNs
+            for i in range(len(ii)):
 
-            return unique_NN, closest_NN
+                # Distribute them by not allowing to vertices to have the same NN
+                for j in range(NUM_NN):
+                    candidate_idx = ii[i, sorted_indices[i, j]]
 
-        def find_path_between_projected_vertices(parent_mesh, unique_NN, closest_NN):
-            # edges without duplication
+                    if candidate_idx not in already_used:
+                        closest_NN[i] = candidate_idx
+                        already_used.append(candidate_idx)
+                        break
+                else:
+                    raise ValueError("No nearest neighbor found after iterating thorugh all of them.")
+
+            assert len(np.unique(closest_NN)) == len(closest_NN), "Redudant NNs."
+
+            # Add first element to end
+            closest_NN_wrapped = np.concatenate([closest_NN, [closest_NN[0]]])
+
+            return closest_NN_wrapped
+
+        def find_path_between_projected_vertices(parent_mesh, closest_NN_wrapped):
+
+            # Create the graph with edge attributes for length
             edges = parent_mesh.edges_unique
-
-            # the actual length of each unique edge
             length = parent_mesh.edges_unique_length
+            g = nx.from_edgelist([(e[0], e[1], {"length": L}) for e, L in zip(edges, length)])
 
-            # create the graph with edge attributes for length
-            g = nx.Graph()
-            for edge, L in zip(edges, length):
-                g.add_edge(*edge, length=L)
-
-            # alternative method for weighted graph creation
-            # you can also create the graph with from_edgelist and
-            # a list comprehension, which is like 1.5x faster
-            ga = nx.from_edgelist([(e[0], e[1], {"length": L}) for e, L in zip(edges, length)])
-
-            # arbitrary indices of mesh.vertices to test with
             full_path = []
-            for i in range(len(unique_NN)):
-                print(i)
-                start = unique_NN[i - 1]
-                end = unique_NN[i]
+            for i in range(len(closest_NN_wrapped)):
+                start = closest_NN_wrapped[i - 1]
+                end = closest_NN_wrapped[i]
 
                 # run the shortest path query using length for edge weight
                 new_path = nx.shortest_path(g, source=start, target=end, weight="length")
@@ -175,7 +177,7 @@ class Shape:
                             idx_path_repeat = idx
 
                     # Find the index of the first repeat in the full path
-                    idx_full_repeat = full_path.index(repeated_verts[0])  # Initilize
+                    idx_full_repeat = full_path.index(repeated_verts[0])  # Initialize
                     for r in repeated_verts:
                         idx = full_path.index(r)
                         if idx < idx_full_repeat:
@@ -192,19 +194,38 @@ class Shape:
                     NN_replacement = full_path[idx_full_repeat]  # Just assign all
 
                     # Replace these NNs for the closest_NN array
-                    for NN in NNs_to_replace:
+                    # for NN in NNs_to_replace:
 
-                        closest_NN[closest_NN == NN] = NN_replacement
+                    #     closest_NN_wrapped[closest_NN_wrapped == NN] = NN_replacement
                 else:
                     verts_to_append = new_path[1:]  # Don't duplicate first vert
 
                 # Append to the full_path
                 full_path.extend(verts_to_append)
+                print("new_path = ", new_path)
+                print("full_path = ", full_path)
 
+            assert len(np.unique(full_path)) == len(full_path), "Redudant elements in full_path."
             full_path.append(full_path[0])  # Add first element to end to close loop
+
+            # Plot to see what's going wrong
+            fig = plt.figure()
+            ax = plt.axes(projection="3d")
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+            ax.set_zlabel("z")
+            ax.view_init(elev=-90, azim=90)
+            x, y, z = parent_mesh.vertices[full_path].T
+            ax.plot(x, y, z, "-", color="green")
+            plt.show()
+
+            # TODO: Smooth out full_path (so many jagged, overlapping vertices). Well, full_path will need to be exactly on vertices, since that's what we use to separate the subsurfaces, but for the junction surface something smoother would be ideal.
+
             return full_path
 
-        def create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN, u):
+        def create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN_wrapped, u):
+
+            closest_NN = closest_NN_wrapped[:-1]  # Remove duplicate last element
 
             # Identify derivatives at points along parent_mesh. mesh
             # TODO: Use something smoother than p_V because this causes ripples in the junction mesh
@@ -282,20 +303,17 @@ class Shape:
             full_slice_idx = np.arange(uu * v_i, uu * (v_i + 1))
 
             # # # Plot to figure out what's going on
-            # fig = plt.figure()
-            # ax = plt.axes(projection="3d")
-            # ax.set_xlabel("x")
-            # ax.set_ylabel("y")
-            # ax.set_zlabel("z")
-            # ax.view_init(elev=-90, azim=90)
-            # for i, points in enumerate([np.squeeze(full_slice), child_ac.mesh.vertices[full_slice_idx]]):
-
-            #     x, y, z = points.T
-
-            #     if i == 0:
-            #         ax.plot(x, y, z, "*", color="green")
-            #     if i == 1:
-            #         ax.plot(x, y, z, ".", color="red")
+            fig = plt.figure()
+            ax = plt.axes(projection="3d")
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+            ax.set_zlabel("z")
+            ax.view_init(elev=-90, azim=90)
+            for v in range(vv):
+                points = junction_verts_array[v, :, :]
+                x, y, z = points.T
+                ax.plot(x, y, z, "-", color="green")
+            plt.show()
 
             assert np.all(np.isclose(np.squeeze(full_slice), child_ac.mesh.vertices[full_slice_idx]))
 
@@ -537,13 +555,14 @@ class Shape:
             num_steps_round_axis=6,
         )
 
-        unique_NN, closest_NN = project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist)
+        closest_NN_wrapped = project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist)
 
-        full_path = find_path_between_projected_vertices(parent_mesh, unique_NN, closest_NN)
+        full_path = find_path_between_projected_vertices(parent_mesh, closest_NN_wrapped)
         # plot_projected_vertices_and_NNs_3D(full_slice, closest_NN, parent_mesh.vertices, full_path)
-        # plot_projected_vertices_and_NNs(self.full_slice_yz, closest_NN, self.mesh_verts_yz, full_path)
-
-        surface, c_V, c_T = create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN, u)
+        plot_projected_vertices_and_NNs(self.full_slice_yz, closest_NN_wrapped[:-1], self.mesh_verts_yz, full_path)
+        surface, c_V, c_T = create_surface_between_child_slice_and_parent_mesh(
+            parent_mesh, child_ac, closest_NN_wrapped, u
+        )
         combined_mesh, combined_edge_vertices = stitch_child_and_junction(child_ac, surface, slice_dist, full_slice)
         # plot_surface_linking_axial_components(parent_mesh, child_ac, surface)
 
