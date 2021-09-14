@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pyembree
 import trimesh
 import networkx as nx
 
@@ -17,6 +18,44 @@ def open_uniform_knot_vector(num_cps, order):
     knots[-order:] = knots[-order - 1] + 1
     knots = knots / knots.max()  # Scale from 0 to 1
     return knots
+
+
+##########
+# Vector functions
+def unit_vector(vector):
+    """Returns the unit vector of the vector."""
+    if vector.ndim == 1:
+        a = 0
+    elif vector.ndim == 2:
+        a = 1
+    else:
+        raise NotImplementedError
+    return vector / np.linalg.norm(vector, axis=a, keepdims=True)
+
+
+def angle_between(v1, v2):
+    """
+    Returns the angle in radians between vectors 'v1' and 'v2'
+    Args:
+        v1 (array): Vector 1.
+        v2 (array): Vector 2
+    Returns:
+        angle (float): Radians
+    >>> angle_between((1, 0, 0), (0, 1, 0))
+    1.5707963267948966
+    >>> angle_between((1, 0, 0), (1, 0, 0))
+    0.0
+    >>> angle_between((1, 0, 0), (-1, 0, 0))
+    3.141592653589793
+    """
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    if v1_u.ndim == 1 and v2_u.ndim == 1:
+        return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+    elif v1_u.ndim == 2 or v2_u.ndim == 2:
+        return np.arccos(np.clip((v1_u * v2_u).sum(axis=1), -1, 1))
+    else:
+        raise NotImplementedError
 
 
 ##########
@@ -104,6 +143,22 @@ def remove_subsurface_from_mesh(mesh, closed_path, point_in_subsurface_to_remove
     return mesh, closed_path_renumbered
 
 
+def find_visible_vertices(mesh, position, indices="ALL"):
+    """Uses simple ray-mesh queries to identify the vertices on a mesh that are visible (not occluded) from a certain position."""
+
+    # TODO: accelerate using pyembree
+    if indices == "ALL":
+        origins = mesh.vertices
+    else:
+        origins = mesh.vertices[indices]
+    directions = position - origins
+    intersects = mesh.ray.intersects_any(
+        ray_origins=origins,
+        ray_directions=directions,
+    )
+    return ~intersects  # Negate to get visible vertices, not occluded
+
+
 ##########
 # Plotting helper functions
 
@@ -127,10 +182,10 @@ def plot_projected_vertices_and_NNs_3D(full_slice, closest_NN, mesh_verts, full_
     z = full_slice[:, 2]
     ax.scatter(x, y, z, "b*")
 
-    # x = mesh_verts[::25, 0]
-    # y = mesh_verts[::25, 1]
-    # z = mesh_verts[::25, 2]
-    # ax.scatter(x, y, z, "k.")
+    x = mesh_verts[::25, 0]
+    y = mesh_verts[::25, 1]
+    z = mesh_verts[::25, 2]
+    ax.scatter(x, y, z, "k.")
 
     # Plot nearest neighbors
     for slice_i, NN_IDX in enumerate(closest_NN):
@@ -176,9 +231,9 @@ def plot_projected_vertices_and_NNs(full_slice_yz, closest_NN, mesh_verts_yz, fu
     z = full_slice_yz[:, 1]
     ax.plot(y, z, "b*")
 
-    y = mesh_verts_yz[:, 0]
-    z = mesh_verts_yz[:, 1]
-    ax.plot(y, z, "k.")
+    # y = mesh_verts_yz[:, 0]
+    # z = mesh_verts_yz[:, 1]
+    # ax.plot(y, z, "k.")
 
     # Plot nearest neighbors
     for slice_i, NN_IDX in enumerate(closest_NN):
@@ -207,6 +262,106 @@ def plot_projected_vertices_and_NNs(full_slice_yz, closest_NN, mesh_verts_yz, fu
     # Plot shortest path
     x, y = mesh_verts_yz[full_path].T
     ax.plot(x, y, "r-")
+    plt.show()
+
+
+def plot_mesh_normals(mesh, indices, child_ac, slice_dist):
+
+    SPACING = 100
+    pts = mesh.vertices[indices][::SPACING]
+    norms = mesh.vertex_normals[indices][::SPACING]
+
+    # Plot mesh derivatives
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.view_init(elev=-90, azim=90)
+
+    x, y, z = pts.T
+    ax.plot3D(x, y, z, "k.")
+
+    for i, _ in enumerate(norms):
+
+        # Normal
+        p1 = pts[i]
+        p2 = p1 + norms[i] * 0.1
+
+        x, y, z = zip(p1, p2)
+        ax.plot3D(x, y, z, "b-")
+
+        # Line to centerpoint
+        p1 = child_ac.r(slice_dist).T
+        p2 = pts[i]
+        x, y, z = zip(p1, p2)
+        ax.plot3D(x, y, z, "r-")
+
+    plt.show()
+
+
+def plot_filtered_closest_NN(parent_mesh, closest_NN_wrapped, too_large):
+
+    # Plot to verify
+    SPACING = 30
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.view_init(elev=-90, azim=90)
+
+    # All
+    x, y, z = parent_mesh.vertices[closest_NN_wrapped].T
+    ax.plot(x, y, z, "-", color="k")
+
+    # Valid
+    x, y, z = parent_mesh.vertices[closest_NN_wrapped[~too_large]].T
+    ax.plot(x, y, z, ".", color="green")
+
+    # Invalid
+    x, y, z = parent_mesh.vertices[closest_NN_wrapped[too_large]].T
+    ax.plot(x, y, z, ".", color="red")
+
+    invalid_idx = np.argwhere(too_large)
+    for idx in invalid_idx:
+
+        i = idx[0]
+        p1 = parent_mesh.vertices[closest_NN_wrapped[i - 1]]
+        p2 = parent_mesh.vertices[closest_NN_wrapped[i]]
+        p3 = parent_mesh.vertices[closest_NN_wrapped[i + 1]]
+
+        x, y, z = np.stack([p1, p2, p3], axis=0).T
+        ax.plot(x, y, z, "-", color="red")
+
+    x, y, z = parent_mesh.vertices[::SPACING].T
+    ax.plot(x, y, z, ".k")
+
+    plt.show()
+
+
+def plot_smoothed_NN(parent_mesh, smoothed_NN, closest_NN_wrapped):
+
+    # Plot to verify
+    SPACING = 30
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.view_init(elev=-90, azim=90)
+
+    # Original
+    x, y, z = parent_mesh.vertices[closest_NN_wrapped].T
+    ax.plot(x, y, z, "-", color="k")
+
+    # Smoothed
+    x, y, z = parent_mesh.vertices[smoothed_NN].T
+    ax.plot(x, y, z, "-", color="green")
+
+    x, y, z = parent_mesh.vertices[::SPACING].T
+    ax.plot(x, y, z, ".k")
+
     plt.show()
 
 

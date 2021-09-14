@@ -3,7 +3,7 @@ from numpy.core.fromnumeric import _searchsorted_dispatcher
 import trimesh
 import numpy as np
 from trimesh import parent
-from objects.parameters import SAMPLING_DENSITY_V, SAMPLING_DENSITY_U, ORDER, NUM_NN
+from objects.parameters import SAMPLING_DENSITY_V, SAMPLING_DENSITY_U, ORDER, NUM_NN, WINDOW_SIZE
 from objects.utilities import (
     open_uniform_knot_vector,
     calc_face_normals,
@@ -11,6 +11,10 @@ from objects.utilities import (
     plot_child_and_junction_edges,
     plot_parent_and_child_edges,
     plot_parent_and_child_faces,
+    angle_between,
+    find_visible_vertices,
+    plot_filtered_closest_NN,
+    plot_smoothed_NN,
 )
 import scipy
 import networkx as nx
@@ -21,6 +25,7 @@ from objects.utilities import (
     plot_projected_vertices_and_NNs_3D,
     plot_mesh_derivatives,
     plot_surface_linking_axial_components,
+    plot_mesh_normals,
 )
 import matplotlib.pyplot as plt
 
@@ -82,8 +87,20 @@ class Shape:
             return full_slice, slice_dist, u, slice_dist_approx
 
         def project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist):
-            ### Expand this slice and project it onto the surface of the parent_mesh.
 
+            # Cull vertices on parent mesh that are not visible (i.e. intersect another face)
+            visible_vertices = find_visible_vertices(
+                mesh=parent_mesh,
+                position=child_ac.r(slice_dist),
+            )
+            parent_verts = parent_mesh.vertices[visible_vertices]
+            old_indices = np.argwhere(visible_vertices)
+            new_indices = np.arange(len(parent_verts))
+            idx_dict = {n: o[0] for (o, n) in zip(old_indices, new_indices)}
+
+            # plot_mesh_normals(parent_mesh, visible_vertices, child_ac, slice_dist)
+
+            # Expand the child's full_slice and project it onto the surface of the parent_mesh.
             TNB_current = np.stack(
                 [
                     child_ac.T(slice_dist)[0],
@@ -106,7 +123,7 @@ class Shape:
             EXPANSION_FACTOR = 1.5
             center = child_ac.r(slice_dist)
             full_slice_rotated = ((full_slice - center) @ R * EXPANSION_FACTOR) + center
-            mesh_verts_rotated = (parent_mesh.vertices - center) @ R + center
+            mesh_verts_rotated = (parent_verts - center) @ R + center
 
             # Remove x-axis
             full_slice_yz = np.squeeze(full_slice_rotated[:, :, 1:])
@@ -114,39 +131,100 @@ class Shape:
             self.full_slice_yz = full_slice_yz
             self.mesh_verts_yz = mesh_verts_yz
 
-            # Identify the 5 nearest neighbors for each point on the slice
+            # Identify the NUM_NN nearest neighbors for each point on the slice
             tree = scipy.spatial.KDTree(mesh_verts_yz)
-            dd, ii = tree.query(full_slice_yz, k=NUM_NN)
+            dd, closest_NN = tree.query(full_slice_yz, k=NUM_NN)
 
-            # Choose the NN with the shortest distance in 3D
-            # TODO: Ensure closest_NN have no duplicates (sample without replacement)
-            mesh_points = mesh_verts_rotated[ii]
-            slice_points = np.repeat(full_slice_rotated, NUM_NN, axis=1)
-            dist = np.sqrt(np.sum((mesh_points - slice_points) ** 2, axis=2))
-            sorted_indices = np.argsort(dist, axis=1)
-            closest_NN = np.zeros((len(ii)), dtype="int")
-            already_used = []
+            closest_NN = np.array([idx_dict[i] for i in closest_NN])
 
-            # Iterate through each of the closest_NNs
-            for i in range(len(ii)):
-
-                # Distribute them by not allowing to vertices to have the same NN
-                for j in range(NUM_NN):
-                    candidate_idx = ii[i, sorted_indices[i, j]]
-
-                    if candidate_idx not in already_used:
-                        closest_NN[i] = candidate_idx
-                        already_used.append(candidate_idx)
-                        break
-                else:
-                    raise ValueError("No nearest neighbor found after iterating thorugh all of them.")
-
-            assert len(np.unique(closest_NN)) == len(closest_NN), "Redudant NNs."
+            # Remove redundant NNs
+            _, idx = np.unique(closest_NN, return_index=True)
+            closest_NN = closest_NN[np.sort(idx)]
 
             # Add first element to end
             closest_NN_wrapped = np.concatenate([closest_NN, [closest_NN[0]]])
 
+            # SPACING = 100
+            # fig = plt.figure()
+            # ax = plt.axes(projection="3d")
+            # ax.set_xlabel("x")
+            # ax.set_ylabel("y")
+            # ax.set_zlabel("z")
+            # ax.view_init(elev=-90, azim=90)
+            # x, y, z = parent_mesh.vertices[closest_NN_wrapped].T
+            # ax.plot(x, y, z, "-", color="green")
+
+            # x, y, z = parent_mesh.vertices[::SPACING].T
+            # ax.plot(x, y, z, ".k")
+
+            # plt.show()
+
+            return closest_NN_wrapped, visible_vertices
+
+        def filter_closest_NN(parent_mesh, closest_NN_wrapped):
+            """Identify abrupt changes in closest_NN and filter them to be smoother."""
+
+            all_valid = False
+            MAX_ANGLE = np.pi * 3 / 4
+
+            while all_valid is False:
+
+                pts = parent_mesh.vertices[closest_NN_wrapped[:-1]]  # Skip last vertex since it's a duplicate
+                arr1 = pts
+                arr2 = np.roll(arr1, shift=1, axis=0)  #  Shift up 1
+                vec1 = arr2 - arr1
+                vec2 = np.roll(vec1, shift=1, axis=0)  # Shift up 1
+
+                # Find angles
+                angles = angle_between(vec2, vec1)  # This order gives angle at vertex without shifting
+                angles = np.concatenate([angles, angles[:1]])
+                too_large = angles > MAX_ANGLE
+
+                # Plot to verify
+                # plot_filtered_closest_NN(parent_mesh, closest_NN_wrapped, too_large)
+
+                # Update by removing NNs with angles that are too large
+                closest_NN_wrapped = closest_NN_wrapped[~too_large]  # Remove angles that are too large
+
+                # Exit while loop
+                if np.all(~too_large):
+                    all_valid = True
+
             return closest_NN_wrapped
+
+        def smooth_closest_NN(closest_NN_wrapped, visible_vertices, window_size):
+
+            closest_NN = closest_NN_wrapped[:-1]
+
+            # Smooth the closest NN by averaging with a sliding window
+            roll_list = np.arange(window_size) - window_size // 2
+            points = np.zeros([len(closest_NN), 3, window_size])
+            for i, roll in enumerate(roll_list):
+
+                rolled_indices = np.roll(closest_NN, roll)
+                points[:, :, i] = parent_mesh.vertices[rolled_indices]
+
+            # Find the nearest vertices to these smoothed points
+            smoothed_points = np.mean(points, axis=2)
+            tree = scipy.spatial.KDTree(parent_mesh.vertices[visible_vertices])
+            _, smoothed_NN = tree.query(smoothed_points, k=1)
+
+            # Renumber smoothed_NN to old indices
+            old_indices = np.argwhere(visible_vertices)
+            new_indices = np.arange(len(parent_mesh.vertices[visible_vertices]))
+            idx_dict = {n: o[0] for (o, n) in zip(old_indices, new_indices)}
+            smoothed_NN = np.array([idx_dict[i] for i in smoothed_NN])
+
+            # Remove redundant NNs
+            _, idx = np.unique(smoothed_NN, return_index=True)
+            smoothed_NN = smoothed_NN[np.sort(idx)]
+
+            # Wrap first element
+            smoothed_NN = np.concatenate([smoothed_NN, [smoothed_NN[0]]])
+
+            # Plot to verify
+            plot_smoothed_NN(parent_mesh, smoothed_NN, closest_NN_wrapped)
+            return smoothed_NN
 
         def find_path_between_projected_vertices(parent_mesh, closest_NN_wrapped):
 
@@ -202,8 +280,6 @@ class Shape:
 
                 # Append to the full_path
                 full_path.extend(verts_to_append)
-                print("new_path = ", new_path)
-                print("full_path = ", full_path)
 
             assert len(np.unique(full_path)) == len(full_path), "Redudant elements in full_path."
             full_path.append(full_path[0])  # Add first element to end to close loop
@@ -217,10 +293,11 @@ class Shape:
             ax.view_init(elev=-90, azim=90)
             x, y, z = parent_mesh.vertices[full_path].T
             ax.plot(x, y, z, "-", color="green")
+
+            x, y, z = parent_mesh.vertices[closest_NN_wrapped].T
+            ax.plot(x, y, z, ".k")
+
             plt.show()
-
-            # TODO: Smooth out full_path (so many jagged, overlapping vertices). Well, full_path will need to be exactly on vertices, since that's what we use to separate the subsurfaces, but for the junction surface something smoother would be ideal.
-
             return full_path
 
         def create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN_wrapped, u):
@@ -554,11 +631,11 @@ class Shape:
             num_steps_long_axis=10,
             num_steps_round_axis=6,
         )
-
-        closest_NN_wrapped = project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist)
-
+        closest_NN_wrapped, visible_vertices = project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist)
+        closest_NN_wrapped = filter_closest_NN(parent_mesh, closest_NN_wrapped)
+        closest_NN_wrapped = smooth_closest_NN(closest_NN_wrapped, visible_vertices, window_size=WINDOW_SIZE)
         full_path = find_path_between_projected_vertices(parent_mesh, closest_NN_wrapped)
-        # plot_projected_vertices_and_NNs_3D(full_slice, closest_NN, parent_mesh.vertices, full_path)
+        plot_projected_vertices_and_NNs_3D(full_slice, closest_NN_wrapped[:-1], parent_mesh.vertices, full_path)
         plot_projected_vertices_and_NNs(self.full_slice_yz, closest_NN_wrapped[:-1], self.mesh_verts_yz, full_path)
         surface, c_V, c_T = create_surface_between_child_slice_and_parent_mesh(
             parent_mesh, child_ac, closest_NN_wrapped, u
