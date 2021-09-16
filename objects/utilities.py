@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import pyembree
 import trimesh
 import networkx as nx
+import scipy
 
 ##########
 # B-Spline Functions
@@ -159,6 +160,69 @@ def find_visible_vertices(mesh, position, indices="ALL"):
     return ~intersects  # Negate to get visible vertices, not occluded
 
 
+def distribute_indices(points1, points2):
+    """Given two lists of vertices with unequal lengths, distribute them evenly."""
+    idx1 = np.arange(points1.shape[0])
+    idx2 = np.arange(points2.shape[0])
+
+    # Identify which is longer and label as short or long
+    num1 = len(idx1)
+    num2 = len(idx2)
+
+    if num1 < num2:
+        l_idx = idx2
+        s_idx = idx1
+        l_pts = points2
+        s_pts = points1
+    if num2 < num1:
+        l_idx = idx1
+        s_idx = idx2
+        l_pts = points1
+        s_pts = points2
+    else:
+        l_idx = idx2
+        s_idx = idx1
+        l_pts = points2
+        s_pts = points1
+
+    ### Distribute short to long
+    l_num = len(l_idx)
+    s_num = len(s_idx)
+
+    # Find the closest l_point to s_idx[0]
+    pairings = np.zeros([l_num, 2], dtype="int")
+    tree = scipy.spatial.KDTree(l_pts)
+    dd, ii = tree.query(s_pts[0], k=1)
+    l_idx_roll = np.roll(l_idx, -ii)
+
+    # Use ratio of lengths of l and s to distribute
+    s_l_ratio = s_num / l_num
+
+    for i, l in enumerate(l_idx_roll):
+
+        s_i = np.round(i * s_l_ratio).astype("int")
+        s = s_idx[s_i]
+        pairings[i] = [s, l]
+
+    # Check results
+    assert np.all(pairings[:, 1] == l_idx_roll), "Missing l_edge vertices."
+    assert set(s_idx) == set(pairings[:, 0]), "Missing s_edge vertices."
+
+    # Raise warning if rolling in other direction produces tighter pairings.
+    distA = np.linalg.norm(s_pts[pairings[:, 0]] - l_pts[pairings[:, 1]], axis=1).sum()
+    roll_pairings = np.roll(pairings[:, 1], -1)  # Roll back 1 so that 0th element is now at position -1
+    flip_pairings = np.flip(roll_pairings)
+    distB = np.linalg.norm(s_pts[pairings[:, 0]] - l_pts[flip_pairings], axis=1).sum()
+    if distB < distA:
+        raise Warning("Flipping the order of the long indices would have resulted in a shorter total distance.")
+
+    # Ensure that pairings[:,0] corresponds to idx1/points1; flip columns if the short is actually points2
+    if num2 < num1:
+        pairings = np.roll(pairings, 1, axis=1)
+
+    return pairings
+
+
 ##########
 # Plotting helper functions
 
@@ -217,42 +281,32 @@ def plot_projected_vertices_and_NNs_3D(full_slice, closest_NN, mesh_verts, full_
     plt.show()
 
 
-def plot_projected_vertices_and_NNs(full_slice_yz, closest_NN, mesh_verts_yz, full_path):
+def plot_projected_vertices_and_NNs(full_slice_yz, closest_NN, mesh_verts_yz_all, full_path):
 
     fig, ax = plt.subplots()
     ax.set_xlabel("y")
     ax.set_ylabel("z")
-    minx = np.min([full_slice_yz.min(), mesh_verts_yz[closest_NN].min()])
-    maxx = np.max([full_slice_yz.max(), mesh_verts_yz[closest_NN].max()])
+    minx = np.min([full_slice_yz.min(), mesh_verts_yz_all[closest_NN].min()])
+    maxx = np.max([full_slice_yz.max(), mesh_verts_yz_all[closest_NN].max()])
     ax.set_xlim([minx, maxx])
     ax.set_ylim([minx, maxx])
 
-    y = full_slice_yz[:, 0]
-    z = full_slice_yz[:, 1]
+    y, z = full_slice_yz.T
     ax.plot(y, z, "b*")
-
-    # y = mesh_verts_yz[:, 0]
-    # z = mesh_verts_yz[:, 1]
-    # ax.plot(y, z, "k.")
 
     # Plot nearest neighbors
     for slice_i, NN_IDX in enumerate(closest_NN):
 
-        # for mesh_i in NN_IDX:
-        #     p1 = full_slice_yz[slice_i, :]
-        #     p2 = mesh_verts_yz[mesh_i, :]
-
-        #     x, y = zip(p1, p2)
-        #     ax.plot(x, y, "g-")
+        p1 = mesh_verts_yz_all[NN_IDX]
 
         p1 = full_slice_yz[slice_i, :]
-        p2 = mesh_verts_yz[NN_IDX, :]
+        p2 = mesh_verts_yz_all[NN_IDX, :]
 
         x, y = zip(p1, p2)
         ax.plot(x, y, "g-")
 
     # # Plot nearest neighbors
-    x, y = mesh_verts_yz[closest_NN].T
+    x, y = mesh_verts_yz_all[closest_NN].T
     ax.plot(x.ravel(), y.ravel(), "r-")
 
     # # Plot slice points
@@ -260,7 +314,7 @@ def plot_projected_vertices_and_NNs(full_slice_yz, closest_NN, mesh_verts_yz, fu
     # ax.plot(x.ravel(), y.ravel(), "r-")
 
     # Plot shortest path
-    x, y = mesh_verts_yz[full_path].T
+    x, y = mesh_verts_yz_all[full_path].T
     ax.plot(x, y, "r-")
     plt.show()
 
