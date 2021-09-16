@@ -15,6 +15,7 @@ from objects.utilities import (
     find_visible_vertices,
     plot_filtered_closest_NN,
     plot_smoothed_NN,
+    distribute_indices,
 )
 import scipy
 import networkx as nx
@@ -43,8 +44,11 @@ class Shape:
 
         parent_mesh = parent_ac.mesh
 
-        # Define functions to carry out fusion in steps
+        # TODO: Clean up the variables passed into/out of each function
+        # TODO: Change the surface to align to every vertex on the parent_mesh
+        # TODO: Link the surface to the child
 
+        # Define functions to carry out fusion in steps
         def find_join_slice_along_child(parent_mesh, child_ac, num_steps_long_axis, num_steps_round_axis):
             """Find slice along the child that is just outside the parent_ac."""
 
@@ -88,16 +92,6 @@ class Shape:
 
         def project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist):
 
-            # Cull vertices on parent mesh that are not visible (i.e. intersect another face)
-            visible_vertices = find_visible_vertices(
-                mesh=parent_mesh,
-                position=child_ac.r(slice_dist),
-            )
-            parent_verts = parent_mesh.vertices[visible_vertices]
-            old_indices = np.argwhere(visible_vertices)
-            new_indices = np.arange(len(parent_verts))
-            idx_dict = {n: o[0] for (o, n) in zip(old_indices, new_indices)}
-
             # plot_mesh_normals(parent_mesh, visible_vertices, child_ac, slice_dist)
 
             # Expand the child's full_slice and project it onto the surface of the parent_mesh.
@@ -123,43 +117,64 @@ class Shape:
             EXPANSION_FACTOR = 1.5
             center = child_ac.r(slice_dist)
             full_slice_rotated = ((full_slice - center) @ R * EXPANSION_FACTOR) + center
-            mesh_verts_rotated = (parent_verts - center) @ R + center
+            mesh_verts_rotated = (parent_mesh.vertices - center) @ R + center
 
             # Remove x-axis
             full_slice_yz = np.squeeze(full_slice_rotated[:, :, 1:])
-            mesh_verts_yz = mesh_verts_rotated[:, 1:]
-            self.full_slice_yz = full_slice_yz
-            self.mesh_verts_yz = mesh_verts_yz
+            mesh_verts_yz_all = mesh_verts_rotated[:, 1:]
 
-            # Identify the NUM_NN nearest neighbors for each point on the slice
-            tree = scipy.spatial.KDTree(mesh_verts_yz)
+            # Cull vertices on parent mesh that are not visible (i.e. intersect another face)
+            visible_vertices = find_visible_vertices(
+                mesh=parent_mesh,
+                position=child_ac.r(slice_dist),
+            )
+            mesh_verts_yz_visible = mesh_verts_yz_all[visible_vertices]
+            old_indices = np.argwhere(visible_vertices)
+            new_indices = np.arange(visible_vertices.sum())
+            idx_dict = {n: o[0] for (o, n) in zip(old_indices, new_indices)}
+
+            # Assign all and visible
+            self.full_slice_yz = full_slice_yz
+            self.mesh_verts_yz_all = mesh_verts_yz_all
+            self.mesh_verts_yz_visible = mesh_verts_yz_visible
+
+            # Identify the nearest neighbor for each point on the slice
+            tree = scipy.spatial.KDTree(mesh_verts_yz_visible)
             dd, closest_NN = tree.query(full_slice_yz, k=NUM_NN)
 
-            closest_NN = np.array([idx_dict[i] for i in closest_NN])
+            closest_NN = np.array([idx_dict[i] for i in closest_NN])  # Renumber to old numbering
 
             # Remove redundant NNs
+            closest_NN_redundant = closest_NN.copy()
             _, idx = np.unique(closest_NN, return_index=True)
             closest_NN = closest_NN[np.sort(idx)]
 
             # Add first element to end
             closest_NN_wrapped = np.concatenate([closest_NN, [closest_NN[0]]])
 
-            # SPACING = 100
-            # fig = plt.figure()
-            # ax = plt.axes(projection="3d")
-            # ax.set_xlabel("x")
-            # ax.set_ylabel("y")
-            # ax.set_zlabel("z")
-            # ax.view_init(elev=-90, azim=90)
-            # x, y, z = parent_mesh.vertices[closest_NN_wrapped].T
-            # ax.plot(x, y, z, "-", color="green")
+            # Plot NNs
+            fig, ax = plt.subplots()
 
-            # x, y, z = parent_mesh.vertices[::SPACING].T
-            # ax.plot(x, y, z, ".k")
+            # Plot full_slice
+            y, z = full_slice_yz.T
+            ax.plot(y, z, "b*")
 
-            # plt.show()
+            # Plot mesh_verts (NNs)
+            y, z = mesh_verts_yz_all[closest_NN_wrapped].T
+            ax.plot(y, z, "k.")
 
-            return closest_NN_wrapped, visible_vertices
+            # Plot linkages
+            for i, NN in enumerate(closest_NN_wrapped):
+
+                p1 = mesh_verts_yz_all[NN]
+                idx = closest_NN_redundant.tolist().index(NN)
+                p2 = full_slice_yz[idx]
+
+                x, y = zip(p1, p2)
+                ax.plot(x, y, "g-")
+            plt.show()
+
+            return closest_NN_wrapped, visible_vertices, closest_NN_redundant
 
         def filter_closest_NN(parent_mesh, closest_NN_wrapped):
             """Identify abrupt changes in closest_NN and filter them to be smoother."""
@@ -298,16 +313,26 @@ class Shape:
             ax.plot(x, y, z, ".k")
 
             plt.show()
-            return full_path
+            return np.array(full_path)
 
-        def create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, closest_NN_wrapped, u):
+        def distribute_path_to_child_vertices(parent_mesh, child_ac, full_path, u, slice_dist):
+            """Full path likely has a different number of vertices than the child_ac (which == SAMPLING_DENSITY_U), so we need to distribute them to create pairings."""
 
-            closest_NN = closest_NN_wrapped[:-1]  # Remove duplicate last element
+            parent_points = parent_mesh.vertices[full_path]
+            child_points = child_ac.surface(u, slice_dist).squeeze()
+
+            p_idx, c_idx = distribute_indices(parent_points, child_points).T
+            p_idx = full_path[p_idx]  # Renumber p_idx
+            c_idx = u[c_idx]  # Renumber c_idx
+
+            return p_idx, c_idx
+
+        def create_surface_between_child_slice_and_parent_mesh(parent_mesh, child_ac, p_idx, c_idx, slice_dist):
 
             # Identify derivatives at points along parent_mesh. mesh
             # TODO: Use something smoother than p_V because this causes ripples in the junction mesh
-            p_V = parent_mesh.vertices[closest_NN]
-            p_T = parent_mesh.vertices[closest_NN] - parent_mesh.vertices[np.roll(closest_NN, -1)]
+            p_V = parent_mesh.vertices[p_idx]
+            p_T = parent_mesh.vertices[p_idx] - parent_mesh.vertices[np.roll(p_idx, -1)]
 
             # Replace 0 values of tangent with last nonzero value
             for i, row in enumerate(p_T):
@@ -316,14 +341,13 @@ class Shape:
 
                     p_T[i] = p_T[i - 1]
 
-            p_N = parent_mesh.vertex_normals[closest_NN]
+            p_N = parent_mesh.vertex_normals[p_idx]
             p_B = np.cross(p_N, p_T)
             p_B = p_B / np.linalg.norm(p_B, axis=1, keepdims=True)  # norm
 
             # Identify derivatives at points along child's full slice
-            uuu = u
-            c_V = child_ac.surface(uuu, slice_dist).squeeze()
-            c_T = child_ac.surface.derivative(uuu, slice_dist, d=(0, 1)).squeeze()
+            c_V = child_ac.surface(c_idx, slice_dist).squeeze()
+            c_T = child_ac.surface.derivative(c_idx, slice_dist, d=(0, 1)).squeeze()
             c_T = c_T / np.linalg.norm(c_T, axis=1, keepdims=True)
 
             # Create B-Spline Surface linking child slice and projection on parent
@@ -352,9 +376,7 @@ class Shape:
             cp[:, 1, :] = c_V - c_T * SCALE_FACTOR
             cp[:, 2, :] = p_V - p_B * SCALE_FACTOR
             cp[:, 3, :] = p_V
-            # cp = cp.reshape(num_rows * num_cp_per_cross_section, cp.shape[2], order="F")
             cp = cp.reshape(num_rows * num_cp_per_cross_section, cp.shape[2], order="F")
-            # XXX: Possibly above change caused problems
 
             # Surface
             surface = Surface(basis1, basis2, cp, rational=False)
@@ -631,17 +653,26 @@ class Shape:
             num_steps_long_axis=10,
             num_steps_round_axis=6,
         )
-        closest_NN_wrapped, visible_vertices = project_child_slice_onto_parent_mesh(parent_mesh, child_ac, slice_dist)
+        closest_NN_wrapped, visible_vertices, closest_NN_redundant = project_child_slice_onto_parent_mesh(
+            parent_mesh, child_ac, slice_dist
+        )
         closest_NN_wrapped = filter_closest_NN(parent_mesh, closest_NN_wrapped)
         closest_NN_wrapped = smooth_closest_NN(closest_NN_wrapped, visible_vertices, window_size=WINDOW_SIZE)
         full_path = find_path_between_projected_vertices(parent_mesh, closest_NN_wrapped)
-        plot_projected_vertices_and_NNs_3D(full_slice, closest_NN_wrapped[:-1], parent_mesh.vertices, full_path)
-        plot_projected_vertices_and_NNs(self.full_slice_yz, closest_NN_wrapped[:-1], self.mesh_verts_yz, full_path)
-        surface, c_V, c_T = create_surface_between_child_slice_and_parent_mesh(
-            parent_mesh, child_ac, closest_NN_wrapped, u
+        plot_projected_vertices_and_NNs_3D(full_slice, closest_NN_redundant, parent_mesh.vertices, full_path)
+        plot_projected_vertices_and_NNs(
+            self.full_slice_yz,
+            closest_NN_redundant,
+            self.mesh_verts_yz_all,
+            full_path,
         )
+        p_idx, c_idx = distribute_path_to_child_vertices(parent_mesh, child_ac, full_path, u, slice_dist)
+        surface, c_V, c_T = create_surface_between_child_slice_and_parent_mesh(
+            parent_mesh, child_ac, p_idx, c_idx, slice_dist
+        )
+        plot_surface_linking_axial_components(parent_mesh, child_ac, surface)
+        # TODO: Fix this so that the meshes get joined appropriately :)
         combined_mesh, combined_edge_vertices = stitch_child_and_junction(child_ac, surface, slice_dist, full_slice)
-        # plot_surface_linking_axial_components(parent_mesh, child_ac, surface)
 
         # Delete the hole in the parent mesh
         parent_mesh_new, full_path_new = remove_interior_vertices_from_parent(parent_mesh, full_path)
