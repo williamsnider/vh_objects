@@ -33,7 +33,7 @@ def test_fuse_meshes():
         euler_angles=np.array([0, np.pi / 3, 0]),
     )
     s = Shape([ac1, ac2])
-    s.fuse_meshes(ac1, ac2)
+    s.fuse_meshes(ac1.mesh, ac2.mesh)
     # s.merged_meshes.show()
 
 
