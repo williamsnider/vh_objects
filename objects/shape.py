@@ -137,14 +137,12 @@ class Shape:
                 vertex_normals=vert_norms,
             )
 
-            v_list = []
-            for v in verts:
-                if v not in c_pym.vertices and v not in p_pym.vertices:
-                    v_list.append(v)
-            v_arr = np.zeros((len(v_list), 3))
-            for i, v in enumerate(v_list):
-                v_arr[i] = v
+            set_c = set([tuple(l) for l in c_pym.vertices.tolist()])
+            set_p = set([tuple(l) for l in p_pym.vertices.tolist()])
+            set_o = set([tuple(l) for l in o_pym.vertices.tolist()])
 
+            new_verts = (set_o - set_p) - set_c
+            new_verts = [list(v) for v in new_verts]
             # Find the two edges
             # Plot to verify
             fig = plt.figure()
@@ -159,10 +157,11 @@ class Shape:
             ax.plot(x, y, z, ".", color="green")
 
             # new
-            x, y, z = v_arr.T
+            x, y, z = zip(*new_verts)
             ax.plot(x, y, z, ".", color="red")
             plt.show()
 
+        # Split the new_verts into two groups based on nearest neighbor affinity
         find_NNs_between_meshes(parent_mesh, child_mesh)
         # # Given two meshes
         # # Find all nearest neighbors that are within some threshold
