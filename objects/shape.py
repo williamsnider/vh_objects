@@ -1,5 +1,7 @@
 from copy import Error
 from networkx.algorithms.core import k_core
+from networkx.algorithms.operators.binary import union
+from networkx.classes.function import neighbors
 from numpy.core.fromnumeric import _searchsorted_dispatcher
 import trimesh
 import numpy as np
@@ -17,6 +19,7 @@ from objects.utilities import (
     plot_filtered_closest_NN,
     plot_smoothed_NN,
     distribute_indices,
+    flatten,
 )
 import scipy
 from scipy.interpolate import CubicSpline
@@ -33,6 +36,7 @@ from objects.utilities import (
 import matplotlib.pyplot as plt
 import pymesh
 from sklearn.cluster import KMeans
+from copy import deepcopy
 
 
 class Shape:
@@ -126,12 +130,55 @@ class Shape:
 
         def order_groups(union_mesh, groups):
 
+            groups_in_order = []
             for group in groups:
 
-                ordered_group = [group[0]]
-                remaining_vertices =  None
-                # Find nearest neigbhor that forms a large angle -- this way we can go through the edges quickly.
-                for vert in group[1:]:
+                # Get nearest neighbor table
+                tree = scipy.spatial.KDTree(union_mesh.vertices[group])
+                dd, closest_NN = tree.query(union_mesh.vertices[group], k=len(group))
+
+                remaining_vertices = [i for i in group]
+                ordered_group = [group[0]]  # Start with first edge vertex. Note indexing is
+
+                for vert in ordered_group:
+
+                    # Exit for loop once all group members have been sorted
+                    if len(ordered_group) == len(group):
+                        break
+
+                    remaining_vertices.remove(vert)
+                    vert_idx = group.index(vert)
+                    nearest_neighbors = [group[i] for i in closest_NN[vert_idx][1:]]  #!!! Skip 0th index (itself)
+
+                    if (
+                        len(ordered_group) == 1
+                    ):  # Just assign first value so that we can start testing vector directions
+                        NN = nearest_neighbors[0]
+                    else:
+
+                        # Form vector between previous two ordered edge vertices
+                        prev_vec = union_mesh.vertices[ordered_group[-2]] - union_mesh.vertices[ordered_group[-1]]
+
+                        # Form vector between current edge vertices and all possible nearest neighbors
+                        curr_vecs = union_mesh.vertices[nearest_neighbors] - union_mesh.vertices[ordered_group[-1]]
+
+                        # Calculate angles - two vectors (as determinede above) should have opposite signs
+                        angles = angle_between(prev_vec, curr_vecs)
+                        CUTOFF = np.pi / 4
+                        valid_angles = angles > CUTOFF
+
+                        # Iterate through neighbors until we find the first valid one
+                        # TODO: Why is this not breaking out of the loop?
+                        for i, NN in enumerate(nearest_neighbors):
+                            if (valid_angles[i] == True) and (NN in remaining_vertices):
+                                break
+                        else:
+                            raise ValueError
+
+                    ordered_group.append(NN)
+                groups_in_order.append(ordered_group)
+            return groups_in_order
+
         def fit_splines(union_mesh, groups):
 
             splines = []
@@ -146,7 +193,7 @@ class Shape:
                 splines.append(spline)
             return splines
 
-        def plot_splines(mesh, groups, splines, spacing=25):
+        def plot_splines(mesh, groups, splines, spacing=1):
 
             fig = plt.figure()
             ax = plt.axes(projection="3d")
@@ -161,15 +208,192 @@ class Shape:
 
             # Plot groups
             for i, group in enumerate(groups):
-                c = np.array([1, i, 0.75])
+                c = np.array([0.25, i, 0.75])
                 x, y, z = mesh.vertices[group].T
                 ax.plot(x, y, z, ".", color=c)
 
+            # Plot group vertex normals
+            for i, group in enumerate(groups):
+                c = np.array([0, 0, 0])
+                for g in group:
+
+                    p1 = mesh.vertices[g]
+                    p2 = p1 + mesh.vertex_normals[g] * 0.1
+                    x, y, z = zip(p1, p2)
+                    ax.plot(x, y, z, "-", color=c)
+
             # Plot splines
             t = np.linspace(0, 1, 100)
-            for spline in splines:
-                c = np.array([i, 0.25, 1])
+            for i, spline in enumerate(splines):
+                c = np.array([i, 0.25, 0.75])
                 x, y, z = spline(t).T
+                ax.plot(x, y, z, "-", color=c)
+
+            plt.show()
+            pass
+
+        def find_valid_neighbors(union_mesh, groups):
+            def find_neighbors_by_degree(mesh, vertex_idx, degree=1):
+
+                for d in range(degree + 1):  # We want to include the highest degree
+
+                    if d == 0:
+                        neighbors_by_degree = [[vertex_idx]]
+                        continue
+
+                    all_neighbors = flatten(neighbors_by_degree)
+                    degree_neighbors = []
+                    for n in neighbors_by_degree[d - 1]:
+                        adjacent = mesh.vertex_neighbors[n]
+                        new_neighbors = list(set(adjacent) - set(all_neighbors))
+                        degree_neighbors.append(new_neighbors)
+
+                    neighbors_by_degree.append(flatten(degree_neighbors))
+
+                return neighbors_by_degree
+
+            expanded_groups = None
+
+            # Find the vertices on the union_mesh that are not near other edge_vertices
+            DEGREE = 7
+            degree_shift = 1  # e.g. if we find neighbors 5 degrees away, exclude all that are 3 or closer degrees
+
+            def find_nested_neighbors(union_mesh, groups, degree=DEGREE):
+                """
+                0th dim = which group
+                1st dim = which vertex in that group
+                2nd dim = which degree of separation
+                3rd dim = which vertex among those vertices at that degree of separation
+                """
+                nested_neighbors = []
+                for group in groups:
+                    neighbors = []
+                    for vert in group:
+                        neighbors.append(find_neighbors_by_degree(union_mesh, vert, degree=degree))
+                    nested_neighbors.append(neighbors)
+                return nested_neighbors
+
+            # Get list of neighbors that are too close and need to be excluded
+            nested_neighbors = find_nested_neighbors(union_mesh, groups, degree=DEGREE)
+            neighbors_too_close = []
+            for i, group in enumerate(groups):
+                group_too_close = []
+                for j, vert in enumerate(group):
+                    vert_too_close = set()
+                    for k in range(DEGREE - degree_shift):
+                        vert_too_close.update(nested_neighbors[i][j][k])
+                    group_too_close.append(vert_too_close)
+                neighbors_too_close.append(group_too_close)
+
+            # Exclude these neighbors based on distance (in degrees of separation)
+            groups_neighbors = []  # d0=group; d1=vertex; d2=valid neighbors
+            for i, group in enumerate(groups):
+                vert_neighbors = []
+                for j, vert in enumerate(group):
+                    neighbors = list(set(nested_neighbors[i][j][DEGREE]) - neighbors_too_close[i][j])
+                    vert_neighbors.append(neighbors)
+                groups_neighbors.append(vert_neighbors)
+
+            # Exclude neighbors based on the angle formed between them and the tangent at the edge vertex
+            valid_neighbors = deepcopy(groups_neighbors)
+            for i, group in enumerate(groups_neighbors):
+                for j, neighbors in enumerate(group):
+
+                    # Gather values for the edge vertex, the preceding edge vertex, and the putative neighbors
+                    vert_idx = groups[i][j]
+                    vert_pts = union_mesh.vertices[vert_idx]
+                    next_vert = j - 1
+                    next_vert_idx = groups[i][next_vert]
+                    next_vert_pts = union_mesh.vertices[next_vert_idx]
+                    neighbors_pts = union_mesh.vertices[neighbors]
+
+                    # Form vectors
+                    vec1 = next_vert_pts - vert_pts
+                    vec_arr = neighbors_pts - vert_pts
+
+                    # Calc angles
+                    ANGLE_CUTOFF = [np.pi / 4, 3 * np.pi / 4]
+                    angles = angle_between(vec1, vec_arr)
+                    valid_angles = (ANGLE_CUTOFF[0] <= angles) & (angles <= ANGLE_CUTOFF[1])
+
+                    for k, valid in enumerate(valid_angles):
+                        if valid == False:
+                            try:
+                                valid_neighbors[i][j].remove(neighbors[k])
+                            except:
+                                pass
+
+            return valid_neighbors
+
+        def plot_neighbors(mesh, groups, groups_neighbors, spacing=10):
+
+            fig = plt.figure()
+            ax = plt.axes(projection="3d")
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+            ax.set_zlabel("z")
+            ax.view_init(elev=-90, azim=90)
+
+            # Sample from entire mesh
+            x, y, z = mesh.vertices[::spacing].T
+            ax.plot(x, y, z, ".", color="green")
+
+            # Plot groups
+            for i, group in enumerate(groups):
+                c = np.array([0.25, i, 0.75])
+                x, y, z = mesh.vertices[group].T
+                ax.plot(x, y, z, ".", color=c)
+
+            # Plot neighbors
+            for a, group in enumerate(groups_neighbors[0]):
+                for j, neighbors in enumerate(group):
+                    c = np.array([0.55, i, 0.75])
+                    x, y, z = mesh.vertices[neighbors].T
+                    ax.plot(x, y, z, ".", color=c)
+
+                if a == 0:
+                    break
+
+            # Plot vertex under question
+            x, y, z = mesh.vertices[groups[0][0]].T
+            ax.plot(x, y, z, ".", color="red")
+
+            plt.show()
+            pass
+
+        def calc_average_of_neighbors(union_mesh, groups_neighbors):
+            groups_average = []
+            for i, group in enumerate(groups_neighbors):
+                neighbors_avg = np.zeros((len(group), 3))
+                for j, neighbors in enumerate(group):
+                    pts = union_mesh.vertices[neighbors]
+                    neighbors_avg[j] = pts.mean(axis=0)
+                groups_average.append(neighbors_avg)
+            return groups_average
+
+        def plot_group_averages(mesh, groups, groups_average, spacing=10):
+
+            fig = plt.figure()
+            ax = plt.axes(projection="3d")
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+            ax.set_zlabel("z")
+            ax.view_init(elev=-90, azim=90)
+
+            # Sample from entire mesh
+            x, y, z = mesh.vertices[::spacing].T
+            ax.plot(x, y, z, ".", color="green")
+
+            # Plot groups
+            for i, group in enumerate(groups):
+                c = np.array([0.25, i, 0.75])
+                x, y, z = mesh.vertices[group].T
+                ax.plot(x, y, z, ".", color=c)
+
+            # Plot averages under question
+            for i, avg in enumerate(groups_average):
+                c = np.array([0.66, i / 3 + 0.1, 1])
+                x, y, z = avg.T
                 ax.plot(x, y, z, "-", color=c)
 
             plt.show()
@@ -177,8 +401,13 @@ class Shape:
 
         union_mesh, edge_verts_pts, edge_verts_indices = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
         groups = segment_edge_verts(edge_verts_pts, edge_verts_indices)
+        groups = order_groups(union_mesh, groups)
         splines = fit_splines(union_mesh, groups)
-        plot_splines(union_mesh, groups, splines)
+        # plot_splines(union_mesh, groups, splines)
+        groups_neighbors = find_valid_neighbors(union_mesh, groups)
+        plot_neighbors(union_mesh, groups, groups_neighbors, spacing=1)
+        groups_average = calc_average_of_neighbors(union_mesh, groups_neighbors)
+        plot_group_averages(union_mesh, groups, groups_average, spacing=10)
         # def plot_mesh_and_edges(mesh, edge_verts, spacing=100):
 
         #     # Find the two edges

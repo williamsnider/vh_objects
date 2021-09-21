@@ -224,6 +224,16 @@ def distribute_indices(points1, points2):
 
 
 ##########
+# Misc Functions
+def flatten(groups):
+    flattened = []
+    for sublist in groups:
+        for i in sublist:
+            flattened.append(i)
+    return flattened
+
+
+##########
 # Plotting helper functions
 
 
