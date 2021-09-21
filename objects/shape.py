@@ -19,6 +19,7 @@ from objects.utilities import (
     distribute_indices,
 )
 import scipy
+from scipy.interpolate import CubicSpline
 import networkx as nx
 from splipy import BSplineBasis, Curve, Surface
 from objects.utilities import (
@@ -31,6 +32,7 @@ from objects.utilities import (
 )
 import matplotlib.pyplot as plt
 import pymesh
+from sklearn.cluster import KMeans
 
 
 class Shape:
@@ -55,9 +57,9 @@ class Shape:
             set_2 = set([tuple(l) for l in pym_2.vertices.tolist()])
             set_o = set([tuple(l) for l in pym_o.vertices.tolist()])
             new_verts = (set_o - set_1) - set_2
-            edge_verts = np.zeros((len(new_verts), 3))
+            edge_verts_pts = np.zeros((len(new_verts), 3))
             for i, v in enumerate(new_verts):
-                edge_verts[i] = list(v)
+                edge_verts_pts[i] = list(v)
 
             # Return as trimesh - easier to work with
             verts = pym_o.vertices
@@ -72,12 +74,80 @@ class Shape:
                 vertex_normals=vert_norms,
             )
 
-            return mesh, edge_verts
+            # Get indices of edge_verts
+            tree = scipy.spatial.KDTree(mesh.vertices)
+            _, edge_verts_indices = tree.query(edge_verts_pts, k=1)
 
-        def plot_mesh_and_edges(mesh, edge_verts, spacing=100):
+            return mesh, edge_verts_pts, edge_verts_indices
 
-            # Find the two edges
-            # Plot to verify
+        def segment_edge_verts(edge_verts_pts, edge_verts_indices):
+
+            # Group by nearest neighbor distance
+            NUM_NN = 25
+            tree = scipy.spatial.KDTree(edge_verts_pts)
+            dd, closest_NN = tree.query(edge_verts_pts, k=NUM_NN + 1)
+
+            groups = []
+            vertices_remaining = [i for i, v in enumerate(edge_verts_pts)]
+            while vertices_remaining != []:
+
+                curr_group = [vertices_remaining[0]]  # Start with some edge_vert's index
+                prev_group = []
+
+                for idx in curr_group:
+
+                    # Remove this idx from the vertices remaining
+                    vertices_remaining.remove(idx)
+
+                    # Gather the nearest neighbors
+                    new_verts = closest_NN[idx, 1:]
+
+                    # Include only those that are still in the remaining list
+                    new_verts = list(set.intersection(set(new_verts), set(vertices_remaining)))
+
+                    # Exclude those that are already in the current group
+                    new_verts = list(set(new_verts) - set(curr_group))
+
+                    # Append to curr_group
+                    curr_group.extend(new_verts)
+
+                groups.append(curr_group)
+
+            # Renumber indices to match the union_mesh
+            groups_renumbered = []
+            for group in groups:
+
+                group_renumbered = []
+                for vert in group:
+                    group_renumbered.append(edge_verts_indices[vert])
+
+                groups_renumbered.append(group_renumbered)
+            return groups_renumbered
+
+        def order_groups(union_mesh, groups):
+
+            for group in groups:
+
+                ordered_group = [group[0]]
+                remaining_vertices =  None
+                # Find nearest neigbhor that forms a large angle -- this way we can go through the edges quickly.
+                for vert in group[1:]:
+        def fit_splines(union_mesh, groups):
+
+            splines = []
+            for group in groups:
+
+                points = union_mesh.vertices[group]
+                points = np.concatenate(
+                    [points, points[0].reshape(1, -1)], axis=0
+                )  # Duplicate first point for periodic spline.
+                t = np.linspace(0, 1, len(points))
+                spline = CubicSpline(t, points, bc_type="periodic")
+                splines.append(spline)
+            return splines
+
+        def plot_splines(mesh, groups, splines, spacing=25):
+
             fig = plt.figure()
             ax = plt.axes(projection="3d")
             ax.set_xlabel("x")
@@ -85,239 +155,275 @@ class Shape:
             ax.set_zlabel("z")
             ax.view_init(elev=-90, azim=90)
 
-            # joint
+            # Sample from entire mesh
             x, y, z = mesh.vertices[::spacing].T
             ax.plot(x, y, z, ".", color="green")
 
-            # new
-            x, y, z = edge_verts.T
-            ax.plot(x, y, z, ".", color="red")
-            plt.show()
+            # Plot groups
+            for i, group in enumerate(groups):
+                c = np.array([1, i, 0.75])
+                x, y, z = mesh.vertices[group].T
+                ax.plot(x, y, z, ".", color=c)
 
-        def flatten(groups):
-            flattened = []
-            for sublist in groups:
-                for i in sublist:
-                    flattened.append(i)
-            return flattened
-
-        def find_verts_near_edge_verts(union_mesh, edge_verts, distance):
-
-            # TODO: Change this to be number of edges of separation, not distance
-            def find_neighbors_by_degree(mesh, vertex_idx, degree=1):
-
-                for d in range(degree + 1):  # We want to include the highest degree
-
-                    if d == 0:
-                        neighbors_by_degree = [[vertex_idx]]
-                        continue
-
-                    all_neighbors = flatten(neighbors_by_degree)
-                    degree_neighbors = []
-                    for n in neighbors_by_degree[d - 1]:
-                        adjacent = mesh.vertex_neighbors[n]
-                        new_neighbors = list(set(adjacent) - set(all_neighbors))
-                        degree_neighbors.append(new_neighbors)
-
-                    neighbors_by_degree.append(flatten(degree_neighbors))
-
-                return neighbors_by_degree[degree]
-
-            neighbors = find_neighbors_by_degree(union_mesh, 1000, degree=5)
-            avg_point = union_mesh.vertices[neighbors].mean(axis=0)
-
-            tree = scipy.spatial.KDTree(union_mesh.vertices)
-            dd, edge_verts_indices = tree.query(edge_verts, k=1)
-            edge_vert_neighbors = []
-            for i in edge_verts_indices:
-
-                edge_vert_neighbors.append(find_neighbors_by_degree(union_mesh, vertex_idx=i, degree=5))
-
-            edge_vert_neighbors_flat = flatten(edge_vert_neighbors)
-            unique, counts = np.unique(edge_vert_neighbors_flat, return_counts=True)
-            FRACTION = 0.7
-            STOP = np.round(FRACTION * len(unique)).astype("int")
-            furthest_idx = unique[np.argsort(counts)][STOP:]
-
-            # TODO: Figure out a better way to select just the furthestmost edge neighbors
-            # Plot to verify
-            spacing = 1
-            fig = plt.figure()
-            ax = plt.axes(projection="3d")
-            ax.set_xlabel("x")
-            ax.set_ylabel("y")
-            ax.set_zlabel("z")
-            ax.view_init(elev=-90, azim=90)
-
-            # # All verts
-            x, y, z = union_mesh.vertices[::20].T
-            ax.plot(x, y, z, ".", color="y")
-
-            # furthest points
-            x, y, z = union_mesh.vertices[furthest_idx].T
-            ax.plot(x, y, z, ".", color="b")
-
-            # # avg point
-            # x, y, z = avg_point.T
-            # ax.plot(x, y, z, ".", color="r")
-
-            # edge_vert
-            # x, y, z = edge_verts[1000]
-            # ax.plot(x, y, z, ".", color="k")
-
-            plt.show()
-            # # Form cKDTree
-            # union_mesh_tree = scipy.spatial.cKDTree(union_mesh.vertices)
-            # neighbors = union_mesh_tree.query_ball_point(edge_verts, distance)
-
-            # Find average point for each edge_vert
-            num_edge_verts = edge_verts.shape[0]
-            avg_point = np.zeros((num_edge_verts, 3))
-            for i, group in enumerate(neighbors):
-                points = union_mesh.vertices[group]
-
-                # ### SIMPLE MEAN OF ALL POINTS
-                # avg_point[i] = points.mean(axis=0)
-
-                # ### MEAN OF TWO FURTHEST POINTS
-                # # Take average of two furthest points in each group
-                # dist = scipy.spatial.distance.pdist(points)
-                # dist = scipy.spatial.distance.squareform(dist)
-                # try:
-                #     r, c = np.where(dist == dist.max())
-                #     p1 = r[0]
-                #     p2 = c[0]
-                # except:
-                #     pass
-                # avg_point[i] = (union_mesh.vertices[group[p1]] + union_mesh.vertices[group[p2]]) / 2
-
-                ### MEAN OF FURTHEST 20% OF POINTS FROM NEIGHBOR
-                FRACTION = 0.20
-                dists = np.linalg.norm(points - edge_verts[i], axis=1)
-                start = np.round(len(group) * (1 - FRACTION)).astype("int")
-                furthest_idx = np.argsort(dists)[start:]  # indices of top FRACTION neighbors
-                furthest_points = points[furthest_idx]
-                avg_point[i] = furthest_points.mean(axis=0)
-
-                # Plot to verify
-                spacing = 1
-                fig = plt.figure()
-                ax = plt.axes(projection="3d")
-                ax.set_xlabel("x")
-                ax.set_ylabel("y")
-                ax.set_zlabel("z")
-                ax.view_init(elev=-90, azim=90)
-
-                # All verts
-                x, y, z = union_mesh.vertices[::20].T
-                ax.plot(x, y, z, ".", color="y")
-
-                # furthest points
-                x, y, z = furthest_points.T
-                ax.plot(x, y, z, ".", color="b")
-
-                # avg point
-                x, y, z = avg_point[i].T
-                ax.plot(x, y, z, ".", color="r")
-
-                # edge_vert
-                x, y, z = edge_verts[i]
-                ax.plot(x, y, z, ".", color="k")
-
-                plt.show()
-
-            # Find the closest edge_vert for each neighbor
-            neighbors_flat_indices = list(set(flatten(neighbors)))
-            neighbors_flat_verts = union_mesh.vertices[neighbors_flat_indices]
-            tree = scipy.spatial.KDTree(edge_verts)
-            dd, closest_NN = tree.query(neighbors_flat_verts, k=1)
-
-            # Scale verts based on distance
-            def falloff(arr):
-                assert arr.max() <= 1.0
-                assert arr.min() >= 0.0
-
-                return np.sqrt(np.sin(arr * np.pi / 2))
-                # return 1 * arr
-
-            scaled_vec = (avg_point[closest_NN] - neighbors_flat_verts) * falloff(((distance - dd) / distance)).reshape(
-                -1, 1
-            )
-
-            scaled_pts = neighbors_flat_verts + scaled_vec
-
-            # Make meshes
-            old_mesh = union_mesh.copy()
-            verts = union_mesh.copy().vertices
-            verts[neighbors_flat_indices] = scaled_pts
-            faces = union_mesh.copy().faces
-            face_norms = calc_face_normals(verts, faces)
-            vert_norms = trimesh.geometry.mean_vertex_normals(verts.shape[0], faces, face_norms)
-            new_mesh = trimesh.Trimesh(
-                vertices=verts,
-                faces=faces,
-                face_normals=face_norms,
-                vertex_normals=vert_norms,
-            )
-            old_mesh.show()
-            new_mesh.show()
-
-            # Plot
-            spacing = 1
-            fig = plt.figure()
-            ax = plt.axes(projection="3d")
-            ax.set_xlabel("x")
-            ax.set_ylabel("y")
-            ax.set_zlabel("z")
-            ax.view_init(elev=-90, azim=90)
-
-            # # joint
-            x, y, z = union_mesh.vertices[::spacing].T
-            ax.plot(x, y, z, ".", color="k")
-
-            # Find edge_vert indices
-            edge_verts_indices = np.argsort(closest_NN[dd == 0])
-
-            for i, NN in enumerate(edge_verts_indices):
-
-                p1 = neighbors_flat_verts[NN]
-                p2 = scaled_pts[NN]
-                x, y, z = zip(p1, p2)
-                ax.plot(x, y, z, "-", color="green")
-
-            # Plot average point
-            x, y, z = avg_point[::spacing].T
-            ax.plot(x, y, z, ".", color="blue")
-
-            # for i, NN in enumerate(closest_NN):
-
-            #     if i % spacing != 0:
-            #         continue
-
-            #     p1 = neighbors_flat_verts[i]
-            #     p2 = p1 + scaled_vec[i]
-
-            #     x, y, z = zip(p1, p2)
-            #     ax.plot(x, y, z, "-", color="green")
-
-            # # scaled
-            # x, y, z = scaled_pts.T
-            # ax.plot(x, y, z, ".", color="b")
-
-            # # new
-            # x, y, z = zip(*edge_verts)
-            # ax.plot(x, y, z, ".", color="red")
-
-            # # Neighbors
-            # x, y, z = union_mesh.vertices[neighbors[0]].T
-            # ax.plot(x, y, z, ".", color="blue")
+            # Plot splines
+            t = np.linspace(0, 1, 100)
+            for spline in splines:
+                c = np.array([i, 0.25, 1])
+                x, y, z = spline(t).T
+                ax.plot(x, y, z, "-", color=c)
 
             plt.show()
             pass
 
-        union_mesh, edge_verts = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
+        union_mesh, edge_verts_pts, edge_verts_indices = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
+        groups = segment_edge_verts(edge_verts_pts, edge_verts_indices)
+        splines = fit_splines(union_mesh, groups)
+        plot_splines(union_mesh, groups, splines)
+        # def plot_mesh_and_edges(mesh, edge_verts, spacing=100):
+
+        #     # Find the two edges
+        #     # Plot to verify
+        #     fig = plt.figure()
+        #     ax = plt.axes(projection="3d")
+        #     ax.set_xlabel("x")
+        #     ax.set_ylabel("y")
+        #     ax.set_zlabel("z")
+        #     ax.view_init(elev=-90, azim=90)
+
+        #     # joint
+        #     x, y, z = mesh.vertices[::spacing].T
+        #     ax.plot(x, y, z, ".", color="green")
+
+        #     # new
+        #     x, y, z = edge_verts.T
+        #     ax.plot(x, y, z, ".", color="red")
+        #     plt.show()
+
+        # def flatten(groups):
+        #     flattened = []
+        #     for sublist in groups:
+        #         for i in sublist:
+        #             flattened.append(i)
+        #     return flattened
+
+        # def find_verts_near_edge_verts(union_mesh, edge_verts, distance):
+
+        #     # TODO: Change this to be number of edges of separation, not distance
+        #     def find_neighbors_by_degree(mesh, vertex_idx, degree=1):
+
+        #         for d in range(degree + 1):  # We want to include the highest degree
+
+        #             if d == 0:
+        #                 neighbors_by_degree = [[vertex_idx]]
+        #                 continue
+
+        #             all_neighbors = flatten(neighbors_by_degree)
+        #             degree_neighbors = []
+        #             for n in neighbors_by_degree[d - 1]:
+        #                 adjacent = mesh.vertex_neighbors[n]
+        #                 new_neighbors = list(set(adjacent) - set(all_neighbors))
+        #                 degree_neighbors.append(new_neighbors)
+
+        #             neighbors_by_degree.append(flatten(degree_neighbors))
+
+        #         return neighbors_by_degree[degree]
+
+        #     neighbors = find_neighbors_by_degree(union_mesh, 1000, degree=5)
+        #     avg_point = union_mesh.vertices[neighbors].mean(axis=0)
+
+        #     tree = scipy.spatial.KDTree(union_mesh.vertices)
+        #     dd, edge_verts_indices = tree.query(edge_verts, k=1)
+        #     edge_vert_neighbors = []
+        #     for i in edge_verts_indices:
+
+        #         edge_vert_neighbors.append(find_neighbors_by_degree(union_mesh, vertex_idx=i, degree=5))
+
+        #     edge_vert_neighbors_flat = flatten(edge_vert_neighbors)
+        #     unique, counts = np.unique(edge_vert_neighbors_flat, return_counts=True)
+        #     FRACTION = 0.7
+        #     STOP = np.round(FRACTION * len(unique)).astype("int")
+        #     furthest_idx = unique[np.argsort(counts)][STOP:]
+
+        #     # TODO: Figure out a better way to select just the furthestmost edge neighbors
+        #     # Plot to verify
+        #     spacing = 1
+        #     fig = plt.figure()
+        #     ax = plt.axes(projection="3d")
+        #     ax.set_xlabel("x")
+        #     ax.set_ylabel("y")
+        #     ax.set_zlabel("z")
+        #     ax.view_init(elev=-90, azim=90)
+
+        #     # # All verts
+        #     x, y, z = union_mesh.vertices[::20].T
+        #     ax.plot(x, y, z, ".", color="y")
+
+        #     # furthest points
+        #     x, y, z = union_mesh.vertices[furthest_idx].T
+        #     ax.plot(x, y, z, ".", color="b")
+
+        #     # # avg point
+        #     # x, y, z = avg_point.T
+        #     # ax.plot(x, y, z, ".", color="r")
+
+        #     # edge_vert
+        #     # x, y, z = edge_verts[1000]
+        #     # ax.plot(x, y, z, ".", color="k")
+
+        #     plt.show()
+        #     # # Form cKDTree
+        #     # union_mesh_tree = scipy.spatial.cKDTree(union_mesh.vertices)
+        #     # neighbors = union_mesh_tree.query_ball_point(edge_verts, distance)
+
+        #     # Find average point for each edge_vert
+        #     num_edge_verts = edge_verts.shape[0]
+        #     avg_point = np.zeros((num_edge_verts, 3))
+        #     for i, group in enumerate(neighbors):
+        #         points = union_mesh.vertices[group]
+
+        #         # ### SIMPLE MEAN OF ALL POINTS
+        #         # avg_point[i] = points.mean(axis=0)
+
+        #         # ### MEAN OF TWO FURTHEST POINTS
+        #         # # Take average of two furthest points in each group
+        #         # dist = scipy.spatial.distance.pdist(points)
+        #         # dist = scipy.spatial.distance.squareform(dist)
+        #         # try:
+        #         #     r, c = np.where(dist == dist.max())
+        #         #     p1 = r[0]
+        #         #     p2 = c[0]
+        #         # except:
+        #         #     pass
+        #         # avg_point[i] = (union_mesh.vertices[group[p1]] + union_mesh.vertices[group[p2]]) / 2
+
+        #         ### MEAN OF FURTHEST 20% OF POINTS FROM NEIGHBOR
+        #         FRACTION = 0.20
+        #         dists = np.linalg.norm(points - edge_verts[i], axis=1)
+        #         start = np.round(len(group) * (1 - FRACTION)).astype("int")
+        #         furthest_idx = np.argsort(dists)[start:]  # indices of top FRACTION neighbors
+        #         furthest_points = points[furthest_idx]
+        #         avg_point[i] = furthest_points.mean(axis=0)
+
+        #         # Plot to verify
+        #         spacing = 1
+        #         fig = plt.figure()
+        #         ax = plt.axes(projection="3d")
+        #         ax.set_xlabel("x")
+        #         ax.set_ylabel("y")
+        #         ax.set_zlabel("z")
+        #         ax.view_init(elev=-90, azim=90)
+
+        #         # All verts
+        #         x, y, z = union_mesh.vertices[::20].T
+        #         ax.plot(x, y, z, ".", color="y")
+
+        #         # furthest points
+        #         x, y, z = furthest_points.T
+        #         ax.plot(x, y, z, ".", color="b")
+
+        #         # avg point
+        #         x, y, z = avg_point[i].T
+        #         ax.plot(x, y, z, ".", color="r")
+
+        #         # edge_vert
+        #         x, y, z = edge_verts[i]
+        #         ax.plot(x, y, z, ".", color="k")
+
+        #         plt.show()
+
+        #     # Find the closest edge_vert for each neighbor
+        #     neighbors_flat_indices = list(set(flatten(neighbors)))
+        #     neighbors_flat_verts = union_mesh.vertices[neighbors_flat_indices]
+        #     tree = scipy.spatial.KDTree(edge_verts)
+        #     dd, closest_NN = tree.query(neighbors_flat_verts, k=1)
+
+        #     # Scale verts based on distance
+        #     def falloff(arr):
+        #         assert arr.max() <= 1.0
+        #         assert arr.min() >= 0.0
+
+        #         return np.sqrt(np.sin(arr * np.pi / 2))
+        #         # return 1 * arr
+
+        #     scaled_vec = (avg_point[closest_NN] - neighbors_flat_verts) * falloff(((distance - dd) / distance)).reshape(
+        #         -1, 1
+        #     )
+
+        #     scaled_pts = neighbors_flat_verts + scaled_vec
+
+        #     # Make meshes
+        #     old_mesh = union_mesh.copy()
+        #     verts = union_mesh.copy().vertices
+        #     verts[neighbors_flat_indices] = scaled_pts
+        #     faces = union_mesh.copy().faces
+        #     face_norms = calc_face_normals(verts, faces)
+        #     vert_norms = trimesh.geometry.mean_vertex_normals(verts.shape[0], faces, face_norms)
+        #     new_mesh = trimesh.Trimesh(
+        #         vertices=verts,
+        #         faces=faces,
+        #         face_normals=face_norms,
+        #         vertex_normals=vert_norms,
+        #     )
+        #     old_mesh.show()
+        #     new_mesh.show()
+
+        #     # Plot
+        #     spacing = 1
+        #     fig = plt.figure()
+        #     ax = plt.axes(projection="3d")
+        #     ax.set_xlabel("x")
+        #     ax.set_ylabel("y")
+        #     ax.set_zlabel("z")
+        #     ax.view_init(elev=-90, azim=90)
+
+        #     # # joint
+        #     x, y, z = union_mesh.vertices[::spacing].T
+        #     ax.plot(x, y, z, ".", color="k")
+
+        #     # Find edge_vert indices
+        #     edge_verts_indices = np.argsort(closest_NN[dd == 0])
+
+        #     for i, NN in enumerate(edge_verts_indices):
+
+        #         p1 = neighbors_flat_verts[NN]
+        #         p2 = scaled_pts[NN]
+        #         x, y, z = zip(p1, p2)
+        #         ax.plot(x, y, z, "-", color="green")
+
+        #     # Plot average point
+        #     x, y, z = avg_point[::spacing].T
+        #     ax.plot(x, y, z, ".", color="blue")
+
+        #     # for i, NN in enumerate(closest_NN):
+
+        #     #     if i % spacing != 0:
+        #     #         continue
+
+        #     #     p1 = neighbors_flat_verts[i]
+        #     #     p2 = p1 + scaled_vec[i]
+
+        #     #     x, y, z = zip(p1, p2)
+        #     #     ax.plot(x, y, z, "-", color="green")
+
+        #     # # scaled
+        #     # x, y, z = scaled_pts.T
+        #     # ax.plot(x, y, z, ".", color="b")
+
+        #     # # new
+        #     # x, y, z = zip(*edge_verts)
+        #     # ax.plot(x, y, z, ".", color="red")
+
+        #     # # Neighbors
+        #     # x, y, z = union_mesh.vertices[neighbors[0]].T
+        #     # ax.plot(x, y, z, ".", color="blue")
+
+        #     plt.show()
+        #     pass
+
+        # union_mesh, edge_verts = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
+        # clustering = segment_edge_verts(edge_verts)
         # plot_mesh_and_edges(union_mesh, edge_verts)
-        find_verts_near_edge_verts(union_mesh, edge_verts, distance=0.25)
+        # find_verts_near_edge_verts(union_mesh, edge_verts, distance=0.25)
         # Roadmap
         # Find all indices of points within X distance of each edge_vert
         # Find the average of these points
