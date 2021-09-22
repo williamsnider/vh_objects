@@ -32,6 +32,7 @@ from objects.utilities import (
     plot_mesh_derivatives,
     plot_surface_linking_axial_components,
     plot_mesh_normals,
+    fix_mesh,
 )
 import matplotlib.pyplot as plt
 import pymesh
@@ -53,12 +54,9 @@ class Shape:
         def calc_mesh_boolean_and_edges(mesh1, mesh2):
 
             # Use PyMesh to get boolean
-            start = time.time()
             pym_1 = pymesh.form_mesh(mesh1.vertices, mesh1.faces)
             pym_2 = pymesh.form_mesh(mesh2.vertices, mesh2.faces)
             pym_o = pymesh.boolean(pym_1, pym_2, operation="union")  # Output
-            end = time.time()
-            print(end - start)
 
             # Get edges - vertices that were in neither initial mesh
             set_1 = set([tuple(l) for l in pym_1.vertices.tolist()])
@@ -409,7 +407,7 @@ class Shape:
         splines = fit_splines(union_mesh, groups)
         # plot_splines(union_mesh, groups, splines)
         groups_neighbors = find_valid_neighbors(union_mesh, groups)
-        plot_neighbors(union_mesh, groups, groups_neighbors, spacing=1)
+        plot_neighbors(union_mesh, groups, groups_neighbors, spacing=10)
         groups_average = calc_average_of_neighbors(union_mesh, groups_neighbors)
         plot_group_averages(union_mesh, groups, groups_average, spacing=10)
         # def plot_mesh_and_edges(mesh, edge_verts, spacing=100):
