@@ -514,6 +514,7 @@ class Shape:
                 ax.plot(x, y, z, "-", color=c)
 
             plt.show()
+            # TODO: Figure how why average of smaller group is so jagged - need to smooth it out
             pass
 
         union_mesh, edge_verts_pts, edge_verts_indices = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
