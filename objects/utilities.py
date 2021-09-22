@@ -276,6 +276,21 @@ def flatten(groups):
     return flattened
 
 
+def sliding_window_mean(arr, window_size, axis):
+
+    assert window_size % 2 == 1, "window_size must be odd."
+
+    big_arr = np.zeros(arr.shape + (window_size,))  # Add extra dimension along which we will average
+    for idx in range(window_size):
+
+        shift = (window_size - 1) // 2 - idx
+        shifted = np.roll(arr, shift=shift, axis=axis)
+        big_arr[..., idx] = shifted  # Ellipsis in python --> get last column. COOL!
+        # big_arr[[slice(None)] * (big_arr.ndim - 1) + [idx]] = shifted  # More general solution
+
+    return big_arr.mean(axis=-1)  # Average along the axis we added (the last one)
+
+
 ##########
 # Plotting helper functions
 
