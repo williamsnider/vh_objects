@@ -37,6 +37,7 @@ import matplotlib.pyplot as plt
 import pymesh
 from sklearn.cluster import KMeans
 from copy import deepcopy
+import time
 
 
 class Shape:
@@ -52,9 +53,12 @@ class Shape:
         def calc_mesh_boolean_and_edges(mesh1, mesh2):
 
             # Use PyMesh to get boolean
+            start = time.time()
             pym_1 = pymesh.form_mesh(mesh1.vertices, mesh1.faces)
             pym_2 = pymesh.form_mesh(mesh2.vertices, mesh2.faces)
             pym_o = pymesh.boolean(pym_1, pym_2, operation="union")  # Output
+            end = time.time()
+            print(end - start)
 
             # Get edges - vertices that were in neither initial mesh
             set_1 = set([tuple(l) for l in pym_1.vertices.tolist()])
