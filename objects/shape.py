@@ -33,6 +33,7 @@ from objects.utilities import (
     plot_surface_linking_axial_components,
     plot_mesh_normals,
     fix_mesh,
+    sliding_window_mean,
 )
 import matplotlib.pyplot as plt
 import pymesh
@@ -234,6 +235,107 @@ class Shape:
             plt.show()
             pass
 
+        def find_valid_neighbors_by_distance(union_mesh, groups, distance, distance_cutoff):
+
+            mesh_pts = union_mesh.vertices
+            tree = scipy.spatial.KDTree(mesh_pts)
+            groups_neighbors_valid = []
+            for group in groups:
+
+                # Neighbors must within distance range (distance*distance_cutoff, distance)
+                group_pts = union_mesh.vertices[group]
+                neighbors_within_distance = tree.query_ball_point(group_pts, distance)
+                neighbors_too_close = tree.query_ball_point(group_pts, distance * distance_cutoff)
+                neighbors_within_cutoff = []  # Neighbors within the correct distance range (not too far, not too close)
+                for i in range(len(group)):
+                    within_distance = set(neighbors_within_distance[i])
+                    too_close = set(neighbors_too_close[i])
+                    within_cutoff = list(within_distance - too_close)
+                    neighbors_within_cutoff.append(within_cutoff)
+
+                # Neighbors must be within angle range relative to tangent at edge_vert
+                ROLL_AMOUNT = 1  # shift to next vert to find the tangent vector
+                WINDOW_SIZE = 5  # Average the tangent vectors using a sliding window of size 5 (to smooth)
+                ANGLE_RANGE = [np.pi / 3, 2 * np.pi / 3]
+                group_tan_vec = group_pts - np.roll(group_pts, ROLL_AMOUNT, axis=0)
+                group_tan_vec_smooth = sliding_window_mean(group_tan_vec, window_size=WINDOW_SIZE, axis=0)
+                neighbors_within_angle = []
+                for i in range(len(group)):
+                    neighbors = np.array(
+                        list(neighbors_within_cutoff[i])
+                    )  # Only get neighbors in correct distance range
+                    neighbors_vecs = mesh_pts[neighbors] - group_pts[i]
+                    tangent_vector = group_tan_vec_smooth[i]
+                    angles = angle_between(tangent_vector, neighbors_vecs)
+                    valid_indices = np.argwhere((ANGLE_RANGE[0] <= angles) & (angles <= ANGLE_RANGE[1]))
+                    within_angle = neighbors[np.squeeze(valid_indices)]
+                    neighbors_within_angle.append(
+                        within_angle.tolist()
+                    )  # This also includes neighbors at the correct distance
+
+                # Segment neighbors into two division on either side of the edge_vertex
+                neighbors_by_division = []
+                for i, vert in enumerate(group):
+
+                    T = group_tan_vec_smooth[i]
+                    N = union_mesh.vertex_normals[vert]
+                    B = np.cross(T, N)  # Segment neighbors based on whether they point in same direction as B
+
+                    neighbors = np.array(neighbors_within_angle[i])
+                    neighbors_pts = mesh_pts[neighbors]
+                    neighbors_vecs = neighbors_pts - mesh_pts[vert]
+
+                    # THRESHOLD = np.pi / 4
+                    # angles = angle_between(neighbors_vecs, B)
+                    # division_A = neighbors[angles <= THRESHOLD].tolist()
+                    # division_B = neighbors[angles > THRESHOLD].tolist()
+                    # neighbors_by_division.append([division_A, division_B])
+
+                    THRESHOLD = 0
+                    dot = neighbors_vecs @ B
+                    division_A = neighbors[dot <= THRESHOLD].tolist()
+                    division_B = neighbors[dot > THRESHOLD].tolist()
+                    neighbors_by_division.append([division_A, division_B])
+                groups_neighbors_valid.append(neighbors_by_division)
+
+            # Plot to verify
+            group_idx = 0
+            idx = -1
+            group = groups[group_idx]
+            fig = plt.figure()
+            ax = plt.axes(projection="3d")
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+            ax.set_zlabel("z")
+            ax.view_init(elev=-90, azim=90)
+            # Plot all verts
+            c = "black"
+            x, y, z = mesh_pts[::10].T
+            ax.plot(x, y, z, ".", color=c)
+
+            # Plot vert
+            idx = -1
+            c = "cyan"
+            x, y, z = mesh_pts[group[idx]].T
+            ax.plot(x, y, z, ".", color=c)
+
+            # Plot neighbors
+            for j, division in enumerate(groups_neighbors_valid[group_idx][idx]):
+                if j == 0:
+                    c = "purple"
+                else:
+                    c = "yellow"
+                x, y, z = mesh_pts[division].T
+                ax.plot(x, y, z, ".", color=c)
+
+            # plt.show()
+            # 1D: group
+            # 2D: verts within that group
+            # 3D: which division
+            # 4D: neighbors
+
+            return groups_neighbors_valid
+
         def find_valid_neighbors(union_mesh, groups):
             def find_neighbors_by_degree(mesh, vertex_idx, degree=1):
 
@@ -363,15 +465,27 @@ class Shape:
             plt.show()
             pass
 
-        def calc_average_of_neighbors(union_mesh, groups_neighbors):
-            groups_average = []
-            for i, group in enumerate(groups_neighbors):
-                neighbors_avg = np.zeros((len(group), 3))
-                for j, neighbors in enumerate(group):
-                    pts = union_mesh.vertices[neighbors]
-                    neighbors_avg[j] = pts.mean(axis=0)
-                groups_average.append(neighbors_avg)
-            return groups_average
+        def calc_average_of_neighbors(union_mesh, groups_neighbors_valid):
+
+            groups_avg = []
+            for i, group in enumerate(groups_neighbors_valid):
+
+                group_avg = np.zeros((len(group), 3))
+
+                for j, vert in enumerate(group):
+
+                    division_avg = np.zeros((2, 3))
+                    for k, division in enumerate(vert):
+
+                        division_pts = union_mesh.vertices[division]
+                        division_avg[k] = division_pts.mean(axis=0)
+                    group_avg[j] = division_avg.mean(axis=0)
+
+                # # Smooth this average
+                WINDOW_SIZE = 9
+                group_avg = sliding_window_mean(group_avg, WINDOW_SIZE, axis=0)
+                groups_avg.append(group_avg)
+            return groups_avg
 
         def plot_group_averages(mesh, groups, groups_average, spacing=10):
 
@@ -393,9 +507,10 @@ class Shape:
                 ax.plot(x, y, z, ".", color=c)
 
             # Plot averages under question
-            for i, avg in enumerate(groups_average):
-                c = np.array([0.66, i / 3 + 0.1, 1])
-                x, y, z = avg.T
+            for j, group_avg in enumerate(groups_average):
+
+                c = "red"
+                x, y, z = group_avg.T
                 ax.plot(x, y, z, "-", color=c)
 
             plt.show()
@@ -406,10 +521,12 @@ class Shape:
         groups = order_groups(union_mesh, groups)
         splines = fit_splines(union_mesh, groups)
         # plot_splines(union_mesh, groups, splines)
-        groups_neighbors = find_valid_neighbors(union_mesh, groups)
-        plot_neighbors(union_mesh, groups, groups_neighbors, spacing=10)
-        groups_average = calc_average_of_neighbors(union_mesh, groups_neighbors)
-        plot_group_averages(union_mesh, groups, groups_average, spacing=10)
+        groups_neighbors_valid = find_valid_neighbors_by_distance(
+            union_mesh, groups, distance=0.1, distance_cutoff=0.75
+        )
+        # plot_neighbors(union_mesh, groups, groups_neighbors_valid, spacing=10)
+        groups_avg = calc_average_of_neighbors(union_mesh, groups_neighbors_valid)
+        plot_group_averages(union_mesh, groups, groups_avg, spacing=10)
         # def plot_mesh_and_edges(mesh, edge_verts, spacing=100):
 
         #     # Find the two edges
