@@ -6,8 +6,8 @@ NUM_ENDPOINTS_SLOPE = 2  # Extra controlpoints that determine slope of spline at
 NUM_CROSS_SECTION_SLOPE = (
     2  # Extra controlpoints that determine slope of spline at the cross sections closest to the endpoints
 )
-SAMPLING_DENSITY_U = 250  # How densely to sample along round axis of 'cylinder'
-SAMPLING_DENSITY_V = 250  # How densely to sample along long axis of 'cylinder'
+SAMPLING_DENSITY_U = 500  # How densely to sample along round axis of 'cylinder'
+SAMPLING_DENSITY_V = 500  # How densely to sample along long axis of 'cylinder'
 NUM_NN = 1  # int((SAMPLING_DENSITY_U * SAMPLING_DENSITY_V * (0.25 ** 2)) ** 0.5)  # How many nearest neighbors to sample when projecting child onto parent
 print("NUM_NN = ", NUM_NN)
 WINDOW_SIZE = 25
