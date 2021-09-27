@@ -582,10 +582,9 @@ class Shape:
                 return np.sin(ratio * np.pi / 4)  # Max when ratio = 1, min when ratio = 0.
 
             # TODO: Weight shifts by their ratios
+            # TODO: Figure out why this overloads
             weight_falloff = falloff(nearby_ratio)
             weight_arr = weight_falloff / weight_falloff.sum(axis=0)
-            weight_arr = weight_arr.reshape(weight_arr.shape + (1,))
-            weight_arr = np.repeat(weight_arr, 3, axis=2)
             weight_arr = falloff(nearby_ratio) / falloff(nearby_ratio_3D).sum(axis=0)
             shifts = (nearby_shift * weight_arr).sum(axis=0)
             nearby_pts_shifted = nearby_pts + shifts
