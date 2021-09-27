@@ -250,6 +250,11 @@ class Shape:
                 neighbors_within_cutoff.append(within_cutoff)
                 nearby_points.update(within_distance)
 
+            # # XXX: Test whether the distances exceed DISTANCE
+            # nearby_pts = union_mesh.vertices[list(nearby_points)]
+            # edge_verts_pts = union_mesh.vertices[group]
+            # nearby_distances = cdist(edge_verts_pts, nearby_pts)
+
             # Neighbors must be within angle range relative to tangent at edge_vert
             ROLL_AMOUNT = 1  # shift to next vert to find the tangent vector
             WINDOW_SIZE = 9  # Average the tangent vectors using a sliding window of size 5 (to smooth)
@@ -264,9 +269,7 @@ class Shape:
                 angles = angle_between(tangent_vector, neighbors_vecs)
                 valid_indices = np.argwhere((ANGLE_RANGE[0] <= angles) & (angles <= ANGLE_RANGE[1]))
                 within_angle = neighbors[np.squeeze(valid_indices)]
-                neighbors_within_angle.append(
-                    within_angle.tolist()
-                )  # This also includes neighbors at the correct distance
+                neighbors_within_angle.append(within_angle)  # This also includes neighbors at the correct distance
 
             # Segment neighbors into two divisions on either side of the edge_vertex
             neighbors_by_division = []
@@ -277,7 +280,10 @@ class Shape:
                 B = np.cross(T, N)  # Segment neighbors based on whether they point in same direction as B
 
                 neighbors = np.array(neighbors_within_angle[i])
-                neighbors_pts = mesh_pts[neighbors]
+                try:
+                    neighbors_pts = mesh_pts[neighbors]
+                except:
+                    pass
                 neighbors_vecs = neighbors_pts - mesh_pts[vert]
 
                 # THRESHOLD = np.pi / 4
@@ -293,32 +299,32 @@ class Shape:
                 neighbors_by_division.append([division_A, division_B])
             valid_neighbors = neighbors_by_division
 
-            # # Plot to verify
-            idx = 38
-            fig = plt.figure()
-            ax = plt.axes(projection="3d")
-            ax.set_xlabel("x")
-            ax.set_ylabel("y")
-            ax.set_zlabel("z")
-            ax.view_init(elev=-90, azim=90)
-            # Plot all verts
-            c = "black"
-            x, y, z = mesh_pts[::10].T
-            ax.plot(x, y, z, ".", color=c)
+            # # # Plot to verify
+            # idx = 38
+            # fig = plt.figure()
+            # ax = plt.axes(projection="3d")
+            # ax.set_xlabel("x")
+            # ax.set_ylabel("y")
+            # ax.set_zlabel("z")
+            # ax.view_init(elev=-90, azim=90)
+            # # Plot all verts
+            # c = "black"
+            # x, y, z = mesh_pts[::10].T
+            # ax.plot(x, y, z, ".", color=c)
 
-            # Plot vert
-            c = "cyan"
-            x, y, z = mesh_pts[group[idx]].T
-            ax.plot(x, y, z, ".", color=c)
+            # # Plot vert
+            # c = "cyan"
+            # x, y, z = mesh_pts[group[idx]].T
+            # ax.plot(x, y, z, ".", color=c)
 
-            # Plot neighbors
-            for j, division in enumerate(valid_neighbors[idx]):
-                if j == 0:
-                    c = "purple"
-                else:
-                    c = "yellow"
-                x, y, z = mesh_pts[division].T
-                ax.plot(x, y, z, ".", color=c)
+            # # Plot neighbors
+            # for j, division in enumerate(valid_neighbors[idx]):
+            #     if j == 0:
+            #         c = "purple"
+            #     else:
+            #         c = "yellow"
+            #     x, y, z = mesh_pts[division].T
+            #     ax.plot(x, y, z, ".", color=c)
 
             # plt.show()
             # 1D: verts within that group
@@ -553,18 +559,69 @@ class Shape:
             nearby_pts = union_mesh.vertices[nearby_points]
             nearby_distances = cdist(edge_verts_pts, nearby_pts)
             nearby_ratio = (distance - nearby_distances) / distance  # Convert these distances to ratios
+            nearby_ratio[nearby_ratio <= 0] = 0  # Ratio below 0  means neighbor is out of range
 
             # Find vector of all mesh points to the neighbors_average
-            neighbor_averages_3D = np.expand_dims(
-                neighbor_averages, axis=1
-            )  # Add third dimension to allow for broadcasting
-            nearby_ratio_3D = np.expand_dims(nearby_ratio, axis=2)
-            nearby_vec = -neighbor_averages_3D + nearby_ratio_3D
+            neighbor_averages_3D = np.expand_dims(neighbor_averages, axis=1)  # Add 3D to allow for repetition
+            nearby_vec = neighbor_averages_3D - nearby_pts
 
             # Multiply vector by ratio of distance from point to edge_vert
-            nearby_shift = nearby_vec * np.expand_dims(nearby_ratio, axis=2)
-            # TODO: Remove the points that are too far from the distance.
-            return None
+            nearby_ratio_3D = np.expand_dims(nearby_ratio, axis=2)
+            nearby_ratio_3D = np.repeat(nearby_ratio_3D, 3, axis=2)
+            nearby_shift = nearby_vec * nearby_ratio_3D
+
+            # # Apply largest shift to each point
+            # largest_idx = np.argmax(nearby_ratio, axis=0)
+            # num_nearby = nearby_pts.shape[0]
+            # largest_shift = nearby_shift[largest_idx, np.arange(num_nearby), :]
+            # nearby_pts_shifted = nearby_pts + largest_shift
+
+            # TODO: add in a smoother fall off function
+            def falloff(ratio):
+
+                return np.sin(ratio * np.pi / 4)  # Max when ratio = 1, min when ratio = 0.
+
+            # TODO: Weight shifts by their ratios
+            weight_falloff = falloff(nearby_ratio)
+            weight_arr = weight_falloff / weight_falloff.sum(axis=0)
+            weight_arr = weight_arr.reshape(weight_arr.shape + (1,))
+            weight_arr = np.repeat(weight_arr, 3, axis=2)
+            weight_arr = falloff(nearby_ratio) / falloff(nearby_ratio_3D).sum(axis=0)
+            shifts = (nearby_shift * weight_arr).sum(axis=0)
+            nearby_pts_shifted = nearby_pts + shifts
+
+            # # Plot to verify
+            # spacing = 1
+            # fig = plt.figure()
+            # ax = plt.axes(projection="3d")
+            # ax.set_xlabel("x")
+            # ax.set_ylabel("y")
+            # ax.set_zlabel("z")
+            # ax.view_init(elev=-90, azim=90)
+
+            # # joint
+            # x, y, z = union_mesh.vertices[nearby_points].T
+            # ax.plot(x, y, z, ".", color="green")
+
+            # # new
+            # for i, p1 in enumerate(nearby_pts):
+            #     p2 = nearby_pts_shifted[i]
+            #     x, y, z = zip(p1, p2)
+            #     ax.plot(x, y, z, "-", color="red")
+            # plt.show()
+
+            # Update mesh
+            union_mesh.vertices[nearby_points] = nearby_pts_shifted
+            union_mesh.face_normals = calc_face_normals(union_mesh.vertices, union_mesh.faces)
+            union_mesh.vertex_normals = trimesh.geometry.mean_vertex_normals(
+                union_mesh.vertices.shape[0],
+                union_mesh.faces,
+                union_mesh.face_normals,
+            )
+            union_mesh.show()
+            return union_mesh
+
+            # return None
 
         union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
         groups = segment_edge_verts(union_mesh, edge_verts_indices)
@@ -576,7 +633,7 @@ class Shape:
             # plot_splines(union_mesh, groups, splines)
             DISTANCE = 0.1
             valid_neighbors, nearby_points = find_valid_neighbors_by_distance(
-                union_mesh, group, distance=0.1, distance_cutoff=0.75
+                union_mesh, group, distance=DISTANCE, distance_cutoff=0.75
             )
             # plot_neighbors(union_mesh, groups, groups_neighbors_valid, spacing=10)
             neighbor_averages = calc_average_of_neighbors(union_mesh, valid_neighbors)
