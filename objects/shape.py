@@ -92,7 +92,7 @@ class Shape:
         def segment_edge_verts(union_mesh, edge_verts_indices):
 
             # Group by nearest neighbor distance
-            NUM_NN = np.round(SAMPLING_DENSITY_U * SAMPLING_DENSITY_V * 0.05).astype("int")
+            NUM_NN = np.round(np.sqrt(SAMPLING_DENSITY_U * SAMPLING_DENSITY_V) * 0.05).astype("int")
             edge_verts_pts = union_mesh.vertices[edge_verts_indices]
             tree = scipy.spatial.KDTree(edge_verts_pts)
             dd, closest_NN = tree.query(edge_verts_pts, k=NUM_NN + 1)
@@ -612,7 +612,9 @@ class Shape:
             group_tangent_vector_smooth = sliding_window_mean(group_tangent_vector, smoothing_window, axis=0)
             return group_tangent_vector_smooth
 
-        def plot_mesh_and_group(mesh, group, group_tangent_vector=None, spline=None, spacing=1):
+        def plot_mesh_and_group(
+            mesh, group, group_tangent_vector=None, spline=None, spacing=1, average_of_neighbors=None
+        ):
 
             fig = plt.figure()
             ax = plt.axes(projection="3d")
@@ -642,6 +644,11 @@ class Shape:
                 x, y, z = spline(t).T
                 ax.plot(x, y, z, ".", color="black")
 
+            # Average of neighbors
+            if type(average_of_neighbors) != type(None):
+                x, y, z = average_of_neighbors.T
+                ax.plot(x, y, z, "-", color="purple")
+
             plt.show()
 
         def calc_average_of_neighbors(mesh, spline, spline_sampling, distance):
@@ -656,7 +663,8 @@ class Shape:
             # Distance weights
             # Further mesh_pts (that are within distance) should be weighted highly.
             distances = cdist(edge_pts, mesh_pts)
-            w_d = distances / distance
+            # w_d = distances / distance
+            w_d = distances ** 2 / distance  # Square to give higher weight to further distances
             w_d[w_d > 1] = 0
 
             #########
@@ -667,8 +675,11 @@ class Shape:
             tan_vec = np.expand_dims(tan_vec, axis=1)
             angles = angle_between(mesh_vec, tan_vec)
             # Give weight 0 to nan, which happens when mesh_vec is comparing two identical points (vector with no direction )
+            ANGLE_CUTOFF = [np.pi / 3, 2 * np.pi / 3]
             angles[np.isnan(angles)] = 0
-            w_a = np.sin(angles)
+            angles[angles < ANGLE_CUTOFF[0]] = 0
+            angles[angles > ANGLE_CUTOFF[1]] = 0
+            w_a = angles / angles.max()
 
             ###########
             # Face area weights
@@ -684,12 +695,44 @@ class Shape:
 
             # Weight by area of faces each vertex touches
             mesh_faces_area = mesh.area_faces[mesh_faces].sum(axis=1)
-            mesh_faces_total_area = mesh_faces_area.sum()
-            w_f = mesh_faces_area / mesh_faces_total_area
-            w_f = np.repeat(w_f, edge_pts.shape[0], axis=0)
+            # w_f = mesh_faces_area / mesh_faces_area.max()
+            w_f = np.clip(mesh_faces_area / mesh_faces_area.mean(), 0.0, 1.0)
 
-            # TODO:  How do you combine multiple weights? w_f may be too far along
-            return None
+            # Combine all weights, normalize so that they sum to 1 for each edge_pt
+            print("Testing without faces")
+            w = w_d * w_a  # * w_f
+            w = w / w.sum(axis=1, keepdims=True)
+            w = np.expand_dims(w, axis=2)
+
+            # Multiply mesh points by weights, then sum, to find average position
+            average_of_neighbors = (mesh_pts * w).sum(axis=1)
+
+            # Plot highly contributing points
+            idx = 25
+            fig = plt.figure()
+            ax = plt.axes(projection="3d")
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+            ax.set_zlabel("z")
+            ax.view_init(elev=-90, azim=90)
+
+            # Entire mesh
+            x, y, z = mesh.vertices.T
+            ax.plot(x, y, z, ".", color="green")
+
+            # Vertices contributing
+            contributors = w[idx] > w[idx].mean() * 100
+            x, y, z = mesh.vertices[np.squeeze(contributors)].T
+            ax.plot(x, y, z, ".", color="blue")
+
+            # Vertex
+            x, y, z = edge_pts[idx]
+            ax.plot(x, y, z, ".", color="red")
+
+            # Average
+            x, y, z = average_of_neighbors[idx]
+            ax.plot(x, y, z, ".", color="purple")
+            return average_of_neighbors
 
         union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
         groups = segment_edge_verts(union_mesh, edge_verts_indices)
@@ -707,14 +750,6 @@ class Shape:
             # Fit spline to allow for even sampling
             spline = fit_spline(union_mesh, group)
 
-            # Plot mesh
-            plot_mesh_and_group(
-                mesh=union_mesh,
-                group=group,
-                spline=spline,
-                spacing=1,
-            )
-
             # Calculate average position of neighbors
             DISTANCE = 0.1
             SPLINE_SAMPLING = 133
@@ -723,6 +758,15 @@ class Shape:
                 spline,
                 spline_sampling=SPLINE_SAMPLING,
                 distance=DISTANCE,
+            )
+
+            # Plot mesh
+            plot_mesh_and_group(
+                mesh=union_mesh,
+                group=group,
+                spline=spline,
+                spacing=1,
+                average_of_neighbors=average_of_neighbors,
             )
 
             # DISTANCE = 0.1
