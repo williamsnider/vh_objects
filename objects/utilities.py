@@ -29,12 +29,7 @@ def open_uniform_knot_vector(num_cps, order):
 # Vector functions
 def unit_vector(vector):
     """Returns the unit vector of the vector."""
-    if vector.ndim == 1:
-        a = 0
-    elif vector.ndim == 2:
-        a = 1
-    else:
-        raise NotImplementedError
+    a = vector.ndim - 1
     return vector / np.linalg.norm(vector, axis=a, keepdims=True)
 
 
@@ -55,12 +50,14 @@ def angle_between(v1, v2):
     """
     v1_u = unit_vector(v1)
     v2_u = unit_vector(v2)
-    if v1_u.ndim == 1 and v2_u.ndim == 1:
-        return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
-    elif v1_u.ndim == 2 or v2_u.ndim == 2:
-        return np.arccos(np.clip((v1_u * v2_u).sum(axis=1), -1, 1))
-    else:
-        raise NotImplementedError
+    a = np.max([v1_u.ndim, v2_u.ndim]) - 1
+    return np.arccos(np.clip((v1_u * v2_u).sum(axis=a), -1.0, 1.0))
+    # if v1_u.ndim == 1 and v2_u.ndim == 1:
+    #     return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+    # elif v1_u.ndim == 2 or v2_u.ndim == 2:
+    #     return np.arccos(np.clip((v1_u * v2_u).sum(axis=1), -1, 1))
+    # else:
+    #     raise NotImplementedError
 
 
 ##########
