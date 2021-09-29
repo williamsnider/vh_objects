@@ -734,6 +734,42 @@ class Shape:
             ax.plot(x, y, z, ".", color="purple")
             return average_of_neighbors
 
+        def find_neighbors(mesh, group, distance):
+
+            mesh_pts = mesh.vertices.__array__()
+            edge_pts = mesh.vertices[group].__array__()
+
+            tree = scipy.spatial.KDTree(mesh_pts)
+            neighbors_list = tree.query_ball_point(edge_pts, r=distance)
+            neighbors = set()
+            for n in neighbors_list:
+                neighbors.update(set(n))
+
+            return list(neighbors)
+
+        def average_points(mesh, indices, distance):
+
+            # Gather points
+            mesh_pts = mesh.vertices.__array__()
+            neighbor_pts = mesh_pts[indices]
+
+            # Cutoff by distance
+            distances = cdist(neighbor_pts, mesh_pts)
+            mask = distances <= distance  # Ignore points that are too far from the neighbor
+            mask_3D = np.expand_dims(mask, axis=2)
+
+            # Average points surrounding each neighbor
+            summed = (mesh_pts * mask_3D).sum(axis=1)
+            counts = np.count_nonzero(mask, axis=1, keepdims=True)
+            average_points = summed / counts
+
+            # Assign to mesh
+            mesh.vertices[indices] = average_points
+
+            # mesh.show()
+
+            return mesh
+
         union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
         groups = segment_edge_verts(union_mesh, edge_verts_indices)
 
@@ -747,11 +783,25 @@ class Shape:
             # Ensure the vertices in each group are in order
             group = order_group(union_mesh, unordered_group)
 
+            # Test out taubin smoothing
+            for i in range(10):
+                trimesh.smoothing.filter_taubin(union_mesh, lamb=0.5, nu=1, iterations=5, laplacian_operator=None)
+                union_mesh.show()
+
+            # Find neighbors (within some distance)
+            DISTANCE = 0.05
+            neighbors = find_neighbors(union_mesh, group, distance=DISTANCE)
+
+            # # Average neighbors
+            # for i in range(100):
+            #     union_mesh = average_points(union_mesh, neighbors, distance=DISTANCE)
+            #     if i % 10 == 0:
+            #         union_mesh.show()
+
             # Fit spline to allow for even sampling
             spline = fit_spline(union_mesh, group)
 
             # Calculate average position of neighbors
-            DISTANCE = 0.1
             SPLINE_SAMPLING = 133
             average_of_neighbors = calc_average_of_neighbors(
                 union_mesh,
