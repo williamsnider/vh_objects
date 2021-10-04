@@ -1,34 +1,57 @@
 import igl
 import scipy as sp
 import numpy as np
-from meshplot import plot, subplot, interact
-import meshplot
-
-meshplot.offline()
-
-import matplotlib.pyplot as plt
 import os
-from objects import *
+import trimesh
+import matplotlib.pyplot as plt
 
 root_folder = os.getcwd()
 
-v, f = igl.read_triangle_mesh(os.path.join(root_folder, "bump_domain.obj"))
+
+v, f = igl.read_triangle_mesh(os.path.join(root_folder, "objects", "decimated-max.obj"))
+v[:, [0, 2]] = v[:, [2, 0]]  # Swap X and Z axes
 u = v.copy()
 
-# Find boundary vertices outside annulus
-vrn = np.linalg.norm(v, axis=1)
-is_outer = [vrn[i] - 1.00 > -1e-15 for i in range(v.shape[0])]
-is_inner = [vrn[i] - 0.15 < 1e-15 for i in range(v.shape[0])]
-in_b = [is_outer[i] or is_inner[i] for i in range(len(is_outer))]
 
-b = np.array([i for i in range(v.shape[0]) if (in_b[i])]).T
-bc = np.zeros(b.size)
+s = igl.read_dmat(os.path.join(root_folder, "objects", "decimated-max-selection.dmat"))
+b = np.array([[t[0] for t in [(i, s[i]) for i in range(0, v.shape[0])] if t[1] >= 0]]).T
+b = np.arange(0, v.shape[0])[s == 2]
 
-for bi in range(b.size):
-    bc[bi] = 0.0 if is_outer[b[bi]] else 1.0
 
-c = np.array(is_outer)
+## Boundary conditions directly on deformed positions
+u_bc = np.zeros((b.shape[0], v.shape[1]))
+v_bc = np.zeros((b.shape[0], v.shape[1]))
 
+for bi in range(b.shape[0]):
+    v_bc[bi] = v[b[bi]]
+
+    if s[b[bi]] == 0:  # Don't move handle 0
+        u_bc[bi] = v[b[bi]]
+    elif s[b[bi]] == 1:  # Move handle 1 down
+        u_bc[bi] = v[b[bi]] + np.array([[0, -50, 0]])
+    else:  # Move other handles forward
+        u_bc[bi] = v[b[bi]] + np.array([[-25, 0, 0]])
+
+i = 2
+u_bc_anim = v_bc + i * 0.6 * (u_bc - v_bc)
+d_bc = u_bc_anim - v_bc
+d = igl.harmonic_weights(v, f, b, d_bc, 2)
+u = v + d
+# subplot(
+#     u,
+#     f,
+#     s,
+#     shading={"wireframe": False, "colormap": "tab10"},
+#     s=[1, 4, i + 1],
+#     data=p,
+# )
+mesh = trimesh.Trimesh(vertices=u, faces=f)
+trimesh.repair.fix_normals(mesh)
+mesh.visual.vertex_colors[b, 0] = 255
+# mesh.show()
+
+
+# Plot points
 fig = plt.figure()
 ax = plt.axes(projection="3d")
 ax.set_xlabel("x")
@@ -37,23 +60,29 @@ ax.set_zlabel("z")
 ax.view_init(elev=-90, azim=90)
 
 # Entire mesh
-x, y, z = v.T
-ax.plot(x, y, z, ".", color="black")
-
-x, y, z = v[is_outer].T
+x, y, z = mesh.vertices.T
 ax.plot(x, y, z, ".", color="green")
 
-x, y, z = v[is_inner].T
+# S Points
+x, y, z = mesh.vertices[b].T
 ax.plot(x, y, z, ".", color="red")
 
-x, y, z = v[b[bc.astype("bool")]].T
-ax.plot(x, y, z, ".", color="purple")
 plt.show()
-for i in range(1, 5):
-    z = igl.harmonic_weights(v, f, b, bc, int(i))
-    u[:, 2] = z
-    if i == 1:
-        p = subplot(u, f, c, shading={"wire_width": 0.01, "colormap": "tab10"}, s=[1, 4, i - 1])
-    else:
-        subplot(u, f, c, shading={"wire_width": 0.01, "colormap": "tab10"}, s=[1, 4, i - 1], data=p)
-p
+
+
+# # Create scene
+# mesh.visual.vertex_colors[b, 0] = 255
+# trimesh.Scene(mesh).show()
+
+# @interact(deformation_field=True, step=(0.0, 2.0))
+# def update(deformation_field, step=0.0):
+#     # Determine boundary conditions
+#     u_bc_anim = v_bc + step * (u_bc - v_bc)
+
+#     if deformation_field:
+#         d_bc = u_bc_anim - v_bc
+#         d = igl.harmonic_weights(v, f, b, d_bc, 2)
+#         u = v + d
+#     else:
+#         u = igl.harmonic_weights(v, f, b, u_bc_anim, 2)
+#     p.update_object(vertices=u)
