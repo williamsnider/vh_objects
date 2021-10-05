@@ -40,4 +40,4 @@ def test_fuse_meshes():
 if __name__ == "__main__":
     import pytest
 
-    pytest.main()
+    pytest.main(["tests"])
