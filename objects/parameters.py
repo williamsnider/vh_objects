@@ -1,13 +1,12 @@
+### Parameters used in generating objects
+
+# Axial component construction parameters
+SAMPLING_DENSITY_U = 100  # How densely to sample along round axis of 'cylinder' axial component
+SAMPLING_DENSITY_V = 100  # How densely to sample along long axis of 'cylinder' axial component
+SLIDE_FACTOR = 0.3  # Impacts surface slope near endpoints
+SHRINK_FACTOR = 0.3  # Impacts surface slope at cross sections adjacent to endpoint
 ORDER = 3  # quadratic B-spline
-SLIDE_FACTOR = 0.3
-SHRINK_FACTOR = 0.3
-NUM_ENDPOINTS = 2  # Position 0.0 and 1.0 on the axial component's backbone
-NUM_ENDPOINTS_SLOPE = 2  # Extra controlpoints that determine slope of spline at endpoint
-NUM_CROSS_SECTION_SLOPE = (
-    2  # Extra controlpoints that determine slope of spline at the cross sections closest to the endpoints
-)
-SAMPLING_DENSITY_U = 100  # How densely to sample along round axis of 'cylinder'
-SAMPLING_DENSITY_V = 100  # How densely to sample along long axis of 'cylinder'
-# NUM_NN = 1  # int((SAMPLING_DENSITY_U * SAMPLING_DENSITY_V * (0.25 ** 2)) ** 0.5)  # How many nearest neighbors to sample when projecting child onto parent
-# print("NUM_NN = ", NUM_NN)
-WINDOW_SIZE = 25
+
+# Shape construction parameters
+HARMONIC_POWER = 3  # 2-> G1 curvature fairing, 3-> G2 curvature fairing, ...
+FAIRING_DISTANCE = 0.1

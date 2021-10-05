@@ -1,21 +1,13 @@
 import numpy as np
 from splipy import BSplineBasis, Surface
 import trimesh
-from objects.parameters import (
-    ORDER,
-    SLIDE_FACTOR,
-    SHRINK_FACTOR,
-    NUM_ENDPOINTS,
-    NUM_ENDPOINTS_SLOPE,
-    NUM_CROSS_SECTION_SLOPE,
-    SAMPLING_DENSITY_U,
-    SAMPLING_DENSITY_V,
-)
-from objects.utilities import open_uniform_knot_vector, calc_face_normals
-import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
-import copy
-import open3d as o3d
+from objects.parameters import ORDER, SLIDE_FACTOR, SHRINK_FACTOR, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V
+from objects.utilities import open_uniform_knot_vector
+
+# Fixed variables - used to built controlpoints array with the correct size.
+NUM_ENDPOINTS = 2  # Position 0.0 and 1.0 on the axial component's backbone
+NUM_ENDPOINTS_SLOPE = 2  # Controlpoints used to control surface slope near endpoints
+NUM_CROSS_SECTION_SLOPE = 2  # Controlpoints used to control surface slope near cross sections adjacent to endpoints
 
 
 class AxialComponent:
@@ -36,9 +28,6 @@ class AxialComponent:
         else:
             self.radius = 1.0 / self.curvature
         self.cross_sections = cross_sections
-        # self.elevation = elevation
-        # self.azimuth = azimuth
-        # self.rotation = rotation
         self.euler_angles = euler_angles
         self.parent_axial_component = parent_axial_component
         self.position_along_parent = position_along_parent
@@ -75,7 +64,6 @@ class AxialComponent:
     def calc_points(self):
         self.calc_transformation_matrices()
         self.calc_R_euler_angles()
-        # self.calc_R_elevation_azimuth_rotation()
         self.get_controlpoints()
         self.make_surface()
         self.make_mesh()
@@ -84,7 +72,7 @@ class AxialComponent:
 
         if self.parent_axial_component is None:
 
-            # Initialize translation and rotationmatrices, which will be updated later
+            # Initialize translation and rotation matrices, which will be updated later
             self.translation = np.array([0, 0, 0])  # TODO: delete this?
             self.R_align_with_parent = np.array(
                 [
@@ -156,93 +144,6 @@ class AxialComponent:
         )
 
         self.R_euler_angles = R_z @ (R_y @ R_x)
-
-    # def calc_R_elevation_azimuth_rotation(self):
-    #     def find_rot_mat_about_vector(theta, u):
-    #         """
-    #         Calculate the rotation matrix needed to rotate a point about a unit vector (u) by amount theta. Importantly, this only works if the unit vector passes through the origin, which is a safe assumption in this project.
-
-    #         Args:
-    #             theta (float): Angle (radians) for the rotation.
-    #             u (array): Vector (shape 3x1) which is the axis about which the point should be rotated.
-
-    #         Returns:
-    #             array: 3x3 rotation matrix
-    #         """
-    #         assert np.isclose(np.linalg.norm(u), 1), "Must be a unit vector"
-    #         return [
-    #             [
-    #                 np.cos(theta) + u[0] ** 2 * (1 - np.cos(theta)),
-    #                 u[0] * u[1] * (1 - np.cos(theta)) - u[2] * np.sin(theta),
-    #                 u[0] * u[2] * (1 - np.cos(theta)) + u[1] * np.sin(theta),
-    #             ],
-    #             [
-    #                 u[0] * u[1] * (1 - np.cos(theta)) + u[2] * np.sin(theta),
-    #                 np.cos(theta) + u[1] ** 2 * (1 - np.cos(theta)),
-    #                 u[1] * u[2] * (1 - np.cos(theta)) - u[0] * np.sin(theta),
-    #             ],
-    #             [
-    #                 u[0] * u[2] * (1 - np.cos(theta)) - u[1] * np.sin(theta),
-    #                 u[1] * u[2] * (1 - np.cos(theta)) + u[0] * np.sin(theta),
-    #                 np.cos(theta) + u[2] ** 2 * (1 - np.cos(theta)),
-    #             ],
-    #         ]
-
-    #     s = np.sin
-    #     c = np.cos
-
-    #     # Rotation matrix for elevation
-    #     e = self.elevation
-    #     # self.R_elevation = np.array(
-    #     #     [
-    #     #         [s(e), c(e), 0],
-    #     #         [-c(e), s(e), 0],
-    #     #         [0, 0, 1],
-    #     #     ]
-    #     # )
-    #     # self.R_elevation = np.array(
-    #     #     [
-    #     #         [1, 0, 0],
-    #     #         [0, s(e), c(e)],
-    #     #         [0, -c(e), s(e)],
-    #     #     ]
-    #     # )
-    #     self.R_elevation = np.array(
-    #         [
-    #             [s(e), 0, c(e)],
-    #             [0, 1, 0],
-    #             [-c(e), 0, s(e)],
-    #         ]
-    #     )
-    #     # Rotation matrix for azimuth
-    #     a = self.azimuth
-    #     # self.R_azimuth = np.array(
-    #     #     [
-    #     #         [c(a), 0, s(a)],
-    #     #         [0, 1, 0],
-    #     #         [-s(a), 0, c(a)],
-    #     #     ]
-    #     # )
-    #     self.R_azimuth = np.array(
-    #         [
-    #             [1, 0, 0],
-    #             [0, c(a), s(a)],
-    #             [0, -s(a), c(a)],
-    #         ]
-    #     )
-
-    #     # Rotation matrix for rotation (about axis determined by elevation and azimuth)
-    #     # Calculate tangent vector after rotating from elevation and azimuth
-    #     T = self.T(self.position_along_self, local=True)
-    #     T = T @ self.R_elevation
-    #     T = T @ self.R_azimuth
-
-    #     # Get rotation matrix that rotates about this vector by amount theta
-    #     r = self.rotation
-    #     self.R_rotation = find_rot_mat_about_vector(r, T[0])
-    #     self.R_elevation_azimuth_rotation = (
-    #         self.R_elevation @ self.R_azimuth @ self.R_rotation
-    #     )
 
     def r(self, t, local=False):
 
@@ -378,14 +279,8 @@ class AxialComponent:
         return B
 
     def get_controlpoints(self):
-
-        # Determine size of controlpoint array
-        num_cross_sections = len(self.cross_sections)
-        num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + NUM_CROSS_SECTION_SLOPE + num_cross_sections
-        self.num_rows = num_rows
-        num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
-
-        # Controlpoint array structure
+        """
+        # controlpoints array structure
         # (0, :, :) - controlpoints at endpoint 0.0
         # (1, :, :) - controlpoints controlling slope at endpoint 0.0
         # (2, :, :) - controlpoints controlling slope at bottom-most cross section
@@ -396,8 +291,16 @@ class AxialComponent:
         # (-3, :, :) - controlpoints controlling slope at top-most cross section
         # (-2, :, :) - controlpoints controlling slope at endpoint 1.0
         # (-1, :, :) - controlpoints at endpoint 1.0
-        # Assign controlpoints - endpoints
+        """
+
+        # Construct empty controlpoint array
+        num_cross_sections = len(self.cross_sections)
+        num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + NUM_CROSS_SECTION_SLOPE + num_cross_sections
+        self.num_rows = num_rows
+        num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
         controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
+
+        # Assign controlpoints - endpoints
         controlpoints[0, :, :] = np.repeat(self.r(0.0), num_cp_per_cross_section, axis=0)  # 0.0 endpoint
         controlpoints[-1, :, :] = np.repeat(self.r(1.0), num_cp_per_cross_section, axis=0)  # 1.0 endpoint
 
@@ -587,108 +490,25 @@ class AxialComponent:
         self.faces = faces
 
         ####################
-        # Face normals
-        self.face_norms = calc_face_normals(verts, faces)
-
-        ####################
-        # Vertex normals
-        self.vert_norms = trimesh.geometry.mean_vertex_normals(num_verts, self.faces, self.face_norms)
-
-        # vert_norms = np.zeros(verts.shape)
-
-        # # Vertices with 6 neighbors
-        # base_column = np.zeros((uu, 6), dtype="int")
-        # base_column[0, :] = np.array(
-        #     [uu * 2 - 2, uu * 2 - 1, 0, uu * 2, uu * 2 + 1, uu * 3 - 1]
-        # )
-        # base_column[-1, :] = np.array(
-        #     [[uu * 2 - 4, uu * 2 - 3, uu * 2 - 2, uu * 4 - 3, uu * 4 - 2, uu * 4 - 1]]
-        # )
-        # base_column[1:-1, 0] = np.arange(0, 0 + 2 * (uu - 2), 2)
-        # base_column[1:-1, 1] = np.arange(1, 1 + 2 * (uu - 2), 2)
-        # base_column[1:-1, 2] = np.arange(2, 2 + 2 * (uu - 2), 2)
-        # base_column[1:-1, 3] = np.arange(2 * uu + 1, 2 * uu + 1 + 2 * (uu - 2), 2)
-        # base_column[1:-1, 4] = np.arange(2 * uu + 2, 2 * uu + 2 + 2 * (uu - 2), 2)
-        # base_column[1:-1, 5] = np.arange(2 * uu + 3, 2 * uu + 3 + 2 * (uu - 2), 2)
-        # array_neighbor_6 = np.zeros((uu, vv - 4, 6), dtype="int")
-        # for i in range(0, vv - 4):
-        #     column = base_column + 2 * uu * i
-        #     array_neighbor_6[:, i, :] = column
-        # normals = face_norms[array_neighbor_6]
-        # normals = np.mean(normals, axis=2)
-        # normals /= np.linalg.norm(normals, axis=2, keepdims=True)
-        # vert_norms[1 * uu : -1 * uu - 2] = normals.reshape(-1, 3)
-
-        # # Vertices with 5 neighbors (those bordering endpoint 0.0)
-        # column = np.zeros((uu, 5), dtype="int")
-        # column[:, 0] = np.arange(-1, 2 * uu - 1, 2)
-        # column[:, 1] = np.arange(0, 2 * uu, 2)
-        # column[:, 2] = np.arange(1, 2 * uu + 1, 2)
-        # column[:, 3] = np.arange(2 * uu * (vv - 3), 2 * uu * (vv - 3) + 2 * uu, 2)
-        # column[:, 4] = np.arange(
-        #     2 * uu * (vv - 3) + 1, 2 * uu * (vv - 3) + 2 * uu + 1, 2
-        # )
-        # column[0, :] = np.array(
-        #     [2 * uu - 1, 0, 1, 2 * uu * (vv - 3), 2 * uu * (vv - 3) + 1]
-        # )
-        # normals = face_norms[column]
-        # normals = np.mean(normals, axis=1)
-        # normals /= np.linalg.norm(normals, axis=1, keepdims=True)
-        # vert_norms[:uu] = normals.reshape(-1, 3)
-
-        # # Vertices with 5 neighbors (those bordering endpoint 1.0) #TODO: fix this
-        # column = np.zeros((uu, 5), dtype="int")
-        # s = 2 * uu * (vv - 4)  # shift amount - for brevity
-        # column[:, 0] = np.arange(s - 2, s + 2 * uu - 2, 2)
-        # column[:, 1] = np.arange(s - 1, s + 2 * uu - 1, 2)
-        # column[:, 2] = np.arange(s, s + 2 * uu, 2)
-        # column[:, 3] = np.arange(s + 3 * uu, s + 4 * uu, 1)
-        # column[:, 4] = np.arange(s + 3 * uu + 1, s + 4 * uu + 1, 1)
-        # column[-1, 4] = s + 3 * uu
-        # normals = face_norms[column]
-        # normals = np.mean(normals, axis=1)
-        # normals /= np.linalg.norm(normals, axis=1, keepdims=True)
-        # vert_norms[-uu - 2 : -2] = normals.reshape(-1, 3)
-
-        # # Vertices with uu neighbors (endpoints)
-        # endpoint_idx = num_verts - 2  # 0.0 endpoint
-        # start = 2 * uu * (vv - 3) + 0 * uu
-        # stop = start + uu
-        # neighbors = np.arange(start, stop)
-        # normal = face_norms[neighbors]
-        # normal = np.mean(normal, axis=0)
-        # normal /= np.linalg.norm(normal)
-        # vert_norms[endpoint_idx] = normal
-
-        # # Vertices with SD neighbors (endpoints)
-        # endpoint_idx = num_verts - 1  # 0.0 endpoint
-        # start = 2 * uu * (vv - 3) + 1 * uu
-        # stop = start + uu
-        # neighbors = np.arange(start, stop)
-        # normal = face_norms[neighbors]
-        # normal = np.mean(normal, axis=0)
-        # normal /= np.linalg.norm(normal)
-        # vert_norms[endpoint_idx] = normal
+        # Skip calculations for face and vertex normals since that should be done after fusing all axial components
 
         ####################
         # Construct trimesh
         self.mesh = trimesh.Trimesh(
             vertices=verts,
             faces=faces,
-            face_normals=self.face_norms,
-            vertex_normals=self.vert_norms,
             process=False,
         )
 
-    def plot_o3d_mesh(self):
-        """
-        Plots the mesh using the custom triangles, vertices, and normals.
-        """
-        self.o3d_mesh = self.mesh.as_open3d
+    # def plot_o3d_mesh(self):
+    #     """
+    #     Plots the mesh using the custom triangles, vertices, and normals.
+    #     """
+    #     self.o3d_mesh = self.mesh.as_open3d
 
-        # Unsure why, but need to copy for the vector3dvector function to work
-        vert_norms = copy.copy(self.vert_norms)
-        face_norms = copy.copy(self.face_norms)
-        self.o3d_mesh.vertex_normals = o3d.utility.Vector3dVector(vert_norms)
-        self.o3d_mesh.triangle_normals = o3d.utility.Vector3dVector(face_norms)
-        o3d.visualization.draw_geometries([self.o3d_mesh])
+    #     # Unsure why, but need to copy for the vector3dvector function to work
+    #     vert_norms = copy.copy(self.vert_norms)
+    #     face_norms = copy.copy(self.face_norms)
+    #     self.o3d_mesh.vertex_normals = o3d.utility.Vector3dVector(vert_norms)
+    #     self.o3d_mesh.triangle_normals = o3d.utility.Vector3dVector(face_norms)
+    #     o3d.visualization.draw_geometries([self.o3d_mesh])

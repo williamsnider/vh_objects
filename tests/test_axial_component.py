@@ -94,9 +94,7 @@ def test_make_surface():
 
     cs0 = CrossSection(base_cp * 0.5, 0.3)
     cs1 = CrossSection(base_cp * 0.5, 0.7)
-    ac = AxialComponent(
-        2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1]
-    )
+    ac = AxialComponent(2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1])
 
     ac.get_controlpoints()
     ac.make_surface()
@@ -116,4 +114,4 @@ def test_make_mesh():
 if __name__ == "__main__":
     import pytest
 
-    pytest.main()
+    pytest.main(["tests"])
