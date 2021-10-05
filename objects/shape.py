@@ -81,7 +81,6 @@ class Shape:
 
         # Fair mesh
         union_mesh = fair_mesh(union_mesh, neighbors)
-        plot_mesh_and_specific_indices(union_mesh, neighbors)
 
     def plot_meshes(self):
 
