@@ -73,13 +73,8 @@ class Shape:
 
             return faired_mesh
 
-        # Find edges of mesh boolean
         union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
-
-        # Find points within DISTANCE of these edges
         neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=FAIRING_DISTANCE)
-
-        # Fair mesh
         union_mesh = fair_mesh(union_mesh, neighbors)
 
     def plot_meshes(self):
