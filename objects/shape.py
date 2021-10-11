@@ -76,6 +76,7 @@ class Shape:
         union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
         neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=FAIRING_DISTANCE)
         union_mesh = fair_mesh(union_mesh, neighbors)
+        union_mesh.show(smooth=False)
 
     def plot_meshes(self):
 
