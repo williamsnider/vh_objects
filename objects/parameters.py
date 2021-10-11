@@ -21,4 +21,4 @@ PEG_SIDE_LENGTH = 10  # mm
 PEG_CORNER_RADIUS = 2  # mm - Round the edges to fit into waterjet cut slots better
 PEG_CORNER_NUM_STEPS = 3
 PEG_DEPTH = 20  # mm
-PEG_SPHERE_SUBDIVISIONS = 3  # Higher --> more points used to fair peg tip
+PEG_SPHERE_SUBDIVISIONS = 5  # Higher --> more points used to fair peg tip

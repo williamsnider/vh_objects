@@ -187,81 +187,69 @@ class Interface:
         # Boundary vertices -- located at or below Z = Z_at_roundover_beginning
         boundary = unfaired.vertices[:, 2] <= Z_at_roundover_beginning
 
-        # Set tip of rounder at specified Z, as well as adjacent
-        roundover_tip_idx = np.argmax(unfaired.vertices[:, 2])  # Assume highest point is tip
-        boundary[roundover_tip_idx] = True
-
-        # Shift all non_boundary points up a similar amount to the roundover_tip_idx
-        # z_shift = PEG_DEPTH - unfaired.vertices[roundover_tip_idx, 2]
-
-        # neighbors = unfaired.vertex_neighbors[roundover_tip_idx]
-        # roundover_adjacent = set()
-        # for n in neighbors:
-        #     roundover_adjacent.update(unfaired.vertex_neighbors[n])
-        # roundover_top = list(roundover_adjacent)
-        # # roundover_top = roundover_adjacent + [roundover_tip_idx]
-        # unfaired.vertices[roundover_top, 2] = PEG_DEPTH  # Flatten tip; set to PEG_DEPTH height
-        # boundary[roundover_top] = True  # Use this to control depth of roundover
-
-        # bbox = peg_base.bounds
-        # bbox = (bbox.T + np.array([-1e-8, 1e-8])).T  # Slightly increase bbox range to include points exactly on border
-        # new_verts_mask = ~trimesh.bounds.contains(bbox, peg.vertices)
-
-        # # Move roundover_tip and adjacent verts to max position
-
-        # # # And remove where sphere intersects edges of peg
-        # # intersection_pts = np.array(
-        # #     [
-        # #         [0, PEG_SIDE_LENGTH / 2, height_to_roundover_beginning],
-        # #         [0, -PEG_SIDE_LENGTH / 2, height_to_roundover_beginning],
-        # #         [-PEG_SIDE_LENGTH / 2, 0, height_to_roundover_beginning],
-        # #         [PEG_SIDE_LENGTH / 2, 0, height_to_roundover_beginning],
-        # #     ]
-        # # )
-        # # for pt in intersection_pts:
-        # #     idx = np.argwhere(np.all(pt == peg.vertices, axis=1))
-        # #     print(idx)
-        # #     new_verts_mask[idx] = False
-        # new_verts = np.arange(peg.vertices.shape[0], dtype="int64")[~new_verts_mask]
-        # plot_mesh_and_specific_indices(peg, new_verts)
-
         # Fair the new_verts to make the roundover
         v = unfaired.vertices
         f = unfaired.faces
         b = np.argwhere(boundary).ravel()  # Boundary - do not fair vertices from peg_bottom
         bc = v[b]  # XYZ coordinates of the boundary indices
-        faired_verts = igl.harmonic_weights(v, f, b, bc, 3)  # Smooths indices at creases
-
-        # Assign to mesh
+        faired_verts = igl.harmonic_weights(v, f, b, bc, 2)  # Smooths indices at creases
         peg = trimesh.Trimesh(
             vertices=faired_verts,
             faces=f,
         )
         peg.show(smooth=False)
 
-        fig = plt.figure()
-        ax = plt.axes(projection="3d")
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("z")
-        ax.view_init(elev=-90, azim=90)
+        # Transform peg to align with interface
+        # Rotate so peg points in -x direction
+        R = np.array(
+            [
+                [0, 0, 1],
+                [0, 1, 0],
+                [-1, 0, 0],
+            ]
+        )
+        peg.vertices = peg.vertices @ R
 
-        x, y, z = peg.vertices[:peg_bottom_num_verts].T
-        ax.plot(x, y, z, "b.")
+        # Translate so bottom of peg aligns with side of cube
+        T = np.array(
+            [
+                [1, 0, 0, -CUBE_SIDE_LENGTH / 2],
+                [0, 1, 0, 0],
+                [0, 0, 1, -CUBE_SIDE_LENGTH / 2 + PEG_SIDE_LENGTH / 2],
+                [0, 0, 0, 1],
+            ]
+        )
+        peg.apply_transform(T)
+        # Combine with interface
+        peg_VF = [peg.vertices, peg.faces]
+        base_interface_VF = boolean_union(base_interface_VF, peg_VF)
+
+        base_interface = trimesh.Trimesh(
+            vertices=base_interface_VF[0],
+            faces=base_interface_VF[1],
+        )
+        base_interface.show()
+        # fig = plt.figure()
+        # ax = plt.axes(projection="3d")
+        # ax.set_xlabel("x")
+        # ax.set_ylabel("y")
+        # ax.set_zlabel("z")
+        # ax.view_init(elev=-90, azim=90)
+
+        # x, y, z = peg.vertices[:peg_bottom_num_verts].T
+        # ax.plot(x, y, z, "b.")
 
         # x, y, z = peg_bottom.vertices.T
         # ax.plot(x, y, z, "r*")
         # plt.show()
 
-        x, y, z = peg_top.vertices.T
-        ax.plot(x, y, z, "r*")
-        plt.show()
+        # x, y, z = peg_top.vertices.T
+        # ax.plot(x, y, z, "r*")
+        # plt.show()
 
-        plot_mesh_and_specific_indices(unfaired, b)
-
-        assert mesh.is_watertight, "Mesh is not watertight. Try adjusting the number of POST_SECTIONS."
-
-        pass
+        # plot_mesh_and_specific_indices(unfaired, b)
+        _ = base_interface.export("base_interface.stl")
+        assert peg.is_watertight, "Peg is not watertight."
 
     def add_label(self):
         pass
