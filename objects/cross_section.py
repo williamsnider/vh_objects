@@ -1,4 +1,5 @@
 import numpy as np
+from objects.utilities import angle_between
 
 
 class CrossSection:
@@ -47,14 +48,15 @@ class CrossSection:
 
         # Find angles between vectors to controlpoints and <1,0> (vector to theta=0)
         vec = self.controlpoints / np.linalg.norm(self.controlpoints, axis=1, keepdims=True)
-        angles = np.arccos(vec[:, 0])
+        # angles = np.arccos(vec[:, 0])
+        angles = angle_between(vec, np.array([1, 0]))
 
         # Roll so that the vector between the origin and the 0th controlpoint is closest to having a minimum able between it and <1,0>
         shift = np.where(angles == angles.min())[0]
         cp = np.roll(self.controlpoints, -shift, axis=0)
 
         # Check the roll worked
-        angles = np.arccos(cp[:, 0])
+        angles = angle_between(cp, np.array([1, 0]))
         assert np.where(angles == angles.min())[0] == 0
 
         self.controlpoints = cp

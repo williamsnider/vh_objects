@@ -46,9 +46,9 @@ class Interface:
         ################ Make post ################
         T = np.array(
             [
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
                 [0, 0, 1, POST_HEIGHT / 2 + CUBE_SIDE_LENGTH / 2],
+                [0, 1, 0, 0],
+                [-1, 0, 0, 0],
                 [0, 0, 0, 1],
             ]
         )
@@ -62,12 +62,12 @@ class Interface:
         base_interface_VF = boolean_union(cube_VF, post_VF)
 
         ################ Make fingertip slots ################
-        # +Y side
+        # +Z side
         T = np.array(
             [
                 [1, 0, 0, 0],
-                [0, 1, 0, CUBE_SIDE_LENGTH / 2 - FINGERTIP_SLOT_SIDE_LENGTH / 2],
-                [0, 0, 1, 0],
+                [0, 1, 0, 0],
+                [0, 0, 1, CUBE_SIDE_LENGTH / 2 - FINGERTIP_SLOT_SIDE_LENGTH / 2],
                 [0, 0, 0, 1],
             ]
         )
@@ -78,7 +78,7 @@ class Interface:
         fingertip_slot_A_VF = [fingertip_slot_A.vertices, fingertip_slot_A.faces]
         base_interface_VF = boolean_difference(base_interface_VF, fingertip_slot_A_VF)
 
-        # -Y side
+        # -Z side
         fingertip_slot_B = trimesh.primitives.Box(
             extents=(FINGERTIP_SLOT_SIDE_LENGTH, FINGERTIP_SLOT_SIDE_LENGTH, FINGERTIP_SLOT_SIDE_LENGTH),
             transform=-T,
@@ -197,25 +197,16 @@ class Interface:
             vertices=faired_verts,
             faces=f,
         )
-        peg.show(smooth=False)
+        # peg.show(smooth=False)
 
         # Transform peg to align with interface
-        # Rotate so peg points in -x direction
-        R = np.array(
-            [
-                [0, 0, 1],
-                [0, 1, 0],
-                [-1, 0, 0],
-            ]
-        )
-        peg.vertices = peg.vertices @ R
 
         # Translate so bottom of peg aligns with side of cube
         T = np.array(
             [
-                [1, 0, 0, -CUBE_SIDE_LENGTH / 2],
+                [1, 0, 0, -CUBE_SIDE_LENGTH / 2 + PEG_SIDE_LENGTH / 2],
+                [0, 0, -1, -CUBE_SIDE_LENGTH / 2],
                 [0, 1, 0, 0],
-                [0, 0, 1, -CUBE_SIDE_LENGTH / 2 + PEG_SIDE_LENGTH / 2],
                 [0, 0, 0, 1],
             ]
         )
@@ -228,7 +219,15 @@ class Interface:
             vertices=base_interface_VF[0],
             faces=base_interface_VF[1],
         )
-        base_interface.show()
+
+        ################ Transform Interface ################
+        # Tip of post should be at (0,0,0)
+        # Bottom of cube should be along (y=0) plane
+        dx = POST_HEIGHT + CUBE_SIDE_LENGTH / 2
+        dy = -CUBE_SIDE_LENGTH / 2
+        dz = 0
+        base_interface.vertices -= np.array([dx, dy, dz])
+
         # fig = plt.figure()
         # ax = plt.axes(projection="3d")
         # ax.set_xlabel("x")
@@ -249,7 +248,7 @@ class Interface:
 
         # plot_mesh_and_specific_indices(unfaired, b)
         _ = base_interface.export("base_interface.stl")
-        assert peg.is_watertight, "Peg is not watertight."
+        # assert peg.is_watertight, "Peg is not watertight."  #TODO: Make watertight
 
     def add_label(self):
         pass

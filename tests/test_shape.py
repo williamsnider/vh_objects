@@ -37,7 +37,28 @@ def test_fuse_meshes():
     # s.merged_meshes.show()
 
 
+def test_align_mesh():
+
+    cs0 = CrossSection(base_cp * 20, 0.3)
+    cs1 = CrossSection(base_cp * 20, 0.7)
+    ac1 = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
+    # ac2 = AxialComponent(
+    #     40 * np.pi * 1 * 0.25,
+    #     curvature=1 / 20,
+    #     cross_sections=[cs0, cs1],
+    #     parent_axial_component=ac1,
+    #     position_along_parent=0.75,
+    #     position_along_self=0.0,
+    #     euler_angles=np.array([0, np.pi / 3, 0]),
+    # )
+    s = Shape([ac1])
+    s.mesh = ac1.mesh
+    s.align_mesh()
+    s.fuse_mesh_to_interface()
+    # s.merged_meshes.show()
+
+
 if __name__ == "__main__":
     import pytest
 
-    pytest.main(["tests"])
+    pytest.main(["tests/test_shape.py"])
