@@ -14,7 +14,7 @@ conda create --name objects_venv python=3.8
 pip install -e .
 
 # Compas contains CGAL bindings
-conda install -c conda-forge matplotlib trimesh rtree compas compas_cgal igl shapely ipython ipykernel black pytest --yes
+conda install -c conda-forge matplotlib trimesh rtree compas compas_cgal igl shapely transforms3d ipython ipykernel black pytest --yes
 ```
 
 ## TODO: Usage
