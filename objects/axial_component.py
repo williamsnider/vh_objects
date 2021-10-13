@@ -364,8 +364,12 @@ class AxialComponent:
             if idx == -3:
                 vec = self.T(pos)
 
-            # Scale vec
-            vec = vec * SLIDE_FACTOR
+            # Scale to roughly halfway between edge and endpoint
+            if idx == 2:
+                dist_to_edge = pos
+            if idx == -3:
+                dist_to_edge = 1 - pos
+            vec = vec * self.length * dist_to_edge / 2
 
             # Slide cp
             cp = cp + vec
@@ -374,6 +378,12 @@ class AxialComponent:
             controlpoints[idx, :, :] = cp
 
         self.controlpoints = controlpoints
+
+        # XXX: Plot to visualize
+        from objects.utilities import plot_controlpoints
+
+        plot_controlpoints(self)
+        pass
 
     def align_cross_section_to_position(self, cp, pos):
 

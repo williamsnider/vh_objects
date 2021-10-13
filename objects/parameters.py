@@ -3,8 +3,8 @@
 # AxialComponent construction
 SAMPLING_DENSITY_U = 100  # Number of samples along round axis of 'cylinder' axial component
 SAMPLING_DENSITY_V = 100  # Number of samples along long axis of 'cylinder' axial component
-SLIDE_FACTOR = 0.3  # Impacts surface slope near endpoints
-SHRINK_FACTOR = 0.3  # Impacts surface slope at cross sections adjacent to endpoint
+SLIDE_FACTOR = 0.2  # Impacts surface slope at cross sections adjacent to endpoint
+SHRINK_FACTOR = 0.5  # Impacts surface slope near endpoints
 ORDER = 3  # quadratic B-spline
 
 # Shape construction

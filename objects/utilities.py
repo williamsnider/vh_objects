@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits import mplot3d
 import networkx as nx
 import numpy as np
 from numpy.linalg import norm
@@ -118,4 +119,33 @@ def plot_mesh_and_specific_indices(
     x, y, z = mesh.vertices[specific_indices].T
     ax.plot(x, y, z, ".", color="blue")
 
+    plt.show()
+
+
+def plot_controlpoints(ac):
+
+    # Controlpoints
+    cp = ac.controlpoints
+    x = cp[:, :, 0].ravel()
+    y = cp[:, :, 1].ravel()
+    z = cp[:, :, 2].ravel()
+
+    # Backbone
+    v = np.linspace(0, 1, 51)
+    r = ac.r(v)
+
+    # Plot
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax_min = cp.min()
+    ax_max = cp.max()
+    ax.set_xlim([ax_min, ax_max])
+    ax.set_ylim([ax_min, ax_max])
+    ax.set_zlim([ax_min, ax_max])
+    ax.view_init(elev=-90, azim=90)
+    ax.plot3D(r[:, 0], r[:, 1], r[:, 2], "k.")
+    ax.plot3D(x, y, z, "g-")
     plt.show()
