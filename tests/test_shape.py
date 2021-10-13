@@ -101,6 +101,18 @@ def test_export_png():
     s.export_png(save_dir)
 
 
+def test_save_mesh_as_png():
+    save_dir = Path(Path.cwd(), "sample_shapes")
+    cs0 = CrossSection(base_cp * 20, 0.3)
+    cs1 = CrossSection(base_cp * 20, 0.7)
+    ac1 = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
+    s = Shape([ac1])
+    s.mesh = ac1.mesh
+    s.align_mesh()
+    s.fuse_mesh_to_interface()
+    s.save_mesh_as_png(save_dir)
+
+
 if __name__ == "__main__":
     import pytest
 

@@ -7,6 +7,8 @@ import igl
 from objects.utilities import plot_mesh_and_specific_indices
 from objects.parameters import HARMONIC_POWER, FAIRING_DISTANCE
 from pathlib import Path
+import pyrender
+import numpngw
 
 
 class Shape:
@@ -258,6 +260,90 @@ class Shape:
         png = self.scene.save_image(resolution=resolution)  # bytes
         with open(filename, "wb") as f:
             f.write(png)
+
+    def save_mesh_as_png(self, save_dir):
+        """
+        Saves the mesh as a png.
+        """
+        # Convert to Path class
+        if type(save_dir) == str:
+            save_dir = Path(save_dir)
+
+        # Construct save_dir
+        if save_dir.is_dir() is False:
+            save_dir.mkdir()
+
+        filename = str(Path(save_dir, self.label).with_suffix(".png"))
+
+        # Compose scene
+        scene = pyrender.Scene(ambient_light=[0.1, 0.1, 0.3], bg_color=[1, 1, 1])
+
+        # Add mesh
+        mesh_pose = np.array(
+            [
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        )
+        mesh = pyrender.Mesh.from_trimesh(self.mesh, smooth=False)
+        interface = pyrender.Mesh.from_trimesh(self.interface, smooth=False)
+        scene.add(mesh, pose=mesh_pose)
+        scene.add(interface, pose=mesh_pose)
+
+        # Add directional light
+        light_pose = np.array(
+            [
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, -1, 0],
+                [0, 0, 0, 1],
+            ]
+        )
+        light = pyrender.DirectionalLight(color=[1, 1, 1], intensity=2.5e3)
+        scene.add(light, pose=light_pose)
+
+        # Set camera pose parameters
+        # With these settings, the resulting image lines up with our shape coordinate system:
+        # Image left = shape +X
+        # Image up = shape +Y
+        # Out of image (Towards viewer) = shape +Z  (check this one)
+        u = np.array([-1, 0, 0])
+        v = np.array([0, 1, 0])
+        n = np.cross(u, v)
+        e = np.array([0, 0, -100])  #  eye: camera position in world coordinates
+        camera_pose = np.array(
+            [
+                [u[0], u[1], u[2], e[0]],
+                [v[0], v[1], v[2], e[1]],
+                [n[0], n[1], n[2], e[2]],
+                [0, 0, 0, 1],
+            ]
+        )
+        # # Set camera pose parameters such that camera lies on positive z-axis looking towards the origin
+        # u = np.array([1, 0, 0])  # up vector
+        # n = np.array([0, 1, 0])  # view direction; opposite vector of camera's "view"
+        # v = np.cross(u, n)
+        # e = np.array([0, 30, 0])  #  eye: camera position in world coordinates
+        # camera_pose = np.array(
+        #     [
+        #         [u[0], v[0], -n[0], -e[0]],
+        #         [u[1], v[1], -n[1], -e[1]],
+        #         [u[2], v[2], -n[2], -e[2]],
+        #         [0, 0, 0, 1],
+        #     ]
+        # )
+
+        camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
+        scene.add(camera, pose=camera_pose)
+
+        r = pyrender.OffscreenRenderer(7680, 4320, bitdepth="16bit")
+        color, _ = r.render(scene)
+
+        # Save png - at 16bit depth
+        numpngw.write_png(filename, color)
+        print(filename)
 
     def plot_meshes(self):
 

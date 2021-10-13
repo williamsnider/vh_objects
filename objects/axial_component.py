@@ -1,7 +1,7 @@
 import numpy as np
 from splipy import BSplineBasis, Surface
 import trimesh
-from objects.parameters import ORDER, SLIDE_FACTOR, SHRINK_FACTOR, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V
+from objects.parameters import ORDER, SHRINK_FACTOR, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V
 from objects.utilities import open_uniform_knot_vector
 
 # Fixed variables - used to built controlpoints array with the correct size.
@@ -379,12 +379,6 @@ class AxialComponent:
 
         self.controlpoints = controlpoints
 
-        # XXX: Plot to visualize
-        from objects.utilities import plot_controlpoints
-
-        plot_controlpoints(self)
-        pass
-
     def align_cross_section_to_position(self, cp, pos):
 
         # Rotate so that cross tangent, normal, and binormal vectors are aligned
@@ -509,6 +503,13 @@ class AxialComponent:
             faces=faces,
             process=False,
         )
+
+        # # XXX: Plot to visualize
+        # from objects.utilities import plot_controlpoints
+
+        # plot_controlpoints(self)
+        # self.mesh.show()
+        # pass
 
     # def plot_o3d_mesh(self):
     #     """

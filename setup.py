@@ -7,5 +7,7 @@ setup(
         "splipy",
         "triangle",
         "pyglet",
+        "pyrender @ git+https://github.com/williamsnider/pyrender-fork.git",
+        "numpngw @ git+https://github.com/WarrenWeckesser/numpngw.git",
     ],
 )
