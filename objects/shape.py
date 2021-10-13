@@ -189,7 +189,6 @@ class Shape:
         # interface.vertices = interface.vertices @ R
 
         trimesh.Scene([interface, self.mesh, bounds, axis]).show()
-        pass
         # fig = plt.figure()
         # ax = plt.axes(projection="3d")
         # ax.set_xlabel("x")
