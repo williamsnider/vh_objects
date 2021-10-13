@@ -28,8 +28,8 @@ def test_fuse_meshes():
         curvature=1 / 1,
         cross_sections=[cs0, cs1],
         parent_axial_component=ac1,
-        position_along_parent=0.5,
-        position_along_self=0.5,
+        position_along_parent=0.2,
+        position_along_self=0.75,
         euler_angles=np.array([0, np.pi / 3, 0]),
     )
     s = Shape([ac1, ac2])
