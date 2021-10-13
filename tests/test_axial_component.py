@@ -27,6 +27,14 @@ base_cp_round = np.array(
 )
 
 
+def test_long_AC():
+    """Debugging a sharp boundary when length is long"""
+    cs0 = CrossSection(base_cp * 20, 0.3)
+    cs1 = CrossSection(base_cp * 20, 0.7)
+    ac = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
+    ac.mesh.show()
+
+
 def test_circular_arc():
 
     cs = CrossSection(base_cp, 0.0)
@@ -114,4 +122,4 @@ def test_make_mesh():
 if __name__ == "__main__":
     import pytest
 
-    pytest.main(["tests"])
+    pytest.main(["tests/test_axial_component.py"])
