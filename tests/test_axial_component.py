@@ -32,7 +32,6 @@ def test_long_AC():
     cs0 = CrossSection(base_cp * 20, 0.3)
     cs1 = CrossSection(base_cp * 20, 0.7)
     ac = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
-    ac.mesh.show()
 
 
 def test_circular_arc():
