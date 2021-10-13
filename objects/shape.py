@@ -6,21 +6,30 @@ from compas_cgal.booleans import boolean_union
 import igl
 from objects.utilities import plot_mesh_and_specific_indices
 from objects.parameters import HARMONIC_POWER, FAIRING_DISTANCE
-import transforms3d
+from pathlib import Path
 
 
 class Shape:
-    def __init__(self, ac_list):
+    def __init__(self, ac_list, fuse_to_interface=False, label="test", save_dir=None):
 
         self.ac_list = ac_list
-        self.obb_matrix = np.array(
-            [
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, 0],
-                [0, 0, 0, 1],
-            ]
-        )
+        self.label = label
+        self.fuse_to_interface = fuse_to_interface
+
+        # Fuse meshes
+        if len(self.ac_list) == 1:
+            self.mesh = ac_list[0].mesh
+        elif len(self.ac_list) == 2:
+            self.fuse_meshes(self.ac_list[0].mesh, self.ac_list[1].mesh)
+        elif len(self.ac_list >= 3):
+            raise NotImplementedError("Multiple ac fusion not implemented.")
+
+        # Find oriented bounding box
+        self.align_mesh()
+
+        # Smoothly fuse to interface
+        if fuse_to_interface is True:
+            self.fuse_mesh_to_interface()
 
     def check_inputs(self):
 
@@ -174,21 +183,15 @@ class Shape:
         shift_to_Z = self.mesh.bounds[1, 2] / 2
         self.mesh.vertices[:, 2] -= shift_to_Z
 
+        # Fix normals (make sure they're pointing out)
+        trimesh.repair.fix_inversion(self.mesh)
+
     def fuse_mesh_to_interface(self):
 
         interface = trimesh.load_mesh("base_interface.stl")
+        self.interface = interface
 
-        # Bounds
-        bounds = self.mesh.bounds
-        bounds_pts = np.array([[x, y, z] for x in bounds[:, 0] for y in bounds[:, 1] for z in bounds[:, 2]])
-        bounds = trimesh.points.PointCloud(bounds_pts)
-
-        # Axes
-        axis = trimesh.creation.axis(origin_size=1)
-        # T, R, Z, S = transforms3d.affines.decompose(self.obb_matrix)
-        # interface.vertices = interface.vertices @ R
-
-        trimesh.Scene([interface, self.mesh, bounds, axis]).show()
+        # trimesh.Scene([interface, self.mesh, bounds, axis]).show()
         # fig = plt.figure()
         # ax = plt.axes(projection="3d")
         # ax.set_xlabel("x")
@@ -207,6 +210,54 @@ class Shape:
         # x, y, z = self.mesh.vertices[0].T
         # ax.plot(x, y, z, "r*")
         # plt.show()
+
+    def construct_scene(self):
+
+        # Bounds
+        bounds = self.mesh.bounds
+        bounds_pts = np.array([[x, y, z] for x in bounds[:, 0] for y in bounds[:, 1] for z in bounds[:, 2]])
+        bounds = trimesh.points.PointCloud(bounds_pts)
+
+        # Axes
+        axis = trimesh.creation.axis(origin_size=1)
+
+        if self.fuse_to_interface is True:
+            self.scene = trimesh.Scene([self.interface, self.mesh, bounds, axis])
+        else:
+            self.scene = trimesh.Scene([self.mesh, bounds, axis])
+
+    def export_stl(self, save_dir):
+
+        # Convert to Path class
+        if type(save_dir) == str:
+            save_dir = Path(save_dir)
+
+        # Construct save_dir
+        if save_dir.is_dir() is False:
+            save_dir.mkdir()
+
+        # Export
+        filename = Path(save_dir, self.label).with_suffix(".stl")
+        self.mesh.export(filename)
+
+    def export_png(self, save_dir):
+
+        self.construct_scene()
+
+        # Convert to Path class
+        if type(save_dir) == str:
+            save_dir = Path(save_dir)
+
+        # Construct save_dir
+        if save_dir.is_dir() is False:
+            save_dir.mkdir()
+
+        # Export
+        filename = Path(save_dir, self.label).with_suffix(".png")
+        resolution = (1920, 1080)
+        png = self.scene.save_image(resolution=resolution)  # bytes
+        with open(filename, "wb") as f:
+            f.write(png)
 
     def plot_meshes(self):
 
