@@ -8,7 +8,7 @@ ORDER = 3  # quadratic B-spline
 
 # Shape construction
 HARMONIC_POWER = 2  # 2-> G1 curvature fairing, 3-> G2 curvature fairing, etc
-FAIRING_DISTANCE = 0.2  # How far (mm) from a junction should vertices in a union mesh be faired
+FAIRING_DISTANCE = 10  # How far (mm) from a junction should vertices in a union mesh be faired
 
 # Interface construction
 CUBE_SIDE_LENGTH = 25  # mm
