@@ -9,25 +9,22 @@ from objects.parameters import HARMONIC_POWER, FAIRING_DISTANCE
 from pathlib import Path
 import pyrender
 import numpngw
+import copy
 
 
 class Shape:
-    def __init__(self, ac_list, fuse_to_interface=False, label="test", save_dir=None):
+    def __init__(self, ac_list, align_OBB=False, fuse_to_interface=False, label="test", save_dir=None):
 
         self.ac_list = ac_list
         self.label = label
         self.fuse_to_interface = fuse_to_interface
 
         # Fuse meshes
-        if len(self.ac_list) == 1:
-            self.mesh = ac_list[0].mesh
-        elif len(self.ac_list) == 2:
-            self.fuse_meshes(self.ac_list[0].mesh, self.ac_list[1].mesh)
-        elif len(self.ac_list >= 3):
-            raise NotImplementedError("Multiple ac fusion not implemented.")
+        self.fuse_meshes()
 
         # Find oriented bounding box
-        self.align_mesh()
+        if align_OBB is True:
+            self.align_mesh()
 
         # Smoothly fuse to interface
         if fuse_to_interface is True:
@@ -37,7 +34,25 @@ class Shape:
 
         assert type(self.ac_list) is list, "ac_list must be a list, even if it has just 1 ac."
 
-    def fuse_meshes(self, parent_mesh, child_mesh):
+    def fuse_meshes(self):
+        def check_and_move_identical_verts(mesh1, mesh2):
+            """Mesh boolean fails often when two vertices on two meshes are identical, so we need to shift one vertex very slightly."""
+
+            # Calculate distance between two sets of vertices
+            tree = scipy.spatial.KDTree(mesh1.vertices)
+            dd, ii = tree.query(mesh2.vertices, k=1)
+            identical_verts = np.isclose(dd, 0)
+
+            # Shift these verts
+            mesh2.vertices[identical_verts] += 1e-3  #
+
+            # Check that this shift was successful
+            dd, ii = tree.query(mesh2.vertices, k=1)
+            identical_verts = np.isclose(dd, 0)
+            assert np.any(identical_verts) == False, "Shifting the identical vertex did not work."
+
+            return mesh1, mesh2
+
         def calc_mesh_boolean_and_edges(mesh1, mesh2):
 
             # Use compas/CGAL to calculate boolean union
@@ -64,6 +79,10 @@ class Shape:
             tree = scipy.spatial.KDTree(mesh.vertices)
             _, edge_verts_indices = tree.query(edge_verts_pts, k=1)
 
+            if mesh.is_watertight:
+                print("Mesh is watertight")
+            else:
+                print("Mesh is NOT watertight")
             return mesh, edge_verts_indices
 
         def find_neighbors(mesh, group, distance):
@@ -82,10 +101,10 @@ class Shape:
         def fair_mesh(union_mesh, neighbors):
 
             v = union_mesh.vertices.__array__()
-            f = union_mesh.faces.__array__().astype("int32")
+            f = union_mesh.faces.__array__().astype("int64")
             num_verts = v.shape[0]
             b = np.array(list(set(range(num_verts)) - set(neighbors))).astype(
-                "int32"
+                "int64"
             )  # Bounday indices - NOT to be faired
             bc = v[b]  # XYZ coordinates of the boundary indices
             z = igl.harmonic_weights(v, f, b, bc, HARMONIC_POWER)  # Smooths indices at creases
@@ -95,11 +114,19 @@ class Shape:
 
             return faired_mesh
 
-        union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(parent_mesh, child_mesh)
-        neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=FAIRING_DISTANCE)
-        union_mesh = fair_mesh(union_mesh, neighbors)
-        # union_mesh.show(smooth=False)
-        self.mesh = union_mesh
+        ac_list = copy.copy(self.ac_list)
+        mesh1 = ac_list.pop(0).mesh  # Take first AC
+
+        while len(ac_list) != 0:
+
+            mesh2 = ac_list.pop(0).mesh
+
+            mesh1, mesh2 = check_and_move_identical_verts(mesh1, mesh2)  # Overlapping vertices cause boolean problems
+            union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(mesh1, mesh2)
+            neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=FAIRING_DISTANCE)
+            mesh1 = fair_mesh(union_mesh, neighbors)  # Rename the joint mesh to mesh1 so other ACs can be added
+
+        self.mesh = mesh1
 
     def align_mesh(self):
         """Rotate the mesh so that it's bbox is optimal for haptic shelving."""
@@ -280,7 +307,7 @@ class Shape:
         # Compose scene
         scene = pyrender.Scene(ambient_light=[0.1, 0.1, 0.3], bg_color=[1, 1, 1])
 
-        # Add mesh
+        # Add mesh and interface
         mesh_pose = np.array(
             [
                 [1, 0, 0, 0],
