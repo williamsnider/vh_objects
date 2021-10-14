@@ -84,7 +84,9 @@ class Shape:
             v = union_mesh.vertices.__array__()
             f = union_mesh.faces.__array__().astype("int32")
             num_verts = v.shape[0]
-            b = np.array(list(set(range(num_verts)) - set(neighbors)))  # Bounday indices - NOT to be faired
+            b = np.array(list(set(range(num_verts)) - set(neighbors))).astype(
+                "int32"
+            )  # Bounday indices - NOT to be faired
             bc = v[b]  # XYZ coordinates of the boundary indices
             z = igl.harmonic_weights(v, f, b, bc, HARMONIC_POWER)  # Smooths indices at creases
 
