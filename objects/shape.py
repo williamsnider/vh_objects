@@ -287,10 +287,15 @@ class Shape:
                 [0, 0, 0, 1],
             ]
         )
+
+        # Add mesh to scene
         mesh = pyrender.Mesh.from_trimesh(self.mesh, smooth=False)
-        interface = pyrender.Mesh.from_trimesh(self.interface, smooth=False)
         scene.add(mesh, pose=mesh_pose)
-        scene.add(interface, pose=mesh_pose)
+
+        # Add interface to scene
+        if self.fuse_to_interface is True:
+            interface = pyrender.Mesh.from_trimesh(self.interface, smooth=False)
+            scene.add(interface, pose=mesh_pose)
 
         # Add directional light
         light_pose = np.array(
