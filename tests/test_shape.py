@@ -33,7 +33,7 @@ def test_fuse_meshes():
         euler_angles=np.array([0, np.pi / 3, 0]),
     )
     s = Shape([ac1, ac2])
-    s.fuse_meshes(ac1.mesh, ac2.mesh)
+    s.fuse_meshes()
     s.mesh.show(smooth=False)
 
 
@@ -51,10 +51,7 @@ def test_align_mesh():
     #     position_along_self=0.0,
     #     euler_angles=np.array([0, np.pi / 3, 0]),
     # )
-    s = Shape([ac1])
-    s.mesh = ac1.mesh
-    s.align_mesh()
-    s.fuse_mesh_to_interface()
+    s = Shape([ac1], align_OBB=True, fuse_to_interface=True)
     # s.merged_meshes.show()
 
 
@@ -73,45 +70,36 @@ def test_export_stl():
     #     position_along_self=0.0,
     #     euler_angles=np.array([0, np.pi / 3, 0]),
     # )
-    s = Shape([ac1])
-    s.mesh = ac1.mesh
-    s.align_mesh()
-    s.fuse_mesh_to_interface()
+    s = Shape([ac1], align_OBB=False, fuse_to_interface=True)
     s.export_stl(save_dir)
 
 
-# def test_export_png():
+def test_export_png():
 
-#     save_dir = Path(Path.cwd(), "sample_shapes")
-#     cs0 = CrossSection(base_cp * 20, 0.3)
-#     cs1 = CrossSection(base_cp * 20, 0.7)
-#     ac1 = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
-#     # ac2 = AxialComponent(
-#     #     40 * np.pi * 1 * 0.25,
-#     #     curvature=1 / 20,
-#     #     cross_sections=[cs0, cs1],
-#     #     parent_axial_component=ac1,
-#     #     position_along_parent=0.75,
-#     #     position_along_self=0.0,
-#     #     euler_angles=np.array([0, np.pi / 3, 0]),
-#     # )
-#     s = Shape([ac1])
-#     s.mesh = ac1.mesh
-#     s.align_mesh()
-#     s.fuse_mesh_to_interface()
-#     s.export_png(save_dir)
+    save_dir = Path(Path.cwd(), "sample_shapes")
+    cs0 = CrossSection(base_cp * 20, 0.3)
+    cs1 = CrossSection(base_cp * 20, 0.7)
+    ac1 = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
+    # ac2 = AxialComponent(
+    #     40 * np.pi * 1 * 0.25,
+    #     curvature=1 / 20,
+    #     cross_sections=[cs0, cs1],
+    #     parent_axial_component=ac1,
+    #     position_along_parent=0.75,
+    #     position_along_self=0.0,
+    #     euler_angles=np.array([0, np.pi / 3, 0]),
+    # )
+    s = Shape([ac1], align_OBB=False, fuse_to_interface=True)
+    s.export_png(save_dir)
 
 
-# def test_save_mesh_as_png():
-#     save_dir = Path(Path.cwd(), "sample_shapes")
-#     cs0 = CrossSection(base_cp * 20, 0.3)
-#     cs1 = CrossSection(base_cp * 20, 0.7)
-#     ac1 = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
-#     s = Shape([ac1])
-#     s.mesh = ac1.mesh
-#     s.align_mesh()
-#     s.fuse_mesh_to_interface()
-#     s.save_mesh_as_png(save_dir)
+def test_save_mesh_as_png():
+    save_dir = Path(Path.cwd(), "sample_shapes")
+    cs0 = CrossSection(base_cp * 20, 0.3)
+    cs1 = CrossSection(base_cp * 20, 0.7)
+    ac1 = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
+    s = Shape([ac1], align_OBB=False, fuse_to_interface=True)
+    s.save_mesh_as_png(save_dir)
 
 
 if __name__ == "__main__":

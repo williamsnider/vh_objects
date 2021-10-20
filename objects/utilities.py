@@ -109,6 +109,7 @@ def plot_mesh_and_specific_indices(
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_zlabel("z")
+    ax.set_title("blue = specific indices")
     ax.view_init(elev=-90, azim=90)
 
     # Entire mesh
