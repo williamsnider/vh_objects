@@ -9,6 +9,9 @@ from scipy.spatial import cKDTree
 def deform_ac(ac, base_ac, row, column, deformation_filter):
     """Deform the specified axial component by moving the controlpoint at row, column by the given filter."""
 
+    if type(deformation_filter) == type(None):
+        return ac
+
     # Organize inputs
     cp_r = row
     cp_c = column
@@ -106,6 +109,7 @@ def deform_ac(ac, base_ac, row, column, deformation_filter):
 
     pts_on_plane = pts_new
 
+    # TODO: Shift points so that they form a circle on this plane (diagonal filters will work better)
     # Scale changes based on avg distance from neighbors to center
     num_neighbors = neighborhood.prod()
     middle_cp = (num_neighbors + 1) // 2
@@ -122,7 +126,8 @@ def deform_ac(ac, base_ac, row, column, deformation_filter):
     return ac
 
 
-filter_plane = np.array(
+# Plane
+plane = np.array(
     [
         [0, 0, 0],
         [0, 0, 0],
@@ -130,7 +135,8 @@ filter_plane = np.array(
     ]
 )
 
-filter_concave_ellipsoid_1 = np.array(
+# Concave ellipsoid
+concave_ellipsoid = np.array(
     [
         [0, 0, 0],
         [0, -1, 0],
@@ -138,32 +144,42 @@ filter_concave_ellipsoid_1 = np.array(
     ]
 )
 
-filter_concave_ellipsoid_2 = np.array(
+# Concave cylinder
+concave_cylinder_vert = np.array(
+    [
+        [0, -1, 0],
+        [0, -1, 0],
+        [0, -1, 0],
+    ]
+)
+
+concave_cylinder_diag_down = np.array(
+    [
+        [-1, 0, 0],
+        [0, -1, 0],
+        [0, 0, -1],
+    ]
+)
+concave_cylinder_diag_up = np.array(
+    [
+        [0, 0, -1],
+        [0, -1, 0],
+        [-1, 0, 0],
+    ]
+)
+
+concave_cylinder_hori = np.array(
     [
         [0, 0, 0],
-        [0, -2, 0],
+        [-1, -1, -1],
         [0, 0, 0],
     ]
 )
 
-filter_concave_cylinder_1 = np.array(
-    [
-        [0, -1, 0],
-        [0, -1, 0],
-        [0, -1, 0],
-    ]
-)
-
-filter_concave_cylinder_2 = np.array(
-    [
-        [0, -2, 0],
-        [0, -2, 0],
-        [0, -2, 0],
-    ]
-)
+# Hyperboloid
 
 
-filter_hyperboloid_surface_1 = np.array(
+hyperboloid_surface_vert = np.array(
     [
         [0, -1, 0],
         [1, 0, 1],
@@ -171,14 +187,32 @@ filter_hyperboloid_surface_1 = np.array(
     ]
 )
 
-filter_hyperboloid_surface_2 = np.array(
+hyperboloid_surface_diag_down = np.array(
     [
-        [0, -2, 0],
-        [2, 0, 2],
-        [0, -2, 0],
+        [-1, 0, 1],
+        [0, 0, 0],
+        [1, 0, -1],
     ]
 )
-filter_convex_cylinder_1 = np.array(
+
+hyperboloid_surface_diag_up = np.array(
+    [
+        [1, 0, -1],
+        [0, 0, 0],
+        [-1, 0, 1],
+    ]
+)
+
+hyperboloid_surface_hori = np.array(
+    [
+        [0, 1, 0],
+        [-1, 0, -1],
+        [0, 1, 0],
+    ]
+)
+
+# Convex cylinder
+convex_cylinder_vert = np.array(
     [
         [0, 1, 0],
         [0, 1, 0],
@@ -186,26 +220,36 @@ filter_convex_cylinder_1 = np.array(
     ]
 )
 
-filter_convex_cylinder_2 = np.array(
+convex_cylinder_diag_down = np.array(
     [
-        [0, 2, 0],
-        [0, 2, 0],
-        [0, 2, 0],
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
     ]
 )
 
-filter_convex_ellipsoid_1 = np.array(
+convex_cylinder_diag_up = np.array(
+    [
+        [0, 0, 1],
+        [0, 1, 0],
+        [1, 0, 0],
+    ]
+)
+
+convex_cylinder_hori = np.array(
+    [
+        [0, 0, 0],
+        [1, 1, 1],
+        [0, 0, 0],
+    ]
+)
+
+
+# Convex ellipsoid
+convex_ellipsoid = np.array(
     [
         [0, 0, 0],
         [0, 1, 0],
-        [0, 0, 0],
-    ]
-)
-
-filter_convex_ellipsoid_2 = np.array(
-    [
-        [0, 0, 0],
-        [0, 2, 0],
         [0, 0, 0],
     ]
 )
