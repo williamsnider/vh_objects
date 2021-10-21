@@ -6,7 +6,7 @@ from objects.shape import Shape
 import numpy as np
 
 # Set random seed for debugging
-np.random.seed(1)
+# np.random.seed(1)
 
 CP_GAUSSIAN_SIGMA = 10
 CS_RADIUS_RANGE = [20, 40]

@@ -24,6 +24,9 @@ import copy
 from scipy.spatial import cKDTree
 from pathlib import Path
 import itertools
+from joblib import Parallel, delayed
+import time
+
 
 base_dir = Path(Path.cwd(), "sample_shapes", "stimulus_set", "iteration0")
 valid_rows = [4, 7, 10]
@@ -92,7 +95,7 @@ filter_set = [
 ]
 
 # Make list of all filter pairs (combinations with replacement)
-dict = dict()
+filter_dict = dict()
 items = list(locals().items())
 for filt in filter_set:
 
@@ -102,62 +105,76 @@ for filt in filter_set:
             continue
 
         if np.all(value == filt):
-            dict[name] = filt
+            filter_dict[name] = filt
             break  # Escape the loop since the variable was found
-dict["None"] = None
-all_pairs = list(itertools.combinations_with_replacement(dict.keys(), 2))
+filter_dict["None"] = None
 
-# Make list of all locations (i.e. controlpoints) (combinations without replacement)
-valid_cps = [[r, c] for r in valid_rows for c in valid_cols]
-all_location_pairs = list(itertools.combinations(valid_cps, 2))
+all_pairs = []
+for d1 in filter_dict.keys():
+    for d2 in filter_dict.keys():
+        for d3 in filter_dict.keys():
 
+            combination = [d1, d2, d3]
+
+            # Require >=1 intervals to be empty
+            if "None" not in combination:
+                continue
+
+            all_pairs.append(combination)
+
+# Assemble list of arguments
+argument_list = []
+count = 0
 for curvature in curvatures:
 
     base_ac = AxialComponent(length, curvature=curvature, cross_sections=[cs1, cs2, cs3, cs4, cs5, cs6, cs7, cs8, cs9])
 
-    for location in all_location_pairs:
+    for deformations in all_pairs:
 
-        row1, col1 = location[0]
-        row2, col2 = location[1]
+        # Construct save_dir
+        png_save_dir = Path(
+            base_dir,
+            "png",
+            "curvature_" + str(np.round(curvature, decimals=3)).replace(".", "p"),
+        )
 
-        for filt in all_pairs:
+        stl_save_dir = Path(
+            base_dir,
+            "stl",
+            "curvature_" + str(np.round(curvature, decimals=3)).replace(".", "p"),
+        )
 
-            # Print status
-            print("Curvature = ", np.round(curvature, decimals=2), " Location = ", location, " Filter pairs = ", filt)
+        # Construct Label
+        label = "_"
+        label = label.join(deformations[::-1])  # Flip order to match png
 
-            # Construct save_dir
-            save_dir = Path(
-                base_dir,
-                "curvature_" + str(np.round(curvature, decimals=3)).replace(".", "p"),
-                "location_" + str(row1) + "_" + str(row2),
-            )
-            # Construct Label
-            label = ""
-            for r in valid_rows:
+        # Append to argument list
+        argument_list.append([base_ac, deformations, label, png_save_dir, stl_save_dir, count])
+        count += 1
 
-                if r == row1:
-                    label += filt[0]
-                elif r == row2:
-                    label += filt[1]
-                else:
-                    label += "None"
 
-                # Add underscore except for final entry
-                if r == valid_rows[-1]:
-                    continue
-                else:
-                    label += "_"
+def carry_out_deformations(base_ac, deformations, label, png_save_dir, stl_save_dir, count):
 
-            # Create shape
-            filt1 = dict[filt[0]]
-            filt2 = dict[filt[1]]
-            ac = copy.deepcopy(base_ac)
-            ac = deform_ac(ac, base_ac, row=row1, column=col1, deformation_filter=filt1)
-            ac = deform_ac(ac, base_ac, row=row2, column=col2, deformation_filter=filt2)
-            ac.make_surface()
-            ac.make_mesh()
-            s = Shape([ac], align_OBB=False, fuse_to_interface=True, label=label)
-            s.save_mesh_as_png(save_dir)
-            # s.mesh.show(smooth=False)
+    print(count)
+    ac = copy.deepcopy(base_ac)
 
+    for i, d in enumerate(deformations):
+
+        row = valid_rows[i]
+        col = valid_cols[0]
+        deformation_filter = filter_dict[d]
+        ac = deform_ac(ac, base_ac, row=row, column=col, deformation_filter=deformation_filter)
+
+    ac.make_surface()
+    ac.make_mesh()
+    s = Shape([ac], align_OBB=False, fuse_to_interface=True, label=label)
+    s.save_mesh_as_png(png_save_dir)
+    s.export_stl(stl_save_dir)
+    # s.mesh.show(smooth=False)
+
+
+start = time.time()
+Parallel(n_jobs=15)(delayed(carry_out_deformations)(*args) for args in argument_list)
+end = time.time()
+print("Execution time: ", end - start)
 # Shift points according to desired patteern
