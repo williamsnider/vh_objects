@@ -265,7 +265,7 @@ class Shape:
 
         # Construct save_dir
         if save_dir.is_dir() is False:
-            save_dir.mkdir()
+            save_dir.mkdir(parents=True)
 
         # Export
         filename = Path(save_dir, self.label).with_suffix(".stl")
