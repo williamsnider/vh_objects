@@ -111,7 +111,7 @@ all_pairs = list(itertools.combinations_with_replacement(dict.keys(), 2))
 valid_cps = [[r, c] for r in valid_rows for c in valid_cols]
 all_location_pairs = list(itertools.combinations(valid_cps, 2))
 
-for curvature in curvatures[1:]:
+for curvature in curvatures:
 
     base_ac = AxialComponent(length, curvature=curvature, cross_sections=[cs1, cs2, cs3, cs4, cs5, cs6, cs7, cs8, cs9])
 

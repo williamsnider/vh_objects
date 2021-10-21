@@ -8,8 +8,8 @@ from objects.utilities import plot_mesh_and_specific_indices
 from objects.parameters import HARMONIC_POWER, FAIRING_DISTANCE
 from pathlib import Path
 import pyrender
-import numpngw
 import copy
+import cv2
 
 
 class Shape:
@@ -361,7 +361,7 @@ class Shape:
         # v = np.cross(u, n)
         # e = np.array([0, 30, 0])  #  eye: camera position in world coordinates
         # camera_pose = np.array(
-        #     [
+        #
         #         [u[0], v[0], -n[0], -e[0]],
         #         [u[1], v[1], -n[1], -e[1]],
         #         [u[2], v[2], -n[2], -e[2]],
@@ -372,12 +372,12 @@ class Shape:
         camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
         scene.add(camera, pose=camera_pose)
 
+        # TODO: This is not 16 bit depth
         r = pyrender.OffscreenRenderer(7680, 4320, bitdepth="16bit")
         color, _ = r.render(scene)
 
         # Save png - at 16bit depth
-        numpngw.write_png(filename, color)
-        print(filename)
+        cv2.imwrite(filename, color)
 
     def plot_meshes(self):
 
