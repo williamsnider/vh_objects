@@ -300,7 +300,7 @@ class Shape:
 
         # Construct save_dir
         if save_dir.is_dir() is False:
-            save_dir.mkdir()
+            save_dir.mkdir(parents=True)
 
         filename = str(Path(save_dir, self.label).with_suffix(".png"))
 
@@ -346,7 +346,7 @@ class Shape:
         u = np.array([-1, 0, 0])
         v = np.array([0, 1, 0])
         n = np.cross(u, v)
-        e = np.array([0, 0, -100])  #  eye: camera position in world coordinates
+        e = np.array([0, 0, -150])  #  eye: camera position in world coordinates
         camera_pose = np.array(
             [
                 [u[0], u[1], u[2], e[0]],
