@@ -1,5 +1,9 @@
 ### Parameters used in generating objects
 
+# Backbone construction
+NUM_INTERPOLATION_POINTS = 1000  #
+NUM_SAMPLES_FOR_REPARAMETERIZATION = 10 * NUM_INTERPOLATION_POINTS
+
 # AxialComponent construction
 SAMPLING_DENSITY_U = 100  # Number of samples along round axis of 'cylinder' axial component
 SAMPLING_DENSITY_V = 100  # Number of samples along long axis of 'cylinder' axial component
