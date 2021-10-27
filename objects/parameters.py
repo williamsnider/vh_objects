@@ -1,5 +1,10 @@
 ### Parameters used in generating objects
 
+# Digit segment construction
+NUM_CP_PER_SEGMENT = 5
+GOAL_LENGTH_SEGMENT = 1
+
+
 # Backbone construction
 NUM_INTERPOLATION_POINTS = 1000  #
 NUM_SAMPLES_FOR_REPARAMETERIZATION = 10 * NUM_INTERPOLATION_POINTS
