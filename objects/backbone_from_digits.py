@@ -12,12 +12,17 @@ class BackboneFromDigits:
 
     def __init__(self, digit_segments, angles_between_segments):
 
-        self.digit_segments = digit_segments
-        self.angles_between_segments = angles_between_segments
+        self.digit_segments = digit_segments.copy()  # Solve bug
+        self.angles_between_segments = angles_between_segments.copy()
 
         self.num_digit_segments = len(self.digit_segments)
         self.num_angles_between_segments = len(angles_between_segments)
 
+        self.check_inputs()
+        self.align_segments()
+        self.link_segments()
+
+    def check_inputs(self):
         assert (
             self.num_digit_segments - 1 == self.num_angles_between_segments
         ), "num_digit_segments is not 1 larger than num_angles_between_segments"
@@ -26,9 +31,11 @@ class BackboneFromDigits:
             self.digit_segments[0] == type(Backbone)
         ), "digit_segment is not an instance of the Backbone class"  # Use Backbone class because T,N,B are calculated more predictably than splipy.curve
 
-        # Align controlpoints
-        self.align_segments()
-        self.link_segments()
+        for segment in self.digit_segments:
+
+            assert np.all(
+                np.isclose(segment.controlpoints[0], 0)
+            ), "First controlpoint for each digit segment must be at origin (0,0,0)."
 
     def align_segments(self):
         """Connect the digits end-to-end, also preserving their angles."""
@@ -72,9 +79,9 @@ class BackboneFromDigits:
             R_euler = calc_R_euler_angles(self.angles_between_segments[i - 1])
 
             # Carry out transformations
-            cp = curr_segment.controlpoints
-            cp = cp @ R_euler
+            cp = curr_segment.controlpoints.copy()
             cp = cp @ R_align
+            cp = cp @ R_euler
             cp = cp + T
 
             # Update list

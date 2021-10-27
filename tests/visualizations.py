@@ -347,8 +347,8 @@ def plot_backbone_from_digit_euler_angles():
     t = np.linspace(0, np.pi / 2, 5)
     cp1 = np.stack(
         [
-            np.zeros(5),
-            np.linspace(0, 1, 5),
+            1 - np.cos(t),
+            np.sin(t),
             np.zeros(5),
         ]
     ).T  # Transpose so that cp are along rows
@@ -359,7 +359,7 @@ def plot_backbone_from_digit_euler_angles():
     for row_num in [0, 1, 2]:
 
         bfd_list = []
-        for theta in np.linspace(-np.pi / 3, np.pi / 3, 4, endpoint=False):
+        for theta in np.linspace(-np.pi, np.pi, 4, endpoint=False):
 
             angles_between_segments = np.zeros((1, 3))
             angles_between_segments[:, row_num] = theta  # TODO: Fix the normal vector calculation
