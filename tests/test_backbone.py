@@ -2,11 +2,26 @@ from objects.backbone import Backbone
 import numpy as np
 
 
+def test_backbone_tangent_normal_binormal():
+    cp = np.array([[0, 0, 0], [0, 10, 0], [0, 20, 0], [0, 30, 0], [10, 30, 0], [20, 30, 0], [30, 30, 0]])
+    backbone = Backbone(cp, reparameterize=True)
+
+    # TODO: Figure out why binormal(0) results in nan. First you need to enable debugging breakpoints in other files.
+    t = np.linspace(0, 1, 100)
+    T = backbone.T(t)
+    N = backbone.N(t)
+    B = backbone.B(t)
+
+    assert np.all(T[0] == [0, 1, 0])
+    assert np.all(N[0] == [-1, 0, 0])
+    assert np.all(B[0] == [0, 0, 1])
+    assert np.all(T[-1] == [1, 0, 0])
+    assert np.all(N[-1] == [0, 1, 0])
+    assert np.all(B[-1] == [0, 0, 1])
+
+
 def test_reparameterize():
-
-    cp = np.array([[0, 0, 0], [0, 1, 0], [0, 2, 0], [0, 3, 0], [1, 3, 0], [2, 3, 0], [3, 3, 0]])
-    NUM_CONTROLPOINTS = cp.shape[0]
-
+    cp = np.array([[0, 0, 0], [0, 10, 0], [0, 20, 0], [0, 30, 0], [10, 30, 0], [20, 30, 0], [30, 30, 0]])
     backbone = Backbone(cp, reparameterize=False)
     new_backbone = backbone.reparameterize()
 

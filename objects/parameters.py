@@ -3,6 +3,7 @@
 # Backbone construction
 NUM_INTERPOLATION_POINTS = 1000  #
 NUM_SAMPLES_FOR_REPARAMETERIZATION = 10 * NUM_INTERPOLATION_POINTS
+EPSILON = 1e-2  # Used to estimate b-spline derivative
 
 # AxialComponent construction
 SAMPLING_DENSITY_U = 100  # Number of samples along round axis of 'cylinder' axial component

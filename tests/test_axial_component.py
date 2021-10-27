@@ -1,7 +1,24 @@
+from objects.backbone import Backbone
 from objects.axial_component import AxialComponent
 from objects.cross_section import CrossSection
+from objects.shape import Shape
 import numpy as np
 
+# Create base backbone
+cp = np.array(
+    [
+        [0, 0, 0],
+        [0, 10, 0],
+        [0, 20, 0],
+        [0, 30, 0],
+        [10, 30, 0],
+        [20, 30, 0],
+        [30, 30, 0],
+    ]
+)
+backbone1 = Backbone(cp, reparameterize=False)
+
+# Create base cross section
 c = np.cos
 s = np.sin
 base_cp = np.array(
@@ -31,77 +48,51 @@ def test_long_AC():
     """Debugging a sharp boundary when length is long"""
     cs0 = CrossSection(base_cp * 20, 0.3)
     cs1 = CrossSection(base_cp * 20, 0.7)
-    ac = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
+    ac = AxialComponent(backbone=backbone1, cross_sections=[cs0, cs1])
+    s = Shape([ac])
 
 
-def test_circular_arc():
+def test_connect_axial_components():
 
-    cs = CrossSection(base_cp, 0.0)
-    ac = AxialComponent(2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs])
-    t = np.linspace(0, 1, 3)
-    backbone = ac.r(t)
-    target = np.array(
-        [
-            [0.0, 0.0, 0.0],
-            [0.70710678, 0.29289322, 0.0],
-            [1.0, 1.0, 0.0],
-        ]
+    position_along_parent = 0.75
+    position_along_self = 0.25
+
+    cs0 = CrossSection(base_cp * 20, 0.3)
+    cs1 = CrossSection(base_cp * 20, 0.7)
+    ac1 = AxialComponent(backbone=backbone1, cross_sections=[cs0, cs1])
+    ac2 = AxialComponent(
+        backbone=backbone1,
+        cross_sections=[cs0, cs1],
+        parent_axial_component=ac1,
+        position_along_parent=position_along_parent,
+        position_along_self=position_along_self,
     )
-    assert np.allclose(backbone, target)
 
+    # Test that join coordinate is correct
+    assert np.all(np.isclose(ac1.r(position_along_parent), ac2.r(position_along_self)))
 
-def test_tangent_vectors():
+    # Test that tangent at join point is correct (since euler angles are (0,0,0))
+    assert np.all(np.isclose(ac1.T(position_along_parent), ac2.T(position_along_self)))
 
-    cs = CrossSection(base_cp, 0.0)
-    ac = AxialComponent(2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs])
-    t = np.linspace(0, 1, 5)
-    T = ac.T(t)
-    N = ac.N(t)
-    B = ac.B(t)
-    T_target = np.array(
-        [
-            [1.00000000e00, 0.00000000e00, 0.00000000e00],
-            [9.23879533e-01, 3.82683432e-01, 0.00000000e00],
-            [7.07106781e-01, 7.07106781e-01, 0.00000000e00],
-            [3.82683432e-01, 9.23879533e-01, 0.00000000e00],
-            [6.12323400e-17, 1.00000000e00, 0.00000000e00],
-        ]
-    )
-    N_target = np.array(
-        [
-            [-0.00000000e00, 1.00000000e00, 0.00000000e00],
-            [-3.82683432e-01, 9.23879533e-01, 0.00000000e00],
-            [-7.07106781e-01, 7.07106781e-01, 0.00000000e00],
-            [-9.23879533e-01, 3.82683432e-01, 0.00000000e00],
-            [-1.00000000e00, 6.12323400e-17, 0.00000000e00],
-        ]
-    )
-    B_target = np.array(
-        [
-            [0.0, -0.0, 1.0],
-            [0.0, -0.0, 1.0],
-            [0.0, -0.0, 1.0],
-            [0.0, -0.0, 1.0],
-            [0.0, -0.0, 1.0],
-        ]
-    )
-    assert np.allclose(T, T_target)
-    assert np.allclose(N, N_target)
-    assert np.allclose(B, B_target)
+    # Test that normal at join point is correct (since euler angles are (0,0,0))
+    assert np.all(np.isclose(ac1.N(position_along_parent), ac2.N(position_along_self)))
+
+    # Test that binormal at join point is correct (since euler angles are (0,0,0))
+    assert np.all(np.isclose(ac1.B(position_along_parent), ac2.B(position_along_self)))
 
 
 def test_get_controlpoints():
-
-    cs = CrossSection(base_cp, 0.5)
-    ac = AxialComponent(2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs])
+    cs0 = CrossSection(base_cp * 20, 0.3)
+    cs1 = CrossSection(base_cp * 20, 0.7)
+    ac = AxialComponent(backbone=backbone1, cross_sections=[cs0, cs1])
     ac.get_controlpoints()
 
 
 def test_make_surface():
 
-    cs0 = CrossSection(base_cp * 0.5, 0.3)
-    cs1 = CrossSection(base_cp * 0.5, 0.7)
-    ac = AxialComponent(2 * np.pi * 1 * 0.25, curvature=1 / 1, cross_sections=[cs0, cs1])
+    cs0 = CrossSection(base_cp * 20, 0.3)
+    cs1 = CrossSection(base_cp * 20, 0.7)
+    ac = AxialComponent(backbone=backbone1, cross_sections=[cs0, cs1])
 
     ac.get_controlpoints()
     ac.make_surface()
@@ -109,9 +100,9 @@ def test_make_surface():
 
 def test_make_mesh():
 
-    cs0 = CrossSection(base_cp_round * 0.5, 0.3)
-    cs1 = CrossSection(base_cp_round * 0.5, 0.7)
-    ac = AxialComponent(2 * np.pi * 1 * 0.25, curvature=0, cross_sections=[cs0, cs1])
+    cs0 = CrossSection(base_cp * 20, 0.3)
+    cs1 = CrossSection(base_cp * 20, 0.7)
+    ac = AxialComponent(backbone=backbone1, cross_sections=[cs0, cs1])
 
     ac.get_controlpoints()
     ac.make_surface()

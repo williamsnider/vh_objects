@@ -1,6 +1,7 @@
 from objects.axial_component import AxialComponent
 from objects.cross_section import CrossSection
 from objects.shape import Shape
+from objects.backbone import Backbone
 import numpy as np
 from pathlib import Path
 
@@ -17,31 +18,49 @@ base_cp = np.array(
     ]
 )
 
+# Create base backbone
+cp = np.array(
+    [
+        [0, 0, 0],
+        [0, 10, 0],
+        [0, 20, 0],
+        [0, 30, 0],
+        [10, 30, 0],
+        [20, 30, 0],
+        [30, 30, 0],
+    ]
+)
+backbone1 = Backbone(cp, reparameterize=False)
+
 
 def test_fuse_meshes():
 
-    cs0 = CrossSection(base_cp * 15, 0.3)
-    cs1 = CrossSection(base_cp * 15, 0.7)
-    ac1 = AxialComponent(25 * np.pi * 1 * 0.25, curvature=0, cross_sections=[cs0, cs1])
+    cs0 = CrossSection(base_cp * 5, 0.3)
+    cs1 = CrossSection(base_cp * 5, 0.7)
+    ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
     ac2 = AxialComponent(
-        2 * np.pi * 25 * 0.25,
-        curvature=1 / 25,
+        backbone1,
         cross_sections=[cs0, cs1],
         parent_axial_component=ac1,
         position_along_parent=0.2,
         position_along_self=0.75,
-        euler_angles=np.array([0, np.pi / 3, 0]),
     )
     s = Shape([ac1, ac2])
     s.fuse_meshes()
     s.mesh.show(smooth=False)
 
+    # Debug
+    import trimesh
+
+    scene = trimesh.Scene([ac1.mesh, ac2.mesh])
+    scene.show()
+
 
 def test_align_mesh():
 
-    cs0 = CrossSection(base_cp * 20, 0.3)
-    cs1 = CrossSection(base_cp * 20, 0.7)
-    ac1 = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
+    cs0 = CrossSection(base_cp * 15, 0.3)
+    cs1 = CrossSection(base_cp * 15, 0.7)
+    ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
     # ac2 = AxialComponent(
     #     40 * np.pi * 1 * 0.25,
     #     curvature=1 / 20,
@@ -58,9 +77,9 @@ def test_align_mesh():
 def test_export_stl():
 
     save_dir = Path(Path.cwd(), "sample_shapes")
-    cs0 = CrossSection(base_cp * 20, 0.3)
-    cs1 = CrossSection(base_cp * 20, 0.7)
-    ac1 = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
+    cs0 = CrossSection(base_cp * 15, 0.3)
+    cs1 = CrossSection(base_cp * 15, 0.7)
+    ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
     # ac2 = AxialComponent(
     #     40 * np.pi * 1 * 0.25,
     #     curvature=1 / 20,
@@ -77,9 +96,9 @@ def test_export_stl():
 def test_export_png():
 
     save_dir = Path(Path.cwd(), "sample_shapes")
-    cs0 = CrossSection(base_cp * 20, 0.3)
-    cs1 = CrossSection(base_cp * 20, 0.7)
-    ac1 = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
+    cs0 = CrossSection(base_cp * 15, 0.3)
+    cs1 = CrossSection(base_cp * 15, 0.7)
+    ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
     # ac2 = AxialComponent(
     #     40 * np.pi * 1 * 0.25,
     #     curvature=1 / 20,
@@ -95,9 +114,9 @@ def test_export_png():
 
 def test_save_mesh_as_png():
     save_dir = Path(Path.cwd(), "sample_shapes")
-    cs0 = CrossSection(base_cp * 20, 0.3)
-    cs1 = CrossSection(base_cp * 20, 0.7)
-    ac1 = AxialComponent(100 * np.pi * 1 * 0.25, curvature=1 / 100, cross_sections=[cs0, cs1])
+    cs0 = CrossSection(base_cp * 15, 0.3)
+    cs1 = CrossSection(base_cp * 15, 0.7)
+    ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
     s = Shape([ac1], align_OBB=False, fuse_to_interface=True)
     s.save_mesh_as_png(save_dir)
 
