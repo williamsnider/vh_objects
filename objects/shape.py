@@ -123,8 +123,25 @@ class Shape:
 
             mesh1, mesh2 = check_and_move_identical_verts(mesh1, mesh2)  # Overlapping vertices cause boolean problems
             union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(mesh1, mesh2)
+
+            # TODO: Implement a method that slightly shifts the vertices on mesh1 and mesh2 that are near the union_mesh vertices that have broken faces, and retry boolean union. This is likely to work, as evidenced by small changes in the euler angles on the joining of the two meshes usually works.
+
+            # # Debug
+            # broken = trimesh.repair.broken_faces(union_mesh, color=[255, 0, 0, 255])
+            # union_mesh.show()
+            # union_mesh.fill_holes()
+            # union_mesh.show()
+
             neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=FAIRING_DISTANCE)
-            mesh1 = fair_mesh(union_mesh, neighbors)  # Rename the joint mesh to mesh1 so other ACs can be added
+            if union_mesh.is_watertight is False:
+                import warnings
+
+                warnings.warn(
+                    "union_mesh is not watertight. This is probably because there is a complex joining of two axial components. This could be solves by slightly shifting the vertices near the broken faces and attempting the union again."
+                )
+                print("Mesh will not be faired, as it is not watertight.")
+            else:
+                mesh1 = fair_mesh(union_mesh, neighbors)  # Rename the joint mesh to mesh1 so other ACs can be added
 
         self.mesh = mesh1
 

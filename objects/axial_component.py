@@ -3,6 +3,7 @@ from splipy import BSplineBasis, Surface
 import trimesh
 from objects.parameters import ORDER, SHRINK_FACTOR, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V
 from objects.utilities import open_uniform_knot_vector
+from objects.backbone import Backbone
 
 # Fixed variables - used to built controlpoints array with the correct size.
 NUM_ENDPOINTS = 2  # Position 0.0 and 1.0 on the axial component's backbone
@@ -13,34 +14,26 @@ NUM_CROSS_SECTION_SLOPE = 2  # Controlpoints used to control surface slope near 
 class AxialComponent:
     def __init__(
         self,
-        length,
-        curvature,
+        backbone,
         cross_sections,
         euler_angles=np.array([0, 0, 0]),
         parent_axial_component=None,
         position_along_parent=1.0,
         position_along_self=0.0,
     ):
-        self.length = length
-        self.curvature = curvature
-        if self.curvature == 0:
-            self.radius = None
-        else:
-            self.radius = 1.0 / self.curvature
+        self.backbone = backbone
         self.cross_sections = cross_sections
         self.euler_angles = euler_angles
         self.parent_axial_component = parent_axial_component
         self.position_along_parent = position_along_parent
         self.position_along_self = position_along_self
+        self.length = self.backbone.length()
 
         # Do calculations
         self.calc_points()
 
     def check_inputs(self):
 
-        assert self.length > 0, "axial_component length must be greater than 0."
-        assert self.curvature >= 0, "Curvature cannot be negative."
-        assert self.length * self.curvature <= 2 * np.pi, "Axial component is too curved and loops back into itself."
         assert type(self.cross_sections) is list, "cross_sections must be input as a list."
 
         current_position = -1
@@ -147,6 +140,7 @@ class AxialComponent:
 
     def r(self, t, local=False):
 
+        # TODO: This is out of date
         # Coordinate system explanation. Imagine you are the monkey, and the robot has brought the shape to your hand. The robot gripper is on the right and parallel to the ground, and the shape is pointing to the left.
         # Origin is at position 0.0 of the parent axial component.
         # +x is the direction along which the axial component points (if the axial component has curvature==0, it goes solely along the +x axis)
@@ -161,21 +155,7 @@ class AxialComponent:
         if np.any(t < 0) or np.any(t > 1):
             raise Exception("Input t must be within closed interval [0,1].")
 
-        num_vals = len(t)
-
-        # For straight lines, have the full extent be in the x-axis
-        if self.curvature == 0:
-            x = self.length * t
-            y = np.zeros(num_vals)
-            z = np.zeros(num_vals)
-        # For arcs, use this equation of a parametric curve
-        else:
-            theta = self.length * t / self.radius  # Convert arc length to radians
-            x = self.radius * np.sin(theta)
-            y = self.radius * -np.cos(theta) + self.radius
-            z = np.zeros(num_vals)
-
-        r = np.stack((x, y, z), axis=-1)
+        r = self.backbone.r(t)
 
         if local is True:
             return r
@@ -199,21 +179,7 @@ class AxialComponent:
         if np.any(t < 0) or np.any(t > 1):
             raise Exception("Input t must be within closed interval [0,1].")
 
-        num_vals = len(t)
-
-        # For straight lines, have the tangent vector be along the x-axis ()
-        if self.curvature == 0:
-            x = np.ones(num_vals)
-            y = np.zeros(num_vals)
-            z = np.zeros(num_vals)
-        # For arcs, calculate the tangent vector using first derivative of r_t equation
-        else:
-            theta = self.length * t / self.radius  # Convert arc length to radians
-            x = np.cos(theta)
-            y = np.sin(theta)
-            z = np.zeros(num_vals)
-
-        T = np.stack((x, y, z), axis=-1)
+        T = self.backbone.T(t)
 
         if local is True:
             return T
@@ -233,21 +199,7 @@ class AxialComponent:
         if np.any(t < 0) or np.any(t > 1):
             raise Exception("Input t must be within closed interval [0,1].")
 
-        num_vals = len(t)
-
-        # For straight lines, have the normal vector be along the Y-axis ()
-        if self.curvature == 0:
-            x = np.zeros(num_vals)
-            y = np.ones(num_vals)
-            z = np.zeros(num_vals)
-        # For arcs, calculate the tangent vector using first derivative of r_t equation
-        else:
-            theta = self.length * t / self.radius  # Convert arc length to radians
-            x = -np.sin(theta)
-            y = np.cos(theta)
-            z = np.zeros(num_vals)
-
-        N = np.stack((x, y, z), axis=-1)
+        N = self.backbone.N(t)
 
         if local is True:
             return N
@@ -267,15 +219,15 @@ class AxialComponent:
         if np.any(t < 0) or np.any(t > 1):
             raise Exception("Input t must be within closed interval [0,1].")
 
+        B = self.backbone.B(t)
+
         if local is True:
-            # Take cross product of T and N
-            T = self.T(t, local=True)
-            N = self.N(t, local=True)
+            return B
         else:
-            # Take cross product of T and N
-            T = self.T(t)
-            N = self.N(t)
-        B = np.cross(T, N)
+            # Transform to align with parent
+            B = B @ self.R_align_with_parent
+            B = B @ self.R_euler_angles
+            return B
         return B
 
     def get_controlpoints(self):
@@ -503,23 +455,3 @@ class AxialComponent:
             faces=faces,
             process=False,
         )
-
-        # # XXX: Plot to visualize
-        # from objects.utilities import plot_controlpoints
-
-        # plot_controlpoints(self)
-        # self.mesh.show()
-        # pass
-
-    # def plot_o3d_mesh(self):
-    #     """
-    #     Plots the mesh using the custom triangles, vertices, and normals.
-    #     """
-    #     self.o3d_mesh = self.mesh.as_open3d
-
-    #     # Unsure why, but need to copy for the vector3dvector function to work
-    #     vert_norms = copy.copy(self.vert_norms)
-    #     face_norms = copy.copy(self.face_norms)
-    #     self.o3d_mesh.vertex_normals = o3d.utility.Vector3dVector(vert_norms)
-    #     self.o3d_mesh.triangle_normals = o3d.utility.Vector3dVector(face_norms)
-    #     o3d.visualization.draw_geometries([self.o3d_mesh])
