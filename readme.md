@@ -16,7 +16,7 @@ conda activate objects_venv
 pip install -e .
 
 # Compas contains CGAL bindings
-conda install -c conda-forge matplotlib trimesh rtree compas compas_cgal igl shapely opencv ipython ipykernel black pytest --yes
+conda install -c conda-forge matplotlib trimesh rtree compas compas_cgal igl shapely opencv ipython ipykernel ipympl black pytest --yes
 ```
 
 ## TODO: Usage
