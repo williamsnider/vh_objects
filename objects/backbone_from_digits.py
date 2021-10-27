@@ -37,6 +37,10 @@ class BackboneFromDigits:
                 np.isclose(segment.controlpoints[0], 0)
             ), "First controlpoint for each digit segment must be at origin (0,0,0)."
 
+            assert (
+                segment.controlpoints.shape[1] == 3
+            ), "Controlpoints must be in Nx3 array; perhaps you forgot to transpose."
+
     def align_segments(self):
         """Connect the digits end-to-end, also preserving their angles."""
 

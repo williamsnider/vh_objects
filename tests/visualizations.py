@@ -6,6 +6,7 @@ from objects.backbone_from_digits import BackboneFromDigits
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
+from objects.digit_segments import segment_arc_1_16, segment_arc_1_8, segment_flat
 
 c = np.cos
 s = np.sin
@@ -389,6 +390,29 @@ def plot_backbone_from_digit_euler_angles():
         plt.show()
 
 
+def plot_segments():
+
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.view_init(elev=-90, azim=90)
+
+    segment_list = [segment_flat, segment_arc_1_8, segment_arc_1_16]
+    t = np.linspace(0, 1, 100)
+    axis_max = 0
+    for segment in segment_list:
+        x, y, z = segment.r(t).T
+        ax.plot(x, y, z, "b-")
+        axis_max = np.max([np.max([x, y, z]), axis_max])
+
+    ax.set_xlim([-axis_max, axis_max])
+    ax.set_ylim([-axis_max, axis_max])
+    ax.set_zlim([-axis_max, axis_max])
+    plt.show()
+
+
 if __name__ == "__main__":
     # plot_tangent_vectors()
     # plot_controlpoints()
@@ -396,4 +420,5 @@ if __name__ == "__main__":
     # plot_align_axial_components()
     # plot_euler_angles()
     # plot_meshes_as_shape()
-    plot_backbone_from_digit_euler_angles()
+    # plot_backbone_from_digit_euler_angles()
+    plot_segments()
