@@ -50,6 +50,39 @@ def angle_between(v1, v2):
     return np.arccos(np.clip((v1_u * v2_u).sum(axis=a), -1.0, 1.0))
 
 
+def calc_R_euler_angles(euler_angles):
+    s = np.sin
+    c = np.cos
+
+    a1, a2, a3 = euler_angles
+    R_x = np.array(
+        [
+            [1, 0, 0],
+            [0, c(a1), -s(a1)],
+            [0, s(a1), c(a1)],
+        ]
+    )
+
+    R_y = np.array(
+        [
+            [c(a2), 0, s(a2)],
+            [0, 1, 0],
+            [-s(a2), 0, c(a2)],
+        ]
+    )
+
+    R_z = np.array(
+        [
+            [c(a3), -s(a3), 0],
+            [s(a3), c(a3), 0],
+            [0, 0, 1],
+        ]
+    )
+
+    R_euler_angles = R_z @ (R_y @ R_x)
+    return R_euler_angles
+
+
 ##########
 # Mesh Functions
 def calc_face_normals(verts, faces):

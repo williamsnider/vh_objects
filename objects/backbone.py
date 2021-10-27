@@ -62,6 +62,10 @@ class Backbone:
     def dx(self, t):
         """First derivative (velocity) of b-spline backbone."""
 
+        if type(t) != type(np.array(0)):
+            t = np.array([t])
+
+        # Copy t to avoid problems when it gets changed
         t = t.copy()  # Changing t was causing a bug
 
         # Handle array that may contain t == 0 or t == 1
@@ -76,52 +80,18 @@ class Backbone:
         dx = np.round(dx, 8)
         return dx
 
-    # def dx(self, t):
-    #     """Estimate first derivative."""
-
-    #     return self.backbone.tangent(t)  # Use
-
-    #     # # Handle array that may contain t == 0 or t == 1
-    #     # mask_t_0 = t == 0
-    #     # mask_t_1 = t == 1
-    #     # t[mask_t_0] = EPSILON
-    #     # t[mask_t_1] = 1 - EPSILON
-
-    #     # # Numerator of first derivative limit
-    #     # num = self.backbone(t + EPSILON) - self.backbone(t)
-
-    #     # # Denominator of first derivative limit
-    #     # den = np.repeat(EPSILON, len(t)).reshape(-1, 1)
-    #     # den[mask_t_0] = 2 * EPSILON  # Epsilon was doubled in numerator, so double here as well
-    #     # den[mask_t_1] = 2 * EPSILON  # Epsilon was doubled in numerator, so double here as well
-
-    #     return np.round(num / den, 8)  # Round to simplifying catching colinear dx and ddx
-
-    # def ddx(self, t):
-    #     """Estimate second derivative."""
-
-    #     # Handle array that may contain t == 0 or t == 1
-    #     mask_t_0 = t == 0
-    #     mask_t_1 = t == 1
-    #     t[mask_t_0] = EPSILON
-    #     t[mask_t_1] = 1 - EPSILON
-
-    #     # Numerator of first derivative limit
-    #     num = self.backbone(t + EPSILON) - 2 * self.backbone(t) + self.backbone(t - EPSILON)
-
-    #     # Denominator of first derivative limit
-    #     den = np.repeat(EPSILON, len(t)).reshape(-1, 1)
-    #     den[mask_t_0] = 2 * EPSILON  # Epsilon was doubled in numerator, so double here as well
-    #     den[mask_t_1] = 2 * EPSILON  # Epsilon was doubled in numerator, so double here as well
-
-    #     return np.round(num / den ** 2, 8)  # Round to simplifying catching colinear dx and ddx
-
     def r(self, t):
+
+        if type(t) != type(np.array(0)):
+            t = np.array(t)
 
         return self.backbone(t)
 
     def T(self, t):
         """Tangent vector is unit vector in same direction as velocity vector."""
+
+        if type(t) != type(np.array(0)):
+            t = np.array(t)
 
         dx = self.dx(t)
         T = dx / np.linalg.norm(dx, axis=1, keepdims=True)
@@ -131,6 +101,9 @@ class Backbone:
         """Normal vector is unit vector that is perpendicular to tangent vector and to [0,0,1].
 
         I chose [0,0,1] arbitrarily, in any case, it will result in the binormal vector that is perpendicular to the tangent and is pointing "most upward" (has largest Z-component)."""
+
+        if type(t) != type(np.array(0)):
+            t = np.array(t)
 
         UP_VECTOR = np.array([0, 0, 1])
         T = self.T(t)
