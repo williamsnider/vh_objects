@@ -90,13 +90,13 @@ def approximate_arc(MAX_ANGLE):
 ### Flat
 cp_flat = np.array(
     [
-        np.linspace(0, 1, NUM_CP_PER_SEGMENT),
+        np.linspace(0, GOAL_LENGTH_SEGMENT, NUM_CP_PER_SEGMENT),
         np.zeros(5),
         np.zeros(5),
     ]
 ).T
 segment_flat = Backbone(cp_flat, reparameterize=False)
-
+assert np.isclose(segment_flat.length(), GOAL_LENGTH_SEGMENT), "Arc segment not close to length GOAL_LENGTH_SEGMENT."
 ### 1/8 circle
 angle = np.pi / 4
 t = np.linspace(0, angle, NUM_CP_PER_SEGMENT)
