@@ -4,7 +4,6 @@ from objects.parameters import NUM_CP_PER_SEGMENT, GOAL_LENGTH_SEGMENT
 from scipy.optimize import minimize
 
 # Calculate the optimal radius of the curved digit segments so that their lengths=1
-GOAL_LENGTH_SEGMENT = 1
 
 
 def arc_array(r, t, NUM_CP_PER_SEGMENT):

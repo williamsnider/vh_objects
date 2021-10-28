@@ -23,6 +23,10 @@ class BackboneFromDigits:
         self.link_segments()
 
     def check_inputs(self):
+
+        assert (
+            self.angles_between_segments.ndim == 2
+        ), "num_angles_between_segments must be a numpy array with 2 dimensions."
         assert (
             self.num_digit_segments - 1 == self.num_angles_between_segments
         ), "num_digit_segments is not 1 larger than num_angles_between_segments"
@@ -61,7 +65,6 @@ class BackboneFromDigits:
 
             # Translation matrix to align end of previous and beginning of current
             T = prev_segment.controlpoints[-1] - curr_segment.controlpoints[0]
-            print(T)
             # Rotation matrix to align end of previous and beginning of current
             prev_TNB = np.stack(
                 [
@@ -94,11 +97,25 @@ class BackboneFromDigits:
             )  # Create new segment with the aligned controlpoints
 
             # Begining and end of cps must be the same
-            # TODO: FIX THIS
             assert np.all(
                 np.isclose(self.digit_segments[i].controlpoints[0], self.digit_segments[i - 1].controlpoints[-1])
             )
-            print(cp)
+
+            # Beginning and end r must be the same
+            assert np.all(np.isclose(self.digit_segments[i].r(0), self.digit_segments[i - 1].r(1)))
+
+            # Beginning and end T must be the same
+            assert np.all(np.isclose(self.digit_segments[i].T(0), self.digit_segments[i - 1].T(1)))
+
+            # Beginning and end N must be the same
+            assert np.all(np.isclose(self.digit_segments[i].N(0), self.digit_segments[i - 1].N(1)))
+
+            # Beginning and end B must be the same
+            assert np.all(np.isclose(self.digit_segments[i].B(0), self.digit_segments[i - 1].B(1)))
+
+            # Debug
+            curr = self.digit_segments[i]
+            prev = self.digit_segments[i - 1]
 
     def link_segments(self):
 

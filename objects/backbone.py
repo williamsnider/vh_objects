@@ -63,7 +63,7 @@ class Backbone:
         """First derivative (velocity) of b-spline backbone."""
 
         if type(t) != type(np.array(0)):
-            t = np.array([t])
+            t = np.array(t, dtype="float64")
 
         # Copy t to avoid problems when it gets changed
         t = t.copy()  # Changing t was causing a bug
@@ -83,7 +83,7 @@ class Backbone:
     def r(self, t):
 
         if type(t) != type(np.array(0)):
-            t = np.array(t)
+            t = np.array(t, dtype="float64")
 
         return self.backbone(t)
 
@@ -91,7 +91,7 @@ class Backbone:
         """Tangent vector is unit vector in same direction as velocity vector."""
 
         if type(t) != type(np.array(0)):
-            t = np.array(t)
+            t = np.array(t, dtype="float64")
 
         dx = self.dx(t)
         T = dx / np.linalg.norm(dx, axis=1, keepdims=True)
@@ -103,7 +103,7 @@ class Backbone:
         I chose [0,0,1] arbitrarily, in any case, it will result in the binormal vector that is perpendicular to the tangent and is pointing "most upward" (has largest Z-component)."""
 
         if type(t) != type(np.array(0)):
-            t = np.array(t)
+            t = np.array(t, dtype="float64")
 
         UP_VECTOR = np.array([0, 0, 1])
         T = self.T(t)
@@ -116,14 +116,28 @@ class Backbone:
         ), "Normal vectors with 0 magnitude aren't valid. This may be because the tangent vector was colinear with [0,0,1]."
         N = cross / magnitude
 
+        # Check that the two are perpendicular
+        assert np.all(np.isclose(np.dot(T, N.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
+        print(T)
+        print(N)
         return N
 
     def B(self, t):
         """Binormal vector is unit vector that is perpendicular to tangent vector and closest to [0,0,1]."""
 
+        if type(t) != type(np.array(0)):
+            t = np.array(t, dtype="float64")
+
         T = self.T(t)
         N = self.N(t)
-        B = np.cross(T, N)  # Already normalized
+        cross = np.cross(T, N)
+        B = cross / np.linalg.norm(cross, axis=1, keepdims=True)
+
+        # Check that the two are perpendicular
+        assert np.all(np.isclose(np.dot(T, N.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
+        assert np.all(np.isclose(np.dot(T, B.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
+        assert np.all(np.isclose(np.dot(B, N.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
+
         return B
 
     def length(self):

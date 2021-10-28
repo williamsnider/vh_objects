@@ -58,6 +58,51 @@ def plot_tangent_vectors():
     plt.show()
 
 
+# Plot tangent vectors
+def plot_tangent_vectors_digit_segment():
+    t = np.linspace(0, 1, 5)
+    cp = np.stack(
+        [
+            1 - np.cos(t),
+            np.sin(t),
+            np.zeros(5),
+        ]
+    ).T  # Transpose so that cp are along rows
+    backbone = Backbone(cp, reparameterize=False)
+
+    t = np.linspace(0, 1, 5)
+    v = np.linspace(0, 1, 51)
+    r = backbone.r(v)
+    T = backbone.T(t)
+    N = backbone.N(t)
+    B = backbone.B(t)
+
+    # Plot
+    fig = plt.figure()
+    ax = plt.axes(projection="3d")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    maxcp = cp.max()
+    ax.set_xlim([-maxcp, maxcp])
+    ax.set_ylim([-maxcp, maxcp])
+    ax.set_zlim([-maxcp, maxcp])
+    ax.view_init(elev=-90, azim=90)
+    ax.plot3D(r[:, 0], r[:, 1], r[:, 2], "k.")
+
+    # Plot lines
+    for i, vec in enumerate([T, N, B]):
+        color = ["red", "green", "blue"][i]
+        for j, t_val in enumerate(t):
+
+            p0 = backbone.r(t_val)[0]
+            p1 = p0 + vec[j, :] * 0.1
+            line = np.stack([p0, p1], axis=0)
+            x, y, z = line.T
+            ax.plot(x, y, z, "-", color=color)
+    plt.show()
+
+
 def plot_controlpoints():
     cp = np.array([[0, 0, 0], [0, 10, 0], [0, 20, 0], [0, 30, 0], [10, 30, 0], [20, 30, 0], [30, 30, 0]])
     backbone = Backbone(cp, reparameterize=True)
@@ -336,16 +381,16 @@ def plot_meshes_as_shape():
 def plot_backbone_from_digit_euler_angles():
 
     # Construct list of digit segments
+    t = np.linspace(0, np.pi / 2, 5)
     cp0 = np.stack(
         [
-            np.zeros(5),
-            np.linspace(0, 1, 5),
+            1 - np.cos(t),
+            np.sin(t),
             np.zeros(5),
         ]
     ).T  # Transpose so that cp are along rows
 
     backbone0 = Backbone(cp0, reparameterize=False)
-    t = np.linspace(0, np.pi / 2, 5)
     cp1 = np.stack(
         [
             1 - np.cos(t),
@@ -360,7 +405,8 @@ def plot_backbone_from_digit_euler_angles():
     for row_num in [0, 1, 2]:
 
         bfd_list = []
-        for theta in np.linspace(-np.pi, np.pi, 4, endpoint=False):
+        for theta in [0]:
+            # for theta in np.linspace(-np.pi, np.pi, 4, endpoint=False):
 
             angles_between_segments = np.zeros((1, 3))
             angles_between_segments[:, row_num] = theta  # TODO: Fix the normal vector calculation
@@ -380,13 +426,19 @@ def plot_backbone_from_digit_euler_angles():
         ax.set_zlim([-maxcp, maxcp])
         ax.view_init(elev=-90, azim=90)
 
+        # Plot backbone from digits
         v = np.linspace(0, 1, 100)
         for bfd in bfd_list:
             backbone = Backbone(bfd.controlpoints, reparameterize=True)
-            # r = backbone.r(v)
-            # ax.plot(r[:, 0], r[:, 1], r[:, 2], "k.")
-            x, y, z = backbone.controlpoints.T
-            ax.plot(x, y, z, "g-")
+            x, y, z = backbone.r(v).T
+            ax.plot(x, y, z, "b-")
+            # x, y, z = backbone.controlpoints.T
+            # ax.plot(x, y, z, "g-")
+
+        # Plot digit segments
+        for segment in bfd.digit_segments:
+            x, y, z = segment.r(v).T
+            ax.plot(x, y, z, "r-")
         plt.show()
 
 
@@ -415,10 +467,11 @@ def plot_segments():
 
 if __name__ == "__main__":
     # plot_tangent_vectors()
+    plot_tangent_vectors_digit_segment()
     # plot_controlpoints()
     # plot_surface()
     # plot_align_axial_components()
     # plot_euler_angles()
     # plot_meshes_as_shape()
-    # plot_backbone_from_digit_euler_angles()
-    plot_segments()
+    plot_backbone_from_digit_euler_angles()
+    # plot_segments()
