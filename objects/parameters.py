@@ -1,8 +1,9 @@
 ### Parameters used in generating objects
 
+
 # Digit segment construction
 NUM_CP_PER_SEGMENT = 5
-GOAL_LENGTH_SEGMENT = 1
+GOAL_LENGTH_SEGMENT = 20  # Assume Neo's hand is 80mm wide (20mm per digit zone)
 
 
 # Backbone construction
