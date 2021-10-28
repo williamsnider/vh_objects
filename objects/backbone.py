@@ -2,6 +2,7 @@ from splipy import Curve, BSplineBasis
 from objects.parameters import NUM_SAMPLES_FOR_REPARAMETERIZATION, ORDER, NUM_INTERPOLATION_POINTS, EPSILON
 from objects.utilities import open_uniform_knot_vector
 import numpy as np
+from copy import deepcopy
 
 
 class Backbone:
@@ -118,8 +119,6 @@ class Backbone:
 
         # Check that the two are perpendicular
         assert np.all(np.isclose(np.dot(T, N.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
-        print(T)
-        print(N)
         return N
 
     def B(self, t):
@@ -143,3 +142,7 @@ class Backbone:
     def length(self):
 
         return self.backbone.length()
+
+    def copy(self):
+
+        return deepcopy(self)

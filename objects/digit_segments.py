@@ -3,46 +3,85 @@ from objects.backbone import Backbone
 from objects.parameters import NUM_CP_PER_SEGMENT, GOAL_LENGTH_SEGMENT
 from scipy.optimize import minimize
 
-# Calculate the optimal radius of the curved digit segments so that their lengths=1
 
+def approximate_arc(MAX_ANGLE):
+    """Construct a B-Spline curve that approximates a circular arc."""
 
-def arc_array(r, t, NUM_CP_PER_SEGMENT):
-    """Constructs the controlpoint array corresponding to an arc based on the radius, t parameterization, and number of controlpoints"""
-    arc_array = np.stack(
-        [
-            r * np.sin(t),
-            r * (1 - np.cos(t)),
-            r * np.zeros(NUM_CP_PER_SEGMENT),
-        ]
-    )
-    return arc_array.T
+    radius = GOAL_LENGTH_SEGMENT / (2 * np.pi) * (2 * np.pi / MAX_ANGLE)
 
+    if NUM_CP_PER_SEGMENT != 5:
+        raise NotImplementedError("NUM_CP_PER_SEGMENT must be 5 for this funtion to work.")
 
-def length_from_r(r, angle_of_circle):
-    """A function that returns the squared distance between the length of the b-spline made from this segment and the GOAL_LENGTH_SEGMENT.
+    def make_arc_array(a, b, c):
 
-    r is the radius of the circle (the variable we will seek to optimize)
-    angle_of_circle is the radians of the arc that this digit_segment forms. The largest such arc we want is 1/8 of a circle (angle_of_circle=np.pi/4) because 4 such segments oriented together could make a half circle when combined, which is the most rounded backbone we want."""
+        # We can think of the second to last arc controlpoint as lying along a vector from the last controlpoint. The vector's slope can be determined from the tangent line of the circle (which is negated). We then can use a single parameter (d) as a measure of how far along this vector we are travelling. This reduces the number of parameters we need, and also ensures that the tangent of the resulting arc at the end will match that of the circle
 
-    t = np.linspace(0, angle_of_circle, NUM_CP_PER_SEGMENT)  # Choose this as 4 such segments could make a half circle
-    cp_arc = arc_array(r, t, NUM_CP_PER_SEGMENT)
-    backbone = Backbone(cp_arc, reparameterize=False)
-    return (backbone.length() - 1) ** 2
+        def tan_vec(MAX_ANGLE):
+            tangent_vec = np.array(
+                [
+                    -radius * np.sin(MAX_ANGLE),
+                    radius * np.cos(MAX_ANGLE),
+                ]
+            )
+            return tangent_vec
 
+        start_tan_vec = tan_vec(0)
+        end_tan_vec = -tan_vec(MAX_ANGLE)  # Negate so this points toward start
 
-### 1/8 circle
-x0 = [0.1]
-args = np.pi / 4
-bounds = [[0.0001, 100 * GOAL_LENGTH_SEGMENT]]
-result = minimize(length_from_r, x0=x0, args=args, bounds=bounds)
-r_1_8 = result.x
+        arc_array = np.array(
+            [
+                [radius, 0, 0],
+                [
+                    radius * np.cos(0) + a * start_tan_vec[0],
+                    radius * np.sin(0) + a * start_tan_vec[1],
+                    0,
+                ],  # Tangent line from start
+                [b, c, 0],
+                [
+                    radius * np.cos(MAX_ANGLE) + a * end_tan_vec[0],
+                    radius * np.sin(MAX_ANGLE) + a * end_tan_vec[1],
+                    0,
+                ],  # Tangent line from end
+                [radius * np.cos(MAX_ANGLE), radius * np.sin(MAX_ANGLE), 0],
+            ]
+        )
+        return arc_array
 
-### 1/16 circle
-x0 = [0.2]
-args = np.pi / 8
-bounds = [[0.0001, 100 * GOAL_LENGTH_SEGMENT]]
-result = minimize(length_from_r, x0=x0, args=args, bounds=bounds)
-r_1_16 = result.x
+    def radius_error(vars):
+
+        # Make the arc array
+        [a, b, c] = vars
+        arc_array = make_arc_array(a, b, c)
+
+        # Make backbone
+        backbone = Backbone(arc_array, reparameterize=False)
+
+        # Sample points along the backbone
+        t = np.linspace(0, 1, 10)
+        r = backbone.r(t)
+
+        # distance from origin should be close to radius if points are well_aligned
+        dist = np.linalg.norm(r, axis=1)
+        return ((dist - radius) ** 2).sum()
+
+    fun = radius_error
+    x0 = [0.1, radius, radius]
+    bounds = [
+        [0.0, 100 * radius],
+        [radius * np.cos(MAX_ANGLE / 2), 100 * radius],  # Convex hull property of B-Splines
+        [radius * np.sin(MAX_ANGLE / 2), 100 * radius],  # Convex hull property of B-Splines
+    ]
+    result = minimize(fun=fun, x0=x0, bounds=bounds)
+    [a, b, c] = result.x
+
+    arc_array = make_arc_array(a, b, c)
+
+    # Shift so that the curve begins at the origin
+    arc_array[:, 0] -= radius
+    arc_array[:, [0, 1]] = arc_array[:, [1, 0]]  # Flip x and y-axis so long portion points in +X direction
+    arc_array[:, 1] = -arc_array[:, 1]  # Negate y axis so curves upward (towards +Y)
+
+    return arc_array
 
 
 ####################
@@ -59,15 +98,15 @@ cp_flat = np.array(
 segment_flat = Backbone(cp_flat, reparameterize=False)
 
 ### 1/8 circle
-r = r_1_8
-t = np.linspace(0, np.pi / 4, NUM_CP_PER_SEGMENT)
-cp_arc = arc_array(r, t, NUM_CP_PER_SEGMENT)
-segment_arc_1_8 = Backbone(cp_arc, reparameterize=False)
-assert np.isclose(segment_arc_1_8.length(), 1), "Arc segment not close to length 1."
+angle = np.pi / 4
+t = np.linspace(0, angle, NUM_CP_PER_SEGMENT)
+cp_arc_1_4 = approximate_arc(angle)
+segment_arc_1_4 = Backbone(cp_arc_1_4, reparameterize=False)
+assert np.isclose(segment_arc_1_4.length(), GOAL_LENGTH_SEGMENT), "Arc segment not close to length GOAL_LENGTH_SEGMENT."
 
 ### 1/16 circle
-r = r_1_16
-t = np.linspace(0, np.pi / 8, NUM_CP_PER_SEGMENT)
-cp_arc = arc_array(r, t, NUM_CP_PER_SEGMENT)
-segment_arc_1_16 = Backbone(cp_arc, reparameterize=False)
-assert np.isclose(segment_arc_1_16.length(), 1), "Arc segment not close to length 1."
+angle = np.pi / 8
+t = np.linspace(0, angle, NUM_CP_PER_SEGMENT)
+cp_arc_1_8 = approximate_arc(angle)
+segment_arc_1_8 = Backbone(cp_arc_1_8, reparameterize=False)
+assert np.isclose(segment_arc_1_8.length(), GOAL_LENGTH_SEGMENT), "Arc segment not close to length GOAL_LENGTH_SEGMENT."

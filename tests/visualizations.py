@@ -6,7 +6,7 @@ from objects.backbone_from_digits import BackboneFromDigits
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
-from objects.digit_segments import segment_arc_1_16, segment_arc_1_8, segment_flat
+from objects.digit_segments import segment_arc_1_8, segment_arc_1_4, segment_flat
 
 c = np.cos
 s = np.sin
@@ -380,33 +380,16 @@ def plot_meshes_as_shape():
 
 def plot_backbone_from_digit_euler_angles():
 
-    # Construct list of digit segments
-    t = np.linspace(0, np.pi / 2, 5)
-    cp0 = np.stack(
-        [
-            1 - np.cos(t),
-            np.sin(t),
-            np.zeros(5),
-        ]
-    ).T  # Transpose so that cp are along rows
-
-    backbone0 = Backbone(cp0, reparameterize=False)
-    cp1 = np.stack(
-        [
-            1 - np.cos(t),
-            np.sin(t),
-            np.zeros(5),
-        ]
-    ).T  # Transpose so that cp are along rows
-    backbone1 = Backbone(cp1, reparameterize=False)
+    backbone0 = segment_arc_1_4.copy()
+    backbone1 = segment_arc_1_4.copy()
+    MAX_ANGLE = np.pi / 4
     digit_segments = [backbone0, backbone1]
 
     # Iterate through different possibilities of angles between them
     for row_num in [0, 1, 2]:
 
         bfd_list = []
-        for theta in [0]:
-            # for theta in np.linspace(-np.pi, np.pi, 4, endpoint=False):
+        for theta in np.linspace(-np.pi, np.pi, 4, endpoint=False):
 
             angles_between_segments = np.zeros((1, 3))
             angles_between_segments[:, row_num] = theta  # TODO: Fix the normal vector calculation

@@ -1,5 +1,7 @@
 from objects.backbone import Backbone
 from objects.backbone_from_digits import BackboneFromDigits
+from objects.parameters import GOAL_LENGTH_SEGMENT
+from objects.digit_segments import segment_arc_1_4
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -76,19 +78,10 @@ import matplotlib.pyplot as plt
 
 def test_align_two_curved_segments():
 
-    # Construct list of digit segments
-    t = np.linspace(0, np.pi / 2, 5)
-    cp0 = np.stack(
-        [
-            1 - np.cos(t),
-            np.sin(t),
-            np.zeros(5),
-        ]
-    ).T  # Transpose so that cp are along rows
+    backbone0 = segment_arc_1_4.copy()
+    backbone1 = segment_arc_1_4.copy()
+    MAX_ANGLE = np.pi / 4
 
-    backbone0 = Backbone(cp0, reparameterize=False)
-    cp1 = cp0.copy()  # Transpose so that cp are along rows
-    backbone1 = Backbone(cp1, reparameterize=False)
     digit_segments = [backbone0, backbone1]
     angles_between_segments = np.array([[0, 0, 0]])
     bfd = BackboneFromDigits(digit_segments, angles_between_segments)
@@ -96,7 +89,8 @@ def test_align_two_curved_segments():
 
     assert np.all(np.isclose(backbone.r(0), 0)), "Backbone not at origin."
 
-    assert np.all(np.isclose(backbone.r(1), [2, 0, 0])), "Digit segments not joined properly."
+    radius = GOAL_LENGTH_SEGMENT / (2 * np.pi) * (2 * np.pi / MAX_ANGLE)
+    assert np.all(np.isclose(backbone.r(1), [radius, radius, 0], rtol=0.09)), "Digit segments not joined properly."
 
 
 if __name__ == "__main__":

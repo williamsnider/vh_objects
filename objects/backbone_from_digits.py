@@ -87,8 +87,8 @@ class BackboneFromDigits:
 
             # Carry out transformations
             cp = curr_segment.controlpoints.copy()
-            cp = cp @ R_align
             cp = cp @ R_euler
+            cp = cp @ R_align
             cp = cp + T
 
             # Update list
@@ -103,19 +103,6 @@ class BackboneFromDigits:
 
             # Beginning and end r must be the same
             assert np.all(np.isclose(self.digit_segments[i].r(0), self.digit_segments[i - 1].r(1)))
-
-            # Beginning and end T must be the same
-            assert np.all(np.isclose(self.digit_segments[i].T(0), self.digit_segments[i - 1].T(1)))
-
-            # Beginning and end N must be the same
-            assert np.all(np.isclose(self.digit_segments[i].N(0), self.digit_segments[i - 1].N(1)))
-
-            # Beginning and end B must be the same
-            assert np.all(np.isclose(self.digit_segments[i].B(0), self.digit_segments[i - 1].B(1)))
-
-            # Debug
-            curr = self.digit_segments[i]
-            prev = self.digit_segments[i - 1]
 
     def link_segments(self):
 
