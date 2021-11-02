@@ -18,7 +18,11 @@ pip install -e .
 # Compas contains CGAL bindings
 conda install -c conda-forge matplotlib trimesh rtree compas compas_cgal igl shapely opencv ipython ipykernel ipympl black pytest --yes
 ```
-
+## TODO List
+1. Check thatrotations are accurate
+2. Propagate rotations down the shape
+3. Fix watertight problems of CGAL boolean
+   
 ## TODO: Usage
 
 ```python
