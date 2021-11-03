@@ -1,4 +1,4 @@
-from objects.digit_segments import segment_flat, segment_arc_1_4, segment_arc_1_8
+from objects.components import segment_flat, segment_arc_1_4, segment_arc_1_8
 from objects.backbone_from_digits import BackboneFromDigits
 from objects.backbone import Backbone
 import numpy as np
