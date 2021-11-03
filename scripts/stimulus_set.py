@@ -167,7 +167,7 @@ def carry_out_deformations(base_ac, deformations, label, png_save_dir, stl_save_
 
     ac.make_surface()
     ac.make_mesh()
-    s = Shape([ac], align_OBB=False, fuse_to_interface=True, label=label)
+    s = Shape([ac], align_OBB=True, fuse_to_interface=True, label=label)
     s.save_mesh_as_png(png_save_dir)
     s.export_stl(stl_save_dir)
     # s.mesh.show(smooth=False)

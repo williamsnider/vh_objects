@@ -1,7 +1,7 @@
 from objects.backbone import Backbone
 from objects.backbone_from_digits import BackboneFromDigits
 from objects.parameters import GOAL_LENGTH_SEGMENT
-from objects.digit_segments import segment_arc_1_4
+from objects.components import segment_arc_1_4
 import numpy as np
 import matplotlib.pyplot as plt
 

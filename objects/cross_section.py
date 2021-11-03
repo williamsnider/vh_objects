@@ -45,19 +45,19 @@ class CrossSection:
         self.controlpoints = cp @ R
 
     def align_controlpoints(self):
-
+        """Roll the controlpoints so that the cp closest to <1,0> is first. This prevents weird tears on the surface of the shape."""
         # Find angles between vectors to controlpoints and <1,0> (vector to theta=0)
         vec = self.controlpoints / np.linalg.norm(self.controlpoints, axis=1, keepdims=True)
         # angles = np.arccos(vec[:, 0])
         angles = angle_between(vec, np.array([1, 0]))
 
         # Roll so that the vector between the origin and the 0th controlpoint is closest to having a minimum able between it and <1,0>
-        shift = np.where(angles == angles.min())[0]
+        shift = angles.argmin()
         cp = np.roll(self.controlpoints, -shift, axis=0)
 
         # Check the roll worked
         angles = angle_between(cp, np.array([1, 0]))
-        assert np.where(angles == angles.min())[0] == 0
+        assert np.isclose(angles[0], angles.min())
 
         self.controlpoints = cp
 

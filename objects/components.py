@@ -1,3 +1,5 @@
+# Contains the digit segments and cross sections we will use to build our shapes.
+
 import numpy as np
 from objects.backbone import Backbone
 from objects.parameters import NUM_CP_PER_SEGMENT, GOAL_LENGTH_SEGMENT
@@ -86,6 +88,7 @@ def approximate_arc(MAX_ANGLE):
 
 ####################
 ### Digit Segments
+####################
 
 ### Flat
 cp_flat = np.array(
@@ -97,6 +100,7 @@ cp_flat = np.array(
 ).T
 segment_flat = Backbone(cp_flat, reparameterize=False)
 assert np.isclose(segment_flat.length(), GOAL_LENGTH_SEGMENT), "Arc segment not close to length GOAL_LENGTH_SEGMENT."
+
 ### 1/8 circle
 angle = np.pi / 4
 t = np.linspace(0, angle, NUM_CP_PER_SEGMENT)
@@ -110,3 +114,64 @@ t = np.linspace(0, angle, NUM_CP_PER_SEGMENT)
 cp_arc_1_8 = approximate_arc(angle)
 segment_arc_1_8 = Backbone(cp_arc_1_8, reparameterize=False)
 assert np.isclose(segment_arc_1_8.length(), GOAL_LENGTH_SEGMENT), "Arc segment not close to length GOAL_LENGTH_SEGMENT."
+
+
+####################
+### Cross Sections
+####################
+c = np.cos
+s = np.sin
+base_cp = np.array(
+    [
+        [c(0 / 6 * 2 * np.pi), s(0 / 6 * 2 * np.pi)],
+        [c(1 / 6 * 2 * np.pi), s(1 / 6 * 2 * np.pi)],
+        [c(2 / 6 * 2 * np.pi), s(2 / 6 * 2 * np.pi)],
+        [c(3 / 6 * 2 * np.pi), s(3 / 6 * 2 * np.pi)],
+        [c(4 / 6 * 2 * np.pi), s(4 / 6 * 2 * np.pi)],
+        [c(5 / 6 * 2 * np.pi), s(5 / 6 * 2 * np.pi)],
+    ]
+)
+
+# concave_high
+cp_concave_high = base_cp.copy()
+cp_concave_high[0, :] = [0.001, 0.001]
+cp_concave_high = cp_concave_high * GOAL_LENGTH_SEGMENT
+
+# concave_low
+cp_concave_low = base_cp.copy()
+cp_concave_low[0, :] = [0.5, 0]
+cp_concave_low = cp_concave_low * GOAL_LENGTH_SEGMENT
+
+# round
+cp_round = base_cp.copy()
+cp_round = cp_round * GOAL_LENGTH_SEGMENT
+
+# convex_low
+cp_convex_low = base_cp.copy()
+cp_convex_low[0, :] = [1.33, 0]
+cp_convex_low = cp_convex_low * GOAL_LENGTH_SEGMENT
+
+# convex_med
+cp_convex_med = base_cp.copy()
+cp_convex_med[0, :] = [1.66, 0]
+cp_convex_med = cp_convex_med * GOAL_LENGTH_SEGMENT
+
+# convex_high
+cp_convex_high = base_cp.copy()
+cp_convex_high[0, :] = [2, 0]
+cp_convex_high = cp_convex_high * GOAL_LENGTH_SEGMENT
+
+# concave_point
+cp_concave_point = base_cp.copy()
+cp_concave_point[:2, :] = [c(1 / 12 * 2 * np.pi) * 0.001, s(1 / 12 * 2 * np.pi) * 0.001]
+cp_concave_point = cp_concave_point * GOAL_LENGTH_SEGMENT
+
+# convex_point_low
+cp_convex_point_low = base_cp.copy()
+cp_convex_point_low[:2, :] = [c(1 / 12 * 2 * np.pi) * 2 / 3, s(1 / 12 * 2 * np.pi) * 2 / 3]
+cp_convex_point_low = cp_convex_point_low * GOAL_LENGTH_SEGMENT
+
+# convex_point_high
+cp_convex_point_high = base_cp.copy()
+cp_convex_point_high[:2, :] = [c(1 / 12 * 2 * np.pi) * 5 / 4, s(1 / 12 * 2 * np.pi) * 5 / 4]
+cp_convex_point_high = cp_convex_point_high * GOAL_LENGTH_SEGMENT
