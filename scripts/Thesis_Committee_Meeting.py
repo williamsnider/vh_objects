@@ -10,8 +10,8 @@ from objects.components import (
     cp_convex_med,
     cp_convex_high,
     cp_plane,
-    cp_concave_point,
     cp_convex_point_low,
+    cp_convex_point_med,
     cp_convex_point_high,
 )
 from objects.backbone_from_digits import BackboneFromDigits
@@ -121,31 +121,6 @@ print("Num backbones: ", len(backbone_list_pruned))
 ######################################
 cs_combinations = []
 
-# # Cylinder
-# c = np.cos
-# s = np.sin
-# cs_cp = np.array(
-#     [
-#         [c(0 / 6 * 2 * np.pi), s(0 / 6 * 2 * np.pi)],
-#         [c(1 / 6 * 2 * np.pi), s(1 / 6 * 2 * np.pi)],
-#         [c(2 / 6 * 2 * np.pi), s(2 / 6 * 2 * np.pi)],
-#         [c(3 / 6 * 2 * np.pi), s(3 / 6 * 2 * np.pi)],
-#         [c(4 / 6 * 2 * np.pi), s(4 / 6 * 2 * np.pi)],
-#         [c(5 / 6 * 2 * np.pi), s(5 / 6 * 2 * np.pi)],
-#     ]
-# )
-# cs0 = CrossSection(cs_cp * 15, 0.0500)
-# cs1 = CrossSection(cs_cp * 15, 0.1625)
-# cs2 = CrossSection(cs_cp * 15, 0.2750)
-# cs3 = CrossSection(cs_cp * 15, 0.3875)
-# cs4 = CrossSection(cs_cp * 15, 0.5000)
-# cs5 = CrossSection(cs_cp * 15, 0.6125)
-# cs6 = CrossSection(cs_cp * 15, 0.7250)
-# cs7 = CrossSection(cs_cp * 15, 0.8375)
-# cs8 = CrossSection(cs_cp * 15, 0.9500)
-
-# cs_combinations.append([cs0, cs1, cs2, cs3, cs4, cs5, cs6, cs7, cs8])
-
 
 ######################################
 ### Define functions that will be paralleled
@@ -162,33 +137,52 @@ def make_shape(backbone, cross_sections, label, png_save_dir, stl_save_dir):
     s.export_stl(stl_save_dir)
 
 
-######################################
-### Render all backbones with circular cross section
-######################################
+# ######################################
+# ### Render all backbones with circular cross section
+# ######################################
 
-# # Construct argument list for parallelization
-# argument_list = []
+# Same cross section across shape
+circular_cs = []
+for cp in [
+    cp_round_high,
+]:
 
-# # Define save_dir
-# png_save_dir = Path(base_dir, "png", "medial_axis")
+    rotation = np.pi / 2  # Rotate so easier to see when rendering
 
-# stl_save_dir = Path(base_dir, "stl", "medial_axis")
+    cs0 = CrossSection(cp, 0.0500, rotation=rotation)
+    cs1 = CrossSection(cp, 0.1625, rotation=rotation)
+    cs2 = CrossSection(cp, 0.2750, rotation=rotation)
+    cs3 = CrossSection(cp, 0.3875, rotation=rotation)
+    cs4 = CrossSection(cp, 0.5000, rotation=rotation)
+    cs5 = CrossSection(cp, 0.6125, rotation=rotation)
+    cs6 = CrossSection(cp, 0.7250, rotation=rotation)
+    cs7 = CrossSection(cp, 0.8375, rotation=rotation)
+    cs8 = CrossSection(cp, 0.9500, rotation=rotation)
+    circular_cs.append([cs0, cs1, cs2, cs3, cs4, cs5, cs6, cs7, cs8])
 
-# # Populate argument list
-# count = 0
-# for backbone in backbone_list_pruned:
+# Construct argument list for parallelization
+argument_list = []
 
-#     for cross_sections in circular_cs:
+# Define save_dir
+png_save_dir = Path(base_dir, "png", "medial_axis")
 
-#         label = "ac_{}".format(count)
-#         args = [backbone, cross_sections, label, png_save_dir, stl_save_dir]
-#         count += 1
-#         argument_list.append(args)
+stl_save_dir = Path(base_dir, "stl", "medial_axis")
 
-# start = time.time()
-# Parallel(n_jobs=-1)(delayed(make_shape)(*args) for args in argument_list)
-# end = time.time()
-# print("Execution time: ", end - start)
+# Populate argument list
+count = 0
+for backbone in backbone_list_pruned:
+
+    for cross_sections in circular_cs:
+
+        label = "ac_{}".format(count)
+        args = [backbone, cross_sections, label, png_save_dir, stl_save_dir]
+        count += 1
+        argument_list.append(args)
+
+start = time.time()
+Parallel(n_jobs=4)(delayed(make_shape)(*args) for args in argument_list)
+end = time.time()
+print("Execution time: ", end - start)
 
 
 ######################################
@@ -206,16 +200,12 @@ for cp in [
     cp_convex_med,
     cp_convex_high,
     cp_plane,
-    cp_concave_point,
     cp_convex_point_low,
+    cp_convex_point_med,
     cp_convex_point_high,
 ]:
 
-    # Shift point a little further so it's easier to see
-    if cp is cp_concave_point or cp is cp_convex_point_low or cp is cp_convex_point_high:
-        rotation = 3 * np.pi / 4
-    else:
-        rotation = np.pi / 2
+    rotation = np.pi / 2  # Rotate so easier to see when rendering
 
     cs0 = CrossSection(cp, 0.0500, rotation=rotation)
     cs1 = CrossSection(cp, 0.1625, rotation=rotation)
@@ -239,16 +229,12 @@ for digit in [2, 3, 4, 5]:
         cp_convex_high,
         cp_round_low,
         cp_plane,
-        cp_concave_point,
         cp_convex_point_low,
+        cp_convex_point_med,
         cp_convex_point_high,
     ]:  # Omit cp_round_high
 
-        # Shift point a little further so it's easier to see
-        if cp is cp_concave_point or cp is cp_convex_point_low or cp is cp_convex_point_high:
-            rotation = 3 * np.pi / 4
-        else:
-            rotation = np.pi / 2
+        rotation = np.pi / 2  # Rotate so easier to see when rendering
 
         if digit == 2:
             cs0 = CrossSection(cp, 0.0500, rotation=rotation)
@@ -305,8 +291,8 @@ for cpA in [
     cp_convex_med,
     cp_convex_high,
     cp_plane,
-    cp_concave_point,
     cp_convex_point_low,
+    cp_convex_point_med,
     cp_convex_point_high,
 ]:
 
@@ -319,8 +305,8 @@ for cpA in [
         cp_convex_med,
         cp_convex_high,
         cp_plane,
-        cp_concave_point,
         cp_convex_point_low,
+        cp_convex_point_med,
         cp_convex_point_high,
     ]:
 
@@ -328,59 +314,51 @@ for cpA in [
         if cpA is cpB:
             continue
 
-        # Shift point a little further so it's easier to see
-        if cpA is cp_concave_point or cpA is cp_convex_point_low or cpA is cp_convex_point_high:
-            rotationA = np.pi / 2
-        else:
-            rotationA = np.pi / 2
+        rotation = np.pi / 2  # Rotate so easier to see when rendering
 
-        # Shift point a little further so it's easier to see
-        if cpB is cp_concave_point or cpB is cp_convex_point_low or cpB is cp_convex_point_high:
-            rotationB = np.pi / 2
-        else:
-            rotationB = np.pi / 2
-
-        cs0 = CrossSection(cpA, 0.0500, rotation=rotationA)
-        cs1 = CrossSection(cpA, 0.1625, rotation=rotationA)
-        cs2 = CrossSection(cpA, 0.2750, rotation=rotationA)
-        cs3 = CrossSection(cpB, 0.3875, rotation=rotationB)
-        cs4 = CrossSection(cpB, 0.5000, rotation=rotationB)
-        cs5 = CrossSection(cpB, 0.6125, rotation=rotationB)
-        cs6 = CrossSection(cpA, 0.7250, rotation=rotationA)
-        cs7 = CrossSection(cpA, 0.8375, rotation=rotationA)
-        cs8 = CrossSection(cpA, 0.9500, rotation=rotationA)
+        cs0 = CrossSection(cpA, 0.0500, rotation=rotation)
+        cs1 = CrossSection(cpA, 0.1625, rotation=rotation)
+        cs2 = CrossSection(cpA, 0.2750, rotation=rotation)
+        cs3 = CrossSection(cpB, 0.3875, rotation=rotation)
+        cs4 = CrossSection(cpB, 0.5000, rotation=rotation)
+        cs5 = CrossSection(cpB, 0.6125, rotation=rotation)
+        cs6 = CrossSection(cpA, 0.7250, rotation=rotation)
+        cs7 = CrossSection(cpA, 0.8375, rotation=rotation)
+        cs8 = CrossSection(cpA, 0.9500, rotation=rotation)
         cs_combinations.append([cs0, cs1, cs2, cs3, cs4, cs5, cs6, cs7, cs8])
 
 # # Construct argument list for parallelization
-# argument_list = []
+argument_list = []
 
-# # Define save_dir
-# png_save_dir = Path(base_dir, "png", "cross_section")
+# Define save_dir
+png_save_dir = Path(base_dir, "png", "cross_section")
 
-# stl_save_dir = Path(base_dir, "stl", "cross_section")
+stl_save_dir = Path(base_dir, "stl", "cross_section")
 
-# digit_segments = [segment_flat, segment_flat, segment_flat, segment_flat]
-# angles_between_segments = np.zeros([3, 3])
-# backbone = make_backbone(digit_segments, angles_between_segments)
+digit_segments = [segment_flat, segment_flat, segment_flat, segment_flat]
+angles_between_segments = np.zeros([3, 3])
+backbone = make_backbone(digit_segments, angles_between_segments)
 
-# # Populate argument list
-# count = 0
-# for cross_sections in cs_combinations:
+# Populate argument list
+count = 0
+for cross_sections in cs_combinations:
 
-#     label = "cs_{}".format(count)
-#     args = [backbone, cross_sections, label, png_save_dir, stl_save_dir]
-#     count += 1
-#     argument_list.append(args)
+    label = "cs_{}".format(count)
+    args = [backbone, cross_sections, label, png_save_dir, stl_save_dir]
+    count += 1
+    argument_list.append(args)
 
-# start = time.time()
-# Parallel(n_jobs=-1)(delayed(make_shape)(*args) for args in argument_list)
-# end = time.time()
-# print("Execution time: ", end - start)
+start = time.time()
+Parallel(n_jobs=4)(delayed(make_shape)(*args) for args in argument_list)
+end = time.time()
+print("Execution time: ", end - start)
 
 ######################################
 ### Render 1000 shapes (shuffled backbones and cross section)
 ######################################
-
+np.random.seed(0)
+np.random.shuffle(backbone_list_pruned)
+np.random.shuffle(cs_combinations)
 num_shapes = 1000
 
 # Extend backbone by repeating entire length
@@ -389,8 +367,9 @@ backbone_list_extended = np.tile(backbone_list_pruned, num_backbone_repeats)
 backbone_list_extended = backbone_list_extended[:num_shapes]
 
 # Extend cross sections by duplicating each item
-cs_list_extended = np.zeros((num_shapes), dtype="object")
 num_cs_repeats = num_shapes / len(cs_combinations)
+cs_list_extended = np.zeros((num_shapes), dtype="object")
+
 for i, comb in enumerate(cs_combinations):
     start = np.round(i * num_cs_repeats).astype("int")
     end = np.round((i + 1) * num_cs_repeats).astype("int")
@@ -400,9 +379,9 @@ for i, comb in enumerate(cs_combinations):
 argument_list = []
 
 # Define save_dir
-png_save_dir = Path(base_dir, "png", "combined")
+png_save_dir = Path(base_dir, "png", "shape")
 
-stl_save_dir = Path(base_dir, "stl", "combined")
+stl_save_dir = Path(base_dir, "stl", "shape")
 
 # Populate argument list
 count = 0
@@ -414,6 +393,6 @@ for i in range(num_shapes):
     argument_list.append(args)
 
 start = time.time()
-Parallel(n_jobs=-1)(delayed(make_shape)(*args) for args in argument_list)
+Parallel(n_jobs=4)(delayed(make_shape)(*args) for args in argument_list)
 end = time.time()
 print("Execution time: ", end - start)

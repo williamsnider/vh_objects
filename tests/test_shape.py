@@ -72,7 +72,7 @@ def test_align_mesh():
     #     euler_angles=np.array([0, np.pi / 3, 0]),
     # )
     s = Shape([ac1], align_OBB=True, fuse_to_interface=True)
-    s.mesh.show()
+    # s.mesh.show()
 
 
 def test_export_stl():

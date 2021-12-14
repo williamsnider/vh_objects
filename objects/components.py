@@ -137,52 +137,52 @@ base_cp = np.array(
 # concave_high
 cp_concave_high = base_cp.copy()
 cp_concave_high[0, :] = [0.001, 0.001]
-cp_concave_high = cp_concave_high * GOAL_LENGTH_SEGMENT
+cp_concave_high = cp_concave_high * GOAL_LENGTH_SEGMENT / 2
 
 # concave_low
 cp_concave_low = base_cp.copy()
 cp_concave_low[0, :] = [0.25, 0]
-cp_concave_low = cp_concave_low * GOAL_LENGTH_SEGMENT
+cp_concave_low = cp_concave_low * GOAL_LENGTH_SEGMENT / 2
 
 # round_low
 cp_round_low = base_cp.copy()
-cp_round_low = cp_round_low * GOAL_LENGTH_SEGMENT * 5 / 8
+cp_round_low = cp_round_low * GOAL_LENGTH_SEGMENT * 5 / 8 / 2
 
 # round_high
 cp_round_high = base_cp.copy()
-cp_round_high = cp_round_high * GOAL_LENGTH_SEGMENT
+cp_round_high = cp_round_high * GOAL_LENGTH_SEGMENT / 2
 
 # convex_low
 cp_convex_low = base_cp.copy()
 cp_convex_low[0, :] = [1.2, 0]
-cp_convex_low = cp_convex_low * GOAL_LENGTH_SEGMENT
+cp_convex_low = cp_convex_low * GOAL_LENGTH_SEGMENT / 2
 
 # convex_med
 cp_convex_med = base_cp.copy()
 cp_convex_med[0, :] = [1.4, 0]
-cp_convex_med = cp_convex_med * GOAL_LENGTH_SEGMENT
+cp_convex_med = cp_convex_med * GOAL_LENGTH_SEGMENT / 2
 
 # convex_high
 cp_convex_high = base_cp.copy()
 cp_convex_high[0, :] = [1.6, 0]
-cp_convex_high = cp_convex_high * GOAL_LENGTH_SEGMENT
+cp_convex_high = cp_convex_high * GOAL_LENGTH_SEGMENT / 2
 
 # plane
 cp_plane = base_cp.copy()
 cp_plane[0, :] = cp_plane[[1, -1], :].mean(axis=0)
-cp_plane = cp_plane * GOAL_LENGTH_SEGMENT
-
-# concave_point
-cp_concave_point = base_cp.copy()
-cp_concave_point[[-1, 0, 1], :] = [c(0 / 8 * 2 * np.pi) * 0.1, s(0 / 8 * 2 * np.pi) * 0.1]
-cp_concave_point = cp_concave_point * GOAL_LENGTH_SEGMENT
+cp_plane = cp_plane * GOAL_LENGTH_SEGMENT / 2
 
 # convex_point_low
 cp_convex_point_low = base_cp.copy()
-cp_convex_point_low[[-1, 0, 1], :] = [c(0 / 8 * 2 * np.pi) * 1 / 2, s(0 / 8 * 2 * np.pi) * 1 / 2]
-cp_convex_point_low = cp_convex_point_low * GOAL_LENGTH_SEGMENT
+cp_convex_point_low[[-1, 0, 1], :] = [c(0 / 8 * 2 * np.pi) * 0.1, s(0 / 8 * 2 * np.pi) * 0.1]
+cp_convex_point_low = cp_convex_point_low * GOAL_LENGTH_SEGMENT / 2
+
+# convex_point_med
+cp_convex_point_med = base_cp.copy()
+cp_convex_point_med[[-1, 0, 1], :] = [c(0 / 8 * 2 * np.pi) * 1 / 2, s(0 / 8 * 2 * np.pi) * 1 / 2]
+cp_convex_point_med = cp_convex_point_med * GOAL_LENGTH_SEGMENT / 2
 
 # convex_point_high
 cp_convex_point_high = base_cp.copy()
 cp_convex_point_high[[-1, 0, 1], :] = [c(0 / 8 * 2 * np.pi), s(0 / 8 * 2 * np.pi)]
-cp_convex_point_high = cp_convex_point_high * GOAL_LENGTH_SEGMENT
+cp_convex_point_high = cp_convex_point_high * GOAL_LENGTH_SEGMENT / 2
