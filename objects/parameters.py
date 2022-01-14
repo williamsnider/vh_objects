@@ -1,12 +1,8 @@
 ### Parameters used in generating objects
 
-
-# Digit segment construction
-NUM_CP_PER_SEGMENT = 5
-GOAL_LENGTH_SEGMENT = 20  # Assume Neo's hand is 80mm wide (20mm per digit zone)
-
-
 # Backbone construction
+BACKBONE_LENGTH = 80  # mm length of Backbone
+BACKBONE_NUM_CP = 10  # Number of controlpoints to construct backbone
 NUM_INTERPOLATION_POINTS = 1000  #
 NUM_SAMPLES_FOR_REPARAMETERIZATION = 10 * NUM_INTERPOLATION_POINTS
 EPSILON = 1e-2  # Used to estimate b-spline derivative
