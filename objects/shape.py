@@ -307,7 +307,7 @@ class Shape:
         with open(filename, "wb") as f:
             f.write(png)
 
-    def save_mesh_as_png(self, save_dir):
+    def save_mesh_as_png(self, save_dir, return_img=False):
         """
         Saves the mesh as a png.
         """
@@ -316,8 +316,9 @@ class Shape:
             save_dir = Path(save_dir)
 
         # Construct save_dir
-        if save_dir.is_dir() is False:
-            save_dir.mkdir(parents=True)
+        if return_img is False:
+            if save_dir.is_dir() is False:
+                save_dir.mkdir(parents=True)
 
         filename = str(Path(save_dir, self.label).with_suffix(".png"))
 
@@ -394,8 +395,11 @@ class Shape:
         r = pyrender.OffscreenRenderer(7680, 4320, bitdepth="16bit")
         color, _ = r.render(scene)
 
-        # Save png - at 16bit depth
-        cv2.imwrite(filename, color)
+        if return_img is True:
+            return color
+        else:
+            # Save png - at 16bit depth
+            cv2.imwrite(filename, color)
 
     def plot_meshes(self):
 
