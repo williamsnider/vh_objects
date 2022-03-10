@@ -307,7 +307,7 @@ class Shape:
         with open(filename, "wb") as f:
             f.write(png)
 
-    def save_mesh_as_png(self, save_dir, return_img=False):
+    def save_mesh_as_png(self, save_dir, return_img=False, rotation=None):
         """
         Saves the mesh as a png.
         """
@@ -334,6 +334,9 @@ class Shape:
                 [0, 0, 0, 1],
             ]
         )
+
+        if rotation is not None:
+            mesh_pose = mesh_pose @ rotation
 
         # Add mesh to scene
         mesh = pyrender.Mesh.from_trimesh(self.mesh, smooth=False)
@@ -365,7 +368,7 @@ class Shape:
         v = np.array([0, 1, 0])
         n = np.cross(u, v)
         # e = np.array([0, 0, -150])  #  eye: camera position in world coordinates
-        e = np.array([30, 20, -125])  #  eye: camera position in world coordinates
+        e = np.array([35, 0, -80])  #  eye: camera position in world coordinates
         camera_pose = np.array(
             [
                 [u[0], u[1], u[2], e[0]],

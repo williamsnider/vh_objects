@@ -5,9 +5,9 @@ from objects.components import (
     segment_weak_curve,
     segment_strong_curve,
     segment_sharp_bend,
-    segment_hook,
-    segment_weak_s,
-    segment_strong_s,
+    segment_hook_f,
+    segment_hook_r,
+    segment_s,
 )
 from objects.cross_section import CrossSection
 from objects.axial_component import AxialComponent
@@ -46,9 +46,9 @@ backbone_list = [
     segment_weak_curve,
     segment_strong_curve,
     segment_sharp_bend,
-    segment_hook,
-    segment_weak_s,
-    segment_strong_s,
+    segment_hook_f,
+    segment_hook_r,
+    segment_s,
 ]
 
 # Make 6x3 Figure
@@ -71,6 +71,7 @@ for row, backbone in enumerate(backbone_list):
     # Plot controlpoints (first column)
     x, y = backbone.controlpoints[:, :2].T
     axs[row, 0].plot(x, y, "g.", markersize=20)
+    axs[row, 0].plot(x, y, "g-")
     y_mean = y.mean()
     axs[row, 0].set_ylim([y_mean - BACKBONE_LENGTH / 2 - padding, y_mean + BACKBONE_LENGTH / 2 + padding])
     axs[row, 0].set_aspect("equal")

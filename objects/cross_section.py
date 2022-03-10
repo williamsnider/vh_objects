@@ -3,13 +3,14 @@ from objects.utilities import angle_between
 
 
 class CrossSection:
-    def __init__(self, controlpoints, position, rotation=0, tilt=0):
+    def __init__(self, controlpoints, position, rotation=0, tilt=0, name=None):
 
         # Assign object attributes
         self.controlpoints = controlpoints
         self.position = position
         self.rotation = rotation
         self.tilt = tilt
+        self.name = name
 
         # Check that inputs are valid
         self.check_inputs()
