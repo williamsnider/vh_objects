@@ -6,10 +6,11 @@ from copy import deepcopy
 
 
 class Backbone:
-    def __init__(self, controlpoints, reparameterize=True):
+    def __init__(self, controlpoints, reparameterize=True, name=None):
 
         self.controlpoints = controlpoints
         self.num_controlpoints = self.controlpoints.shape[0]
+        self.name = name
 
         # Construct B-Spline
         self.construct_B_spline()

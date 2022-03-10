@@ -99,7 +99,7 @@ cp_flat = np.array(
         np.zeros(NUM_CP),
     ]
 ).T
-segment_flat = Backbone(cp_flat, reparameterize=True)
+segment_flat = Backbone(cp_flat, reparameterize=True, name="Flat")
 
 ### Weak curve
 NUM_CP = 3
@@ -111,7 +111,7 @@ cp_weak_curve = np.array(
         np.zeros(NUM_CP),
     ]
 ).T
-segment_weak_curve = Backbone(cp_weak_curve, reparameterize=True)
+segment_weak_curve = Backbone(cp_weak_curve, reparameterize=True, name="Weak Curve")
 
 ### Strong curve
 NUM_CP = 3
@@ -123,7 +123,7 @@ cp_strong_curve = np.array(
         np.zeros(NUM_CP),
     ]
 ).T
-segment_strong_curve = Backbone(cp_strong_curve, reparameterize=True)
+segment_strong_curve = Backbone(cp_strong_curve, reparameterize=True, name="Strong Curve")
 
 ### Sharp bend
 NUM_CP = 4
@@ -136,44 +136,66 @@ cp_sharp_bend = np.array(
         np.zeros(NUM_CP),
     ]
 ).T
-segment_sharp_bend = Backbone(cp_sharp_bend, reparameterize=True)
+segment_sharp_bend = Backbone(cp_sharp_bend, reparameterize=True, name="Sharp Bend")
 
 
-### Hook
+# ### Hook forward
+# NUM_CP = 4
+# HOOK_HEIGHT = BACKBONE_LENGTH / 4
+# cp_hook_f = np.array(
+#     [
+#         [0, BACKBONE_LENGTH - HOOK_HEIGHT * 3, BACKBONE_LENGTH - HOOK_HEIGHT, BACKBONE_LENGTH],
+#         [0, 0, 0, HOOK_HEIGHT],
+#         np.zeros(NUM_CP),
+#     ]
+# ).T
+# segment_hook_f = Backbone(cp_hook_f, reparameterize=True)
+
+# ### Hook reverse
+# NUM_CP = 4
+# HOOK_HEIGHT = BACKBONE_LENGTH / 4
+# cp_hook_r = cp_hook_f.copy()
+# cp_hook_r = np.flip(cp_hook_r, axis=0)  # reverse order of points
+# cp_hook_r[:, 0] *= -1  # flip across y-axis
+# cp_hook_r -= cp_hook_r[0]  # shift so point of hook is at origin
+# theta = np.arctan(cp_hook_r[1, 1] / cp_hook_r[1, 0])
+# R = np.array(
+#     [
+#         [np.cos(theta), -np.sin(theta)],
+#         [np.sin(theta), np.cos(theta)],
+#     ]
+# )
+# cp_hook_r[:, :2] = cp_hook_r[:, :2] @ R
+# segment_hook_r = Backbone(cp_hook_r, reparameterize=True)
+
+###  S
 NUM_CP = 4
-HOOK_HEIGHT = BACKBONE_LENGTH / 4
-cp_hook = np.array(
-    [
-        [0, BACKBONE_LENGTH - HOOK_HEIGHT * 3, BACKBONE_LENGTH - HOOK_HEIGHT, BACKBONE_LENGTH],
-        [0, 0, 0, HOOK_HEIGHT],
-        np.zeros(NUM_CP),
-    ]
-).T
-segment_hook = Backbone(cp_hook, reparameterize=True)
-
-### Slight S
-NUM_CP = 4
-S_PROPORTION = 0.1  # How far up/down the middle controlpoints are. Higher --> sharper curves
-cp_weak_s = np.array(
+S_PROPORTION = 0.15  # How far up/down the middle controlpoints are. Higher --> sharper curves
+cp_s = np.array(
     [
         [0, BACKBONE_LENGTH * 0.25, BACKBONE_LENGTH * 0.75, BACKBONE_LENGTH],
         [0, BACKBONE_LENGTH * S_PROPORTION, -BACKBONE_LENGTH * S_PROPORTION, 0],
         np.zeros(NUM_CP),
     ]
 ).T
-segment_weak_s = Backbone(cp_weak_s, reparameterize=True)
+segment_s = Backbone(cp_s, reparameterize=True, name="S")
 
-### Strong S
-NUM_CP = 4
-S_PROPORTION = 0.2  # How far up/down the middle controlpoints are. Higher --> sharper curves
-cp_strong_s = np.array(
-    [
-        [0, BACKBONE_LENGTH * 0.25, BACKBONE_LENGTH * 0.75, BACKBONE_LENGTH],
-        [0, BACKBONE_LENGTH * S_PROPORTION, -BACKBONE_LENGTH * S_PROPORTION, 0],
-        np.zeros(NUM_CP),
-    ]
-).T
-segment_strong_s = Backbone(cp_strong_s, reparameterize=True)
+### Hook forward
+# To match curvature of S, sample many controlpoints along the S, and then convert 1 side to linear.
+NUM_CP = 100
+t = np.linspace(0, 1, NUM_CP)
+cp_hook_f = segment_s.r(t)
+cp_hook_f[NUM_CP // 2 :, 1] = 0  # Make straight by clamping Y-values to 0
+segment_hook_f = Backbone(cp_hook_f, reparameterize=True, name="Hook F")
+
+### Hook reverse
+# To match curvature of S, sample many controlpoints along the S, and then convert 1 side to linear.
+NUM_CP = 100
+cp_hook_r = cp_hook_f.copy()
+cp_hook_r = np.flip(cp_hook_r, axis=0)  # Reorder x-values
+cp_hook_r[:, 0] *= -1  # Flip across y-axis
+cp_hook_r -= cp_hook_r[0]  # Shift leftmost point to origin
+segment_hook_r = Backbone(cp_hook_r, reparameterize=True, name="Hook R")
 
 # ####################
 # ### Digit Segments
@@ -223,15 +245,28 @@ base_cp = np.array(
     ]
 )
 
+# For clarity, define variables used in the following transformations
+cp_x = base_cp[0, 0]  # x coordinate of point we will manipulate
+cp_x_prev_next = base_cp[1, 0]  # x coordinate of points on either side of the point we will manipulate
+concave_convex_shift = cp_x_prev_next - 0.001  # How much to shift the point for concave/convex cross sections
+
 # concave_high
 cp_concave_high = base_cp.copy()
-cp_concave_high[0, :] = [0.001, 0.001]
+cp_concave_high[0, 0] = cp_x_prev_next - concave_convex_shift
 cp_concave_high = cp_concave_high * BACKBONE_LENGTH / 2 / 2
 
 # concave_low
+# We want the concave low's curvature to be the opposite of the round_high. To do this, we will reflect the controlpoint across the line connecting the current and next controlpoints. In other words, the x-value of this controlpoint will be the same distance away from the previous/next controlpoint's x values, however, it will be closer to the origin.
 cp_concave_low = base_cp.copy()
-cp_concave_low[0, :] = [0.25, 0]
+cp_x_flipped = cp_x_prev_next - (cp_x - cp_x_prev_next)  # shift to left of the line
+cp_concave_low[0, 0] = cp_x_flipped
 cp_concave_low = cp_concave_low * BACKBONE_LENGTH / 2 / 2
+
+# elliptical
+cp_elliptical = base_cp.copy()
+cp_elliptical[:, 0] *= 2 / 3
+cp_elliptical[:, 1] *= 4 / 3
+cp_elliptical *= BACKBONE_LENGTH / 2 / 2
 
 # round_low
 cp_round_low = base_cp.copy()
@@ -241,37 +276,12 @@ cp_round_low = cp_round_low * BACKBONE_LENGTH / 2 * 5 / 8 / 2
 cp_round_high = base_cp.copy()
 cp_round_high = cp_round_high * BACKBONE_LENGTH / 2 / 2
 
-# convex_low
-cp_convex_low = base_cp.copy()
-cp_convex_low[0, :] = [1.2, 0]
-cp_convex_low = cp_convex_low * BACKBONE_LENGTH / 2 / 2
-
-# convex_med
-cp_convex_med = base_cp.copy()
-cp_convex_med[0, :] = [1.4, 0]
-cp_convex_med = cp_convex_med * BACKBONE_LENGTH / 2 / 2
-
-# convex_high
-cp_convex_high = base_cp.copy()
-cp_convex_high[0, :] = [1.6, 0]
-cp_convex_high = cp_convex_high * BACKBONE_LENGTH / 2 / 2
+# convex - inverse of concave_high
+cp_convex = base_cp.copy()
+cp_convex[0, 0] = cp_x_prev_next + concave_convex_shift
+cp_convex *= BACKBONE_LENGTH / 2 / 2
 
 # plane
 cp_plane = base_cp.copy()
 cp_plane[0, :] = cp_plane[[1, -1], :].mean(axis=0)
 cp_plane = cp_plane * BACKBONE_LENGTH / 2 / 2
-
-# convex_point_low
-cp_convex_point_low = base_cp.copy()
-cp_convex_point_low[[-1, 0, 1], :] = [c(0 / 8 * 2 * np.pi) * 0.1, s(0 / 8 * 2 * np.pi) * 0.1]
-cp_convex_point_low = cp_convex_point_low * BACKBONE_LENGTH / 2 / 2
-
-# convex_point_med
-cp_convex_point_med = base_cp.copy()
-cp_convex_point_med[[-1, 0, 1], :] = [c(0 / 8 * 2 * np.pi) * 1 / 2, s(0 / 8 * 2 * np.pi) * 1 / 2]
-cp_convex_point_med = cp_convex_point_med * BACKBONE_LENGTH / 2 / 2
-
-# convex_point_high
-cp_convex_point_high = base_cp.copy()
-cp_convex_point_high[[-1, 0, 1], :] = [c(0 / 8 * 2 * np.pi), s(0 / 8 * 2 * np.pi)]
-cp_convex_point_high = cp_convex_point_high * BACKBONE_LENGTH / 2 / 2
