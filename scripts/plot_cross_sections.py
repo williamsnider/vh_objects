@@ -1,10 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from objects.components import (
-    cp_round_low,
     cp_round_high,
     cp_concave_high,
-    cp_concave_low,
     cp_plane,
     cp_convex,
     cp_elliptical,
@@ -19,11 +17,9 @@ from objects.shape import Shape
 
 cs_list = [
     cp_concave_high,
-    cp_concave_low,
     cp_plane,
     cp_round_high,
     cp_convex,
-    cp_round_low,
     cp_elliptical,
 ]
 
