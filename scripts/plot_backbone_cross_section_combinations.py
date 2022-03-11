@@ -1,17 +1,15 @@
-# Test that the segments listed in objects.components produce correct shapes
+# Test that the backbones listed in objects.components produce correct shapes
 
 from objects.components import (
-    segment_flat,
-    segment_weak_curve,
-    segment_strong_curve,
-    segment_sharp_bend,
-    segment_hook_f,
-    segment_hook_r,
-    segment_s,
-    cp_round_low,
+    backbone_flat,
+    backbone_weak_curve,
+    backbone_strong_curve,
+    backbone_sharp_bend,
+    backbone_hook_f,
+    backbone_hook_r,
+    backbone_s,
     cp_round_high,
     cp_concave_high,
-    cp_concave_low,
     cp_plane,
     cp_convex,
     cp_elliptical,
@@ -62,18 +60,17 @@ base_cp_round = np.array(
 )
 
 backbone_list = [
-    segment_flat,
-    segment_weak_curve,
-    segment_strong_curve,
-    segment_sharp_bend,
-    segment_hook_f,
-    segment_hook_r,
-    segment_s,
+    backbone_flat,
+    backbone_weak_curve,
+    backbone_strong_curve,
+    backbone_sharp_bend,
+    backbone_hook_f,
+    backbone_hook_r,
+    backbone_s,
 ]
 
 cs_list = [
     cp_concave_high,
-    cp_concave_low,
     cp_plane,
     cp_round_high,
     cp_convex,
@@ -83,11 +80,9 @@ cs_list = [
 
 cs_dict = {
     "concave_high": cp_concave_high,
-    "concave_low": cp_concave_low,
     "plane": cp_plane,
     "round_high": cp_round_high,
     "convex": cp_convex,
-    "round_low": cp_round_low,
     "elliptical": cp_elliptical,
 }
 
@@ -234,7 +229,7 @@ for rotation in [0, np.pi / 2, np.pi, 3 * np.pi / 2]:
     for b in backbone_list:
 
         # Skip redundant - flat backbone same regardless of rotation
-        if rotation != 0 and b == segment_flat:
+        if rotation != 0 and b == backbone_flat:
             continue
 
         for c in cs_dict.keys():
@@ -256,7 +251,7 @@ for rotation in [0, np.pi / 2, np.pi, 3 * np.pi / 2]:
     # for b in backbone_list:
 
     #     # Skip redundant - flat backbone same regardless of rotation
-    #     if rotation != 0 and b == segment_flat:
+    #     if rotation != 0 and b == backbone_flat:
     #         continue
 
     #     for c in cs_dict.keys():
@@ -287,7 +282,7 @@ for rotation in [0, np.pi / 2, np.pi, 3 * np.pi / 2]:
     for b in backbone_list:
 
         # Skip redundant - flat backbone same regardless of rotation
-        if rotation != 0 and b == segment_flat:
+        if rotation != 0 and b == backbone_flat:
             continue
 
         for c in cs_dict.keys():
@@ -313,7 +308,7 @@ for rotation in [0, np.pi / 2, np.pi, 3 * np.pi / 2]:
     for b in backbone_list:
 
         # Skip redundant - flat backbone same regardless of rotation
-        if rotation != 0 and b == segment_flat:
+        if rotation != 0 and b == backbone_flat:
             continue
 
         for c in cs_dict.keys():
@@ -339,7 +334,7 @@ for rotation in [0, np.pi / 2, np.pi, 3 * np.pi / 2]:
     for b in backbone_list:
 
         # Skip redundant - flat backbone same regardless of rotation
-        if rotation != 0 and b == segment_flat:
+        if rotation != 0 and b == backbone_flat:
             continue
 
         for c in cs_dict.keys():
@@ -361,5 +356,76 @@ for rotation in [0, np.pi / 2, np.pi, 3 * np.pi / 2]:
             pattern = "BBA"
             combinations.append([backbone, cs_names, pattern, rotation])
 
-for c in combinations:
-    render_combination(*c)
+# for c in combinations:
+#     render_combination(*c)
+
+
+def export_stl(backbone, cs_names, pattern, rotation):
+
+    # Generate list of cross sections
+    cs = [cs_dict[name] for name in cs_names]
+    if pattern == "A":
+        assert len(cs) == 1
+        cs_list = [CrossSection(cs[0], i, rotation=rotation) for i in np.linspace(0.1, 0.9, 10)]
+    elif pattern == "AB":
+        assert len(cs) == 2
+        cs_list = [CrossSection(cs[0], i, rotation=rotation) for i in np.linspace(0.1, 0.1 / 0.9 * 4, 5)] + [
+            CrossSection(cs[1], i, rotation=rotation) for i in np.linspace(0.1 / 0.9 * 5, 0.9, 5)
+        ]
+    elif pattern == "ABB":
+        assert len(cs) == 3
+        assert cs_names[1] == cs_names[2]
+        cs_list = (
+            [CrossSection(cs[0], i, rotation=rotation) for i in np.linspace(0.1, 0.3, 3)]
+            + [CrossSection(cs[1], i, rotation=rotation) for i in np.linspace(0.4, 0.6, 3)]
+            + [CrossSection(cs[2], i, rotation=rotation) for i in np.linspace(0.7, 0.9, 3)]
+        )
+    elif pattern == "BAB":
+        assert len(cs) == 3
+        assert cs_names[0] == cs_names[2]
+        cs_list = (
+            [CrossSection(cs[0], i, rotation=rotation) for i in np.linspace(0.1, 0.3, 3)]
+            + [CrossSection(cs[1], i, rotation=rotation) for i in np.linspace(0.4, 0.6, 3)]
+            + [CrossSection(cs[2], i, rotation=rotation) for i in np.linspace(0.7, 0.9, 3)]
+        )
+    elif pattern == "BBA":
+        assert len(cs) == 3
+        assert cs_names[0] == cs_names[1]
+        cs_list = (
+            [CrossSection(cs[0], i, rotation=rotation) for i in np.linspace(0.1, 0.3, 3)]
+            + [CrossSection(cs[1], i, rotation=rotation) for i in np.linspace(0.4, 0.6, 3)]
+            + [CrossSection(cs[2], i, rotation=rotation) for i in np.linspace(0.7, 0.9, 3)]
+        )
+    else:
+        raise NotImplementedError
+
+    ac = AxialComponent(backbone=backbone, cross_sections=cs_list)
+    s = Shape([ac])
+    filename = "_".join([pattern, backbone.name, *cs_names])
+    s.label = filename
+
+    # Construct save_dir
+    save_dir = Path(
+        base_dir,
+        "sample_shapes",
+    )
+    if save_dir.is_dir() is False:
+        save_dir.mkdir(parents=True)
+    s.export_stl(save_dir)
+
+
+# Sample shapes to print
+samples = [
+    [backbone_weak_curve, ["concave_high"], "A", np.pi / 2],
+    [backbone_weak_curve, ["round_high"], "A", np.pi / 2],
+    [backbone_weak_curve, ["convex"], "A", np.pi / 2],
+    [backbone_flat, ["convex"], "A", 0],
+    [backbone_weak_curve, ["convex"], "A", 0],
+    [backbone_strong_curve, ["convex"], "A", 0],
+    [backbone_s, ["concave_high", "round_high", "round_high"], "ABB", 0],
+    [backbone_s, ["round_high", "concave_high", "round_high"], "BAB", 0],
+    [backbone_s, ["round_high", "round_high", "concave_high"], "BBA", 0],
+]
+
+for c in samples:
+    export_stl(*c)
