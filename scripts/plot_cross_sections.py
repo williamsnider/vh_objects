@@ -1,12 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from objects.components import (
-    cp_round_high,
+    cp_round,
     cp_concave_high,
     cp_plane,
     cp_convex,
     cp_elliptical,
-    segment_flat,
+    backbone_flat,
 )
 from objects.parameters import ORDER, BACKBONE_LENGTH
 from splipy import BSplineBasis, Curve
@@ -18,7 +18,7 @@ from objects.shape import Shape
 cs_list = [
     cp_concave_high,
     cp_plane,
-    cp_round_high,
+    cp_round,
     cp_convex,
     cp_elliptical,
 ]
@@ -106,7 +106,7 @@ for row, cs in enumerate(cs_list):
 
     # Plot render of shape
     cs_for_shape = [CrossSection(cs, i, rotation=np.pi / 2) for i in np.linspace(0.1, 0.9, 10)]
-    ac = AxialComponent(backbone=segment_flat, cross_sections=cs_for_shape)
+    ac = AxialComponent(backbone=backbone_flat, cross_sections=cs_for_shape)
     s = Shape([ac])
     color = s.save_mesh_as_png(save_dir="dummy", return_img=True)
     color = np.flip(color, axis=1)  # Reverse y axis so that the render aligns with the above plots
