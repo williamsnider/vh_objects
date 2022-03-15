@@ -29,5 +29,9 @@ PEG_CORNER_NUM_STEPS = 3
 PEG_DEPTH = 20  # mm
 PEG_SPHERE_SUBDIVISIONS = 1  # Higher --> more points used to fair peg tip
 
+# Component construction
+cs_scale_backbone = BACKBONE_LENGTH / 4  # Controls thickness of cross sections around backbone
+cs_scale_surface_deformation = 2.5  # Controls thickness of cross sections in surface deformations
+
 # Misc
 SAVE_DIR = "../sample_shapes"
