@@ -33,7 +33,7 @@ cp = np.array(
 backbone1 = Backbone(cp, reparameterize=False)
 
 
-def test_fuse_meshes():
+def test_combine_meshes():
 
     cs0 = CrossSection(base_cp * 5, 0.3)
     cs1 = CrossSection(base_cp * 5, 0.7)
@@ -46,7 +46,7 @@ def test_fuse_meshes():
         position_along_self=0.75,
     )
     s = Shape([ac1, ac2])
-    s.fuse_meshes([ac1.mesh, ac2.mesh], operation="union")
+    s.combine_meshes([ac1.mesh, ac2.mesh], operation="union")
     s.mesh.show(smooth=False)
 
     # Debug
