@@ -2,11 +2,10 @@ from objects.axial_component import AxialComponent
 from objects.cross_section import CrossSection
 from objects.shape import Shape
 from objects.backbone import Backbone
-from objects.backbone_from_digits import BackboneFromDigits
+from objects.components import cp_round, backbone_flat
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
-from objects.digit_segments import segment_arc_1_8, segment_arc_1_4, segment_flat
 
 c = np.cos
 s = np.sin
@@ -378,83 +377,28 @@ def plot_meshes_as_shape():
     s.mesh.show()
 
 
-def plot_backbone_from_digit_euler_angles():
-
-    backbone0 = segment_arc_1_4.copy()
-    backbone1 = segment_arc_1_4.copy()
-    MAX_ANGLE = np.pi / 4
-    digit_segments = [backbone0, backbone1]
-
-    # Iterate through different possibilities of angles between them
-    for row_num in [0, 1, 2]:
-
-        bfd_list = []
-        for theta in np.linspace(-np.pi, np.pi, 4, endpoint=False):
-
-            angles_between_segments = np.zeros((1, 3))
-            angles_between_segments[:, row_num] = theta  # TODO: Fix the normal vector calculation
-            bfd = BackboneFromDigits(digit_segments=digit_segments, angles_between_segments=angles_between_segments)
-            bfd_list.append(bfd)
-
-        # Plot
-        cp = bfd_list[0].controlpoints
-        fig = plt.figure()
-        ax = plt.axes(projection="3d")
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("z")
-        maxcp = cp.max()
-        ax.set_xlim([-maxcp, maxcp])
-        ax.set_ylim([-maxcp, maxcp])
-        ax.set_zlim([-maxcp, maxcp])
-        ax.view_init(elev=-90, azim=90)
-
-        # Plot backbone from digits
-        v = np.linspace(0, 1, 100)
-        for bfd in bfd_list:
-            backbone = Backbone(bfd.controlpoints, reparameterize=True)
-            x, y, z = backbone.r(v).T
-            ax.plot(x, y, z, "b-")
-            # x, y, z = backbone.controlpoints.T
-            # ax.plot(x, y, z, "g-")
-
-        # Plot digit segments
-        for segment in bfd.digit_segments:
-            x, y, z = segment.r(v).T
-            ax.plot(x, y, z, "r-")
-        plt.show()
-
-
-def plot_segments():
-
-    fig = plt.figure()
-    ax = plt.axes(projection="3d")
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("z")
-    ax.view_init(elev=-90, azim=90)
-
-    segment_list = [segment_flat, segment_arc_1_8, segment_arc_1_16]
-    t = np.linspace(0, 1, 100)
-    axis_max = 0
-    for segment in segment_list:
-        x, y, z = segment.r(t).T
-        ax.plot(x, y, z, "b-")
-        axis_max = np.max([np.max([x, y, z]), axis_max])
-
-    ax.set_xlim([-axis_max, axis_max])
-    ax.set_ylim([-axis_max, axis_max])
-    ax.set_zlim([-axis_max, axis_max])
-    plt.show()
+def plot_axial_component_roundover():
+    # Varying cross section relative sizes
+    size = np.array([0.5, 1, 2])  # quadratic increase (flare)
+    backbone = backbone_flat
+    cp = cp_round
+    rotation = 0
+    cs_list = [
+        CrossSection(cp * size[0], 0.1, rotation=rotation),
+        CrossSection(cp * size[1], 0.5, rotation=rotation),
+        CrossSection(cp * size[2], 0.9, rotation=rotation),
+    ]
+    ac = AxialComponent(backbone=backbone, cross_sections=cs_list)
+    s = Shape([ac])
+    s.mesh.show()
 
 
 if __name__ == "__main__":
     # plot_tangent_vectors()
-    plot_tangent_vectors_digit_segment()
+    # plot_tangent_vectors_digit_segment()
     # plot_controlpoints()
     # plot_surface()
     # plot_align_axial_components()
     # plot_euler_angles()
     # plot_meshes_as_shape()
-    plot_backbone_from_digit_euler_angles()
-    # plot_segments()
+    plot_axial_component_roundover()

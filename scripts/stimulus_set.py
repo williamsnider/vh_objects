@@ -1,5 +1,4 @@
 # Steps to constructions shapes, rendering png and forming stl
-from socket import AF_X25
 from objects.components import (
     backbone_flat,
     backbone_weak_curve,
