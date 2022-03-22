@@ -4,7 +4,9 @@ import scipy
 import matplotlib.pyplot as plt
 from compas_cgal.booleans import boolean_union
 import igl
-from objects.utilities import plot_mesh_and_specific_indices
+from objects.utilities import (
+    fuse_meshes
+)
 from objects.parameters import HARMONIC_POWER, FAIRING_DISTANCE
 from pathlib import Path
 import pyrender
@@ -18,132 +20,84 @@ class Shape:
         self.ac_list = ac_list
         self.label = label
         self.fuse_to_interface = fuse_to_interface
+        self.mesh = None
 
-        # Fuse meshes
-        self.fuse_meshes()
+        # Fuse axial components meshes
+        self.combine_meshes([ac.mesh for ac in ac_list], operation='union')
 
-        # Find oriented bounding box
-        if align_OBB is True:
-            self.align_mesh()
+        # # Find oriented bounding box
+        # if align_OBB is True:
+        #     self.align_mesh()
 
-        # Smoothly fuse to interface
-        if fuse_to_interface is True:
-            self.fuse_mesh_to_interface()
+        # # Smoothly fuse to interface
+        # if fuse_to_interface is True:
+        #     self.fuse_mesh_to_interface()
 
     def check_inputs(self):
 
         assert type(self.ac_list) is list, "ac_list must be a list, even if it has just 1 ac."
 
-    def fuse_meshes(self):
-        def check_and_move_identical_verts(mesh1, mesh2):
-            """Mesh boolean fails often when two vertices on two meshes are identical, so we need to shift one vertex very slightly."""
+    def combine_meshes(self, meshes_to_fuse, operation="union"):
+        """Joins meshes together by iterating through the list of meshes."""
+        mesh_list = copy.copy(meshes_to_fuse)
+        mesh1 = mesh_list.pop(0)
 
-            # Calculate distance between two sets of vertices
-            tree = scipy.spatial.KDTree(mesh1.vertices)
-            dd, ii = tree.query(mesh2.vertices, k=1)
-            identical_verts = np.isclose(dd, 0)
+        while len(mesh_list) != 0:
 
-            # Shift these verts
-            mesh2.vertices[identical_verts] += 1e-3  #
+            mesh2 = mesh_list.pop(0)
+            mesh1 = fuse_meshes(mesh1, mesh2, FAIRING_DISTANCE, operation=operation)
+            # mesh1, mesh2 = check_and_move_identical_verts(mesh1, mesh2)  # Overlapping vertices cause boolean problems
+            # union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(mesh1, mesh2, operation)
 
-            # Check that this shift was successful
-            dd, ii = tree.query(mesh2.vertices, k=1)
-            identical_verts = np.isclose(dd, 0)
-            assert np.any(identical_verts) == False, "Shifting the identical vertex did not work."
+            # # # Debug
+            # # broken = trimesh.repair.broken_faces(union_mesh, color=[255, 0, 0, 255])
+            # # union_mesh.show()
+            # # union_mesh.fill_holes()
+            # # union_mesh.show()
 
-            return mesh1, mesh2
+            # neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=FAIRING_DISTANCE)
+            # if union_mesh.is_watertight is False:
+            #     import warnings
 
-        def calc_mesh_boolean_and_edges(mesh1, mesh2):
-
-            # Use compas/CGAL to calculate boolean union
-            mesh_A = [mesh1.vertices.tolist(), mesh1.faces.tolist()]
-            mesh_B = [mesh2.vertices.tolist(), mesh2.faces.tolist()]
-            mesh_C = boolean_union(mesh_A, mesh_B)
-
-            # Get edges - vertices that were in neither initial mesh
-            set_A = set([tuple(l) for l in mesh_A[0]])
-            set_B = set([tuple(l) for l in mesh_B[0]])
-            set_C = set([tuple(l) for l in mesh_C[0]])
-            new_verts = (set_C - set_A) - set_B
-            edge_verts_pts = np.zeros((len(new_verts), 3))
-            for i, v in enumerate(new_verts):
-                edge_verts_pts[i] = list(v)
-
-            # Return as trimesh - easier to work with
-            mesh = trimesh.Trimesh(
-                vertices=mesh_C[0],
-                faces=mesh_C[1],
-            )
-
-            # Get indices of edge_verts
-            tree = scipy.spatial.KDTree(mesh.vertices)
-            _, edge_verts_indices = tree.query(edge_verts_pts, k=1)
-
-            if mesh.is_watertight:
-                print("Mesh is watertight")
-            else:
-                print("Mesh is NOT watertight")
-            return mesh, edge_verts_indices
-
-        def find_neighbors(mesh, group, distance):
-
-            mesh_pts = mesh.vertices.__array__()
-            edge_pts = mesh.vertices[group].__array__()
-
-            tree = scipy.spatial.KDTree(mesh_pts)
-            neighbors_list = tree.query_ball_point(edge_pts, r=distance)
-            neighbors = set()
-            for n in neighbors_list:
-                neighbors.update(set(n))
-
-            return list(neighbors)
-
-        def fair_mesh(union_mesh, neighbors):
-
-            v = union_mesh.vertices.__array__()
-            f = union_mesh.faces.__array__().astype("int64")
-            num_verts = v.shape[0]
-            b = np.array(list(set(range(num_verts)) - set(neighbors))).astype(
-                "int64"
-            )  # Bounday indices - NOT to be faired
-            bc = v[b]  # XYZ coordinates of the boundary indices
-            z = igl.harmonic_weights(v, f, b, bc, HARMONIC_POWER)  # Smooths indices at creases
-
-            union_mesh.vertices = z
-            faired_mesh = union_mesh
-
-            return faired_mesh
-
-        ac_list = copy.copy(self.ac_list)
-        mesh1 = ac_list.pop(0).mesh  # Take first AC
-
-        while len(ac_list) != 0:
-
-            mesh2 = ac_list.pop(0).mesh
-
-            mesh1, mesh2 = check_and_move_identical_verts(mesh1, mesh2)  # Overlapping vertices cause boolean problems
-            union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(mesh1, mesh2)
-
-            # TODO: Implement a method that slightly shifts the vertices on mesh1 and mesh2 that are near the union_mesh vertices that have broken faces, and retry boolean union. This is likely to work, as evidenced by small changes in the euler angles on the joining of the two meshes usually works.
-
-            # # Debug
-            # broken = trimesh.repair.broken_faces(union_mesh, color=[255, 0, 0, 255])
-            # union_mesh.show()
-            # union_mesh.fill_holes()
-            # union_mesh.show()
-
-            neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=FAIRING_DISTANCE)
-            if union_mesh.is_watertight is False:
-                import warnings
-
-                warnings.warn(
-                    "union_mesh is not watertight. This is probably because there is a complex joining of two axial components. This could be solves by slightly shifting the vertices near the broken faces and attempting the union again."
-                )
-                print("Mesh will not be faired, as it is not watertight.")
-            else:
-                mesh1 = fair_mesh(union_mesh, neighbors)  # Rename the joint mesh to mesh1 so other ACs can be added
+            #     warnings.warn(
+            #         "union_mesh is not watertight. This is probably because there is a complex joining of two axial components. This could be solves by slightly shifting the vertices near the broken faces and attempting the union again."
+            #     )
+            #     print("Mesh will not be faired, as it is not watertight.")
+            # else:
+            #     mesh1 = fair_mesh(union_mesh, neighbors, HARMONIC_POWER)  # Rename the joint mesh to mesh1 so other ACs can be added
 
         self.mesh = mesh1
+
+        # ac_list = copy.copy(self.ac_list)
+        # mesh1 = ac_list.pop(0).mesh  # Take first AC
+
+        # while len(ac_list) != 0:
+
+        #     mesh2 = ac_list.pop(0).mesh
+
+        #     mesh1, mesh2 = check_and_move_identical_verts(mesh1, mesh2)  # Overlapping vertices cause boolean problems
+        #     union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(mesh1, mesh2, operation)
+
+        #     # TODO: Implement a method that slightly shifts the vertices on mesh1 and mesh2 that are near the union_mesh vertices that have broken faces, and retry boolean union. This is likely to work, as evidenced by small changes in the euler angles on the joining of the two meshes usually works.
+
+        #     # # Debug
+        #     # broken = trimesh.repair.broken_faces(union_mesh, color=[255, 0, 0, 255])
+        #     # union_mesh.show()
+        #     # union_mesh.fill_holes()
+        #     # union_mesh.show()
+
+        #     neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=FAIRING_DISTANCE)
+        #     if union_mesh.is_watertight is False:
+        #         import warnings
+
+        #         warnings.warn(
+        #             "union_mesh is not watertight. This is probably because there is a complex joining of two axial components. This could be solves by slightly shifting the vertices near the broken faces and attempting the union again."
+        #         )
+        #         print("Mesh will not be faired, as it is not watertight.")
+        #     else:
+        #         mesh1 = fair_mesh(union_mesh, neighbors)  # Rename the joint mesh to mesh1 so other ACs can be added
+
+        # self.mesh = mesh1
 
     def align_mesh(self):
         """Rotate the mesh so that it's bbox is optimal for haptic shelving."""
