@@ -8,7 +8,7 @@ from objects.backbone import Backbone
 # Fixed variables - used to built controlpoints array with the correct size.
 NUM_ENDPOINTS = 2  # Position 0.0 and 1.0 on the axial component's backbone
 NUM_ENDPOINTS_SLOPE = 2  # Controlpoints used to control surface slope near endpoints
-NUM_CROSS_SECTION_SLOPE = 2  # Controlpoints used to control surface slope near cross sections adjacent to endpoints
+# NUM_CROSS_SECTION_SLOPE = 2  # Controlpoints used to control surface slope near cross sections adjacent to endpoints
 
 
 class AxialComponent:
@@ -235,19 +235,18 @@ class AxialComponent:
         # controlpoints array structure
         # (0, :, :) - controlpoints at endpoint 0.0
         # (1, :, :) - controlpoints controlling slope at endpoint 0.0
-        # (2, :, :) - controlpoints controlling slope at bottom-most cross section
-        # (3, :, :) - controlpoints of cross section 0
-        # (4, :, :) - controlpoints of cross section 1
+        # (2, :, :) - controlpoints of cross section 0
+        # (3, :, :) - controlpoints of cross section 1
         # ...
-        # (-4, :, :) - controlpoints of cross section -1
-        # (-3, :, :) - controlpoints controlling slope at top-most cross section
+        # (-4, :, :) - controlpoints of cross section -2
+        # (-3, :, :) - controlpoints of cross section -1
         # (-2, :, :) - controlpoints controlling slope at endpoint 1.0
         # (-1, :, :) - controlpoints at endpoint 1.0
         """
 
         # Construct empty controlpoint array
         num_cross_sections = len(self.cross_sections)
-        num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + NUM_CROSS_SECTION_SLOPE + num_cross_sections
+        num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + num_cross_sections
         self.num_rows = num_rows
         num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
         controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
@@ -257,7 +256,7 @@ class AxialComponent:
         controlpoints[-1, :, :] = np.repeat(self.r(1.0), num_cp_per_cross_section, axis=0)  # 1.0 endpoint
 
         # Assign controlpoints - cross sections
-        idx = 3
+        idx = 2
         for cs in self.cross_sections:
 
             cp = cs.controlpoints
@@ -293,43 +292,111 @@ class AxialComponent:
             # Assign to controlpoint array
             controlpoints[idx, :, :] = cp
 
-        # Assign controlpoints - extra to determine slope at edge cross sections
-        for idx in [2, -3]:
-
-            # Get the cross section we will use.
-            if idx == 2:
-                cs = self.cross_sections[0]
-                pos = cs.position
-            if idx == -3:
-                cs = self.cross_sections[-1]
-                pos = cs.position
-
-            # Grab the cp we are going to slide
-            cp = cs.controlpoints
-
-            # Rotate and translate cross section
-            cp = self.align_cross_section_to_position(cp, pos)
-
-            # Get the tangent vector at this position
-            if idx == 2:
-                vec = -self.T(pos)  # Negate to go in opposite direction (toward 0.0)
-            if idx == -3:
-                vec = self.T(pos)
-
-            # Scale to roughly halfway between edge and endpoint
-            if idx == 2:
-                dist_to_edge = pos
-            if idx == -3:
-                dist_to_edge = 1 - pos
-            vec = vec * self.length * dist_to_edge / 2
-
-            # Slide cp
-            cp = cp + vec
-
-            # Assign to controlpoint array
-            controlpoints[idx, :, :] = cp
-
         self.controlpoints = controlpoints
+
+    # def get_controlpoints(self):
+    #     """
+    #     # controlpoints array structure
+    #     # (0, :, :) - controlpoints at endpoint 0.0
+    #     # (1, :, :) - controlpoints controlling slope at endpoint 0.0
+    #     # (2, :, :) - controlpoints controlling slope at bottom-most cross section
+    #     # (3, :, :) - controlpoints of cross section 0
+    #     # (4, :, :) - controlpoints of cross section 1
+    #     # ...
+    #     # (-4, :, :) - controlpoints of cross section -1
+    #     # (-3, :, :) - controlpoints controlling slope at top-most cross section
+    #     # (-2, :, :) - controlpoints controlling slope at endpoint 1.0
+    #     # (-1, :, :) - controlpoints at endpoint 1.0
+    #     """
+
+    #     # Construct empty controlpoint array
+    #     num_cross_sections = len(self.cross_sections)
+    #     num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + NUM_CROSS_SECTION_SLOPE + num_cross_sections
+    #     self.num_rows = num_rows
+    #     num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
+    #     controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
+
+    #     # Assign controlpoints - endpoints
+    #     controlpoints[0, :, :] = np.repeat(self.r(0.0), num_cp_per_cross_section, axis=0)  # 0.0 endpoint
+    #     controlpoints[-1, :, :] = np.repeat(self.r(1.0), num_cp_per_cross_section, axis=0)  # 1.0 endpoint
+
+    #     # Assign controlpoints - cross sections
+    #     idx = 3
+    #     for cs in self.cross_sections:
+
+    #         cp = cs.controlpoints
+    #         pos = cs.position
+
+    #         # Rotate and translate cross section
+    #         cp = self.align_cross_section_to_position(cp, pos)
+
+    #         # Assign to controlpoint array
+    #         controlpoints[idx, :, :] = cp
+    #         idx += 1
+
+    #     # Assign controlpoints - extra to determine slope at endpoint
+    #     for idx in [1, -2]:
+
+    #         # Get the cross section we will use.
+    #         if idx == 1:
+    #             cs = self.cross_sections[0]
+    #             pos = 0.0
+    #         if idx == -2:
+    #             cs = self.cross_sections[-1]
+    #             pos = 1.0
+
+    #         # Grab the cp we are going to shrink
+    #         cp = cs.controlpoints
+
+    #         # Shrink the cross section
+    #         cp = cp * SHRINK_FACTOR
+
+    #         # Rotate and translate cross section
+    #         cp = self.align_cross_section_to_position(cp, pos)
+
+    #         # Assign to controlpoint array
+    #         controlpoints[idx, :, :] = cp
+
+    #     # Assign controlpoints - extra to determine slope at edge cross sections
+    #     for idx in [2, -3]:
+
+    #         # Get the cross section we will use.
+    #         if idx == 2:
+    #             cs = self.cross_sections[0]
+    #             pos = cs.position
+    #         if idx == -3:
+    #             cs = self.cross_sections[-1]
+    #             pos = cs.position
+
+    #         # Grab the cp we are going to slide
+    #         cp = cs.controlpoints
+
+    #         # Shrink cross section XXX
+    #         cp = cp * np.sqrt(SHRINK_FACTOR)
+
+    #         # Rotate and translate cross section
+    #         cp = self.align_cross_section_to_position(cp, pos)
+
+    #         # Get the tangent vector at this position
+    #         if idx == 2:
+    #             vec = -self.T(pos)  # Negate to go in opposite direction (toward 0.0)
+    #         if idx == -3:
+    #             vec = self.T(pos)
+
+    #         # Scale to roughly halfway between edge and endpoint
+    #         if idx == 2:
+    #             dist_to_edge = pos
+    #         if idx == -3:
+    #             dist_to_edge = 1 - pos
+    #         vec = vec * self.length * dist_to_edge / 2
+
+    #         # Slide cp
+    #         cp = cp + vec
+
+    #         # Assign to controlpoint array
+    #         controlpoints[idx, :, :] = cp
+
+    #     self.controlpoints = controlpoints
 
     def align_cross_section_to_position(self, cp, pos):
 
