@@ -33,27 +33,27 @@ cp = np.array(
 backbone1 = Backbone(cp, reparameterize=False)
 
 
-# def test_fuse_meshes():
+def test_fuse_meshes():
 
-#     cs0 = CrossSection(base_cp * 5, 0.3)
-#     cs1 = CrossSection(base_cp * 5, 0.7)
-#     ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
-#     ac2 = AxialComponent(
-#         backbone1,
-#         cross_sections=[cs0, cs1],
-#         parent_axial_component=ac1,
-#         position_along_parent=0.2,
-#         position_along_self=0.75,
-#     )
-#     s = Shape([ac1, ac2])
-#     s.fuse_meshes()
-#     s.mesh.show(smooth=False)
+    cs0 = CrossSection(base_cp * 5, 0.3)
+    cs1 = CrossSection(base_cp * 5, 0.7)
+    ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
+    ac2 = AxialComponent(
+        backbone1,
+        cross_sections=[cs0, cs1],
+        parent_axial_component=ac1,
+        position_along_parent=0.2,
+        position_along_self=0.75,
+    )
+    s = Shape([ac1, ac2])
+    s.fuse_meshes([ac1.mesh, ac2.mesh], operation="union")
+    s.mesh.show(smooth=False)
 
-#     # Debug
-#     import trimesh
+    # Debug
+    import trimesh
 
-#     scene = trimesh.Scene([ac1.mesh, ac2.mesh])
-#     scene.show()
+    scene = trimesh.Scene([ac1.mesh, ac2.mesh])
+    # scene.show()
 
 
 def test_align_mesh():
@@ -90,7 +90,7 @@ def test_export_stl():
     #     position_along_self=0.0,
     #     euler_angles=np.array([0, np.pi / 3, 0]),
     # )
-    s = Shape([ac1], align_OBB=False, fuse_to_interface=True)
+    s = Shape([ac1], align_OBB=False, fuse_to_interface=False)
     s.export_stl(save_dir)
 
 
@@ -109,7 +109,7 @@ def test_export_png():
     #     position_along_self=0.0,
     #     euler_angles=np.array([0, np.pi / 3, 0]),
     # )
-    s = Shape([ac1], align_OBB=False, fuse_to_interface=True)
+    s = Shape([ac1], align_OBB=False, fuse_to_interface=False)
     s.export_png(save_dir)
 
 
@@ -118,7 +118,7 @@ def test_save_mesh_as_png():
     cs0 = CrossSection(base_cp * 15, 0.3)
     cs1 = CrossSection(base_cp * 15, 0.7)
     ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
-    s = Shape([ac1], align_OBB=False, fuse_to_interface=True)
+    s = Shape([ac1], align_OBB=False, fuse_to_interface=False)
     s.save_mesh_as_png(save_dir)
 
 

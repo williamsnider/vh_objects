@@ -5,9 +5,19 @@ from objects.backbone import Backbone
 from objects.cross_section import CrossSection
 from objects.axial_component import AxialComponent
 import trimesh
-from objects.parameters import BACKBONE_LENGTH, BACKBONE_NUM_CP, cs_scale_backbone
+from objects.parameters import (
+    BACKBONE_LENGTH,
+    BACKBONE_NUM_CP,
+    cs_scale_backbone,
+    cs_scale_surface_deformation,
+    SD_LENGTH,
+    STRAIGHT_PROPORTION,
+    ARC_ANGLE,
+    ELLIPTICAL_MAJOR,
+    ELLIPTICAL_MINOR,
+)
 from scipy.optimize import minimize
-from objects.utilities import sliding_window_mean, approximate_arc
+from objects.utilities import sliding_window_mean, approximate_arc, fuse_meshes
 
 #################
 ### Backbones ###
@@ -124,9 +134,9 @@ cp_x_prev_next = base_cp[1, 0]  # x coordinate of points on either side of the p
 concave_convex_shift = cp_x_prev_next - 0.001  # How much to shift the point for concave/convex cross sections
 
 # concave_high
-cp_concave_high = base_cp.copy()
-cp_concave_high[0, 0] = cp_x_prev_next - concave_convex_shift
-cp_concave_high = cp_concave_high * cs_scale_backbone
+cp_concave = base_cp.copy()
+cp_concave[0, 0] = cp_x_prev_next - concave_convex_shift
+cp_concave = cp_concave * cs_scale_backbone
 
 # # concave_low
 # # We want the concave low's curvature to be the opposite of the round_high. To do this, we will reflect the controlpoint across the line connecting the current and next controlpoints. In other words, the x-value of this controlpoint will be the same distance away from the previous/next controlpoint's x values, however, it will be closer to the origin.
@@ -162,11 +172,7 @@ cp_plane = cp_plane * cs_scale_backbone
 ##########################################
 ### Backbones for surface deformations ###
 ##########################################
-SD_LENGTH = 15
-STRAIGHT_PROPORTION = 0.25
-ARC_ANGLE = np.pi / 4
-ELLIPTICAL_MAJOR = 7 / 6
-ELLIPTICAL_MINOR = 1 - (ELLIPTICAL_MAJOR - 1)
+
 
 # SD Flat Backbone
 sd_flat_cp = np.array([np.linspace(0, SD_LENGTH, 3), np.zeros(3), np.zeros(3)]).T
@@ -196,22 +202,45 @@ sd_cp_elliptical *= np.array([ELLIPTICAL_MAJOR, ELLIPTICAL_MINOR])
 ### Surface deformations (meshes) ###
 #####################################
 
-# Sphere
-sd_sphere = trimesh.creation.uv_sphere(radius=cs_scale_surface_deformation, count=[32, 32])
-
-# Ellipsoid
-sd_ellipsoid = sd_sphere.copy()
-sd_ellipsoid.apply_scale([ELLIPTICAL_MAJOR, ELLIPTICAL_MINOR, 1])
 
 # Cylinder
 cp = sd_cp_round
 rotation = 0
-cs_list = [
-    CrossSection(cp * 0.1, 0.0, rotation=rotation),
-    *[CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, 0.9, 5)],
-]
+cs_list = [CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, 0.9, 5)]
 ac = AxialComponent(backbone=sd_flat, cross_sections=cs_list)
-sd_curved_cylinder = ac.mesh
+origin = ac.backbone.r(STRAIGHT_PROPORTION)[0]
+sd_cylinder = (ac.mesh, origin)
+
+# Cylinder - spherical top
+vs, us = ac.surface.start()
+ve, ue = ac.surface.end()
+opposite_points = np.squeeze(ac.surface([vs, (vs + ve) / 2], 0.5))
+sphere_radius = np.linalg.norm(opposite_points[1] - opposite_points[0]) / 2
+join_position = (SD_LENGTH - sphere_radius) / SD_LENGTH
+join_point = ac.backbone.r(join_position)[0]  #
+sphere_top = trimesh.creation.icosphere(subdivisions=3, radius=sphere_radius)
+sphere_top.apply_translation(join_point)  # Align center of sphere to end of cylinder
+cp = sd_cp_round
+rotation = 0
+cs_list = [
+    *[CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, join_position, 5)],
+    *[CrossSection(cp * 0.1, i, rotation=rotation) for i in np.linspace(join_position, 0.9, 5)],
+]
+ac_cylinder_spherical_top = AxialComponent(backbone=sd_flat, cross_sections=cs_list)
+origin = ac_cylinder_spherical_top.backbone.r(STRAIGHT_PROPORTION)[0]
+fused = fuse_meshes(ac_cylinder_spherical_top.mesh, sphere_top, 1, "union")
+sd_cylinder_spherical_top = (fused, origin)
+
+# Sphere
+sphere = trimesh.creation.icosphere(subdivisions=3, radius=sphere_radius)
+origin = sphere.centroid
+sd_sphere = (sphere, origin)
+
+# Ellipsoid
+ellipsoid = sphere.copy()
+ellipsoid.apply_scale([1, ELLIPTICAL_MAJOR, ELLIPTICAL_MINOR])
+origin = ellipsoid.centroid
+sd_ellipsoid = (ellipsoid, origin)
 
 # Elliptical Cylinder
 cp = sd_cp_elliptical
@@ -221,33 +250,33 @@ cs_list = [
     *[CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, 0.9, 5)],
 ]
 ac = AxialComponent(backbone=sd_flat, cross_sections=cs_list)
-sd_curved_cylinder = ac.mesh
+origin = ac.backbone.r(STRAIGHT_PROPORTION)[0]
+sd_elliptical_cylinder = (ac.mesh, origin)
 
 # Cone forward (pointy)
 cp = sd_cp_round
 rotation = 0
 cs_list = [
-    CrossSection(cp * 0.1, 0.0, rotation=rotation),
-    CrossSection(cp, 0.25, rotation=rotation),
-    CrossSection(cp, 0.25, rotation=rotation),
-    CrossSection(cp * 0.2, 1.0, rotation=rotation),
+    CrossSection(cp, 0.0, rotation=rotation),
     CrossSection(cp * 0.2, 1.0, rotation=rotation),
 ]
 ac = AxialComponent(backbone=sd_flat, cross_sections=cs_list)
-sd_cone_forward = ac.mesh
+origin = ac.backbone.r(STRAIGHT_PROPORTION)[0]
+sd_cone = (ac.mesh, origin)
 
-# Cone reverse (widening)
-cp = sd_cp_round
-rotation = 0
-cs_list = [
-    CrossSection(cp * 0.1, 0.0, rotation=rotation),
-    CrossSection(cp * 0.2, 0.25, rotation=rotation),
-    CrossSection(cp * 0.2, 0.25, rotation=rotation),
-    CrossSection(cp, 1.0, rotation=rotation),
-    CrossSection(cp, 1.0, rotation=rotation),
-]
-ac = AxialComponent(backbone=sd_flat, cross_sections=cs_list)
-sd_cone_reverse = ac.mesh
+# # Cone reverse (widening)
+# cp = sd_cp_round
+# rotation = 0
+# cs_list = [
+#     CrossSection(cp * 0.1, 0.0, rotation=rotation),
+#     CrossSection(cp * 0.2, 0.25, rotation=rotation),
+#     CrossSection(cp * 0.2, 0.25, rotation=rotation),
+#     CrossSection(cp, 1.0, rotation=rotation),
+#     CrossSection(cp, 1.0, rotation=rotation),
+# ]
+# ac = AxialComponent(backbone=sd_flat, cross_sections=cs_list)
+# origin = ac.backbone.r(STRAIGHT_PROPORTION)[0]
+# sd_cone_reverse = (ac.mesh, origin)
 
 # Curved Cylinder
 cp = sd_cp_round
@@ -257,7 +286,8 @@ cs_list = [
     *[CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, 0.9, 5)],
 ]
 ac = AxialComponent(backbone=sd_weak_curve, cross_sections=cs_list)
-sd_curved_cylinder = ac.mesh
+origin = ac.backbone.r(STRAIGHT_PROPORTION)[0]
+sd_curved_cylinder = (ac.mesh, origin)
 
 # Curved Elliptical cylinder
 cp = sd_cp_elliptical
@@ -267,85 +297,8 @@ cs_list = [
     *[CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, 0.9, 5)],
 ]
 ac = AxialComponent(backbone=sd_weak_curve, cross_sections=cs_list)
-sd_curved_elliptical_cylinder = ac.mesh
-# def approximate_arc(MAX_ANGLE, arc_length):
-#     """Construct a B-Spline curve that approximates a circular arc."""
-
-#     radius = arc_length / (2 * np.pi) * (2 * np.pi / MAX_ANGLE)
-
-#     # if NUM_CP_PER_SEGMENT != 5:
-#     #     raise NotImplementedError("NUM_CP_PER_SEGMENT must be 5 for this funtion to work.")
-
-#     def make_arc_array(a, b, c):
-
-#         # We can think of the second to last arc controlpoint as lying along a vector from the last controlpoint. The vector's slope can be determined from the tangent line of the circle (which is negated). We then can use a single parameter (d) as a measure of how far along this vector we are travelling. This reduces the number of parameters we need, and also ensures that the tangent of the resulting arc at the end will match that of the circle
-
-#         def tan_vec(MAX_ANGLE):
-#             tangent_vec = np.array(
-#                 [
-#                     -radius * np.sin(MAX_ANGLE),
-#                     radius * np.cos(MAX_ANGLE),
-#                 ]
-#             )
-#             return tangent_vec
-
-#         start_tan_vec = tan_vec(0)
-#         end_tan_vec = -tan_vec(MAX_ANGLE)  # Negate so this points toward start
-
-#         arc_array = np.array(
-#             [
-#                 [radius, 0, 0],
-#                 [
-#                     radius * np.cos(0) + a * start_tan_vec[0],
-#                     radius * np.sin(0) + a * start_tan_vec[1],
-#                     0,
-#                 ],  # Tangent line from start
-#                 [b, c, 0],
-#                 [
-#                     radius * np.cos(MAX_ANGLE) + a * end_tan_vec[0],
-#                     radius * np.sin(MAX_ANGLE) + a * end_tan_vec[1],
-#                     0,
-#                 ],  # Tangent line from end
-#                 [radius * np.cos(MAX_ANGLE), radius * np.sin(MAX_ANGLE), 0],
-#             ]
-#         )
-#         return arc_array
-
-#     def radius_error(vars):
-
-#         # Make the arc array
-#         [a, b, c] = vars
-#         arc_array = make_arc_array(a, b, c)
-
-#         # Make backbone
-#         backbone = Backbone(arc_array, reparameterize=False)
-
-#         # Sample points along the backbone
-#         t = np.linspace(0, 1, 10)
-#         r = backbone.r(t)
-
-#         # distance from origin should be close to radius if points are well_aligned
-#         dist = np.linalg.norm(r, axis=1)
-#         return ((dist - radius) ** 2).sum()
-
-#     fun = radius_error
-#     x0 = [0.1, radius, radius]
-#     bounds = [
-#         [0.0, 100 * radius],
-#         [radius * np.cos(MAX_ANGLE / 2), 100 * radius],  # Convex hull property of B-Splines
-#         [radius * np.sin(MAX_ANGLE / 2), 100 * radius],  # Convex hull property of B-Splines
-#     ]
-#     result = minimize(fun=fun, x0=x0, bounds=bounds)
-#     [a, b, c] = result.x
-
-#     arc_array = make_arc_array(a, b, c)
-
-#     # Shift so that the curve begins at the origin
-#     arc_array[:, 0] -= radius
-#     arc_array[:, [0, 1]] = arc_array[:, [1, 0]]  # Flip x and y-axis so long portion points in +X direction
-#     arc_array[:, 1] = -arc_array[:, 1]  # Negate y axis so curves upward (towards +Y)
-
-#     return arc_array
+origin = ac.backbone.r(STRAIGHT_PROPORTION)[0]
+sd_curved_elliptical_cylinder = (ac.mesh, origin)
 
 # ####################
 # ### Digit Segments
