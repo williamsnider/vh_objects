@@ -281,11 +281,17 @@ for b_name in ["b_flat"]:
                             s.cs_name = [cs_name]
                             s.sd_name = sd_name
                             shapes.append(s)
-                            print(len(shapes))
 
 # Labeling the shapes
 for i, s in enumerate(shapes):
     s.label = set_version + "_" + str(i).zfill(4)
+
+# Attach interface
+for i, s in enumerate(shapes):
+    print(i)
+    s.create_interface()
+    s.fuse_mesh_to_interface()
+    s.mesh.show()
 
 
 ###########################

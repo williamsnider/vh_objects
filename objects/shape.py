@@ -12,7 +12,10 @@ from objects.parameters import (
     POST_LENGTH,
     POST_FAIRING_DISTANCE,
 )
+from objects.backbone import Backbone
 from objects.interface import Interface
+from objects.axial_component import AxialComponent
+from objects.cross_section import CrossSection
 from pathlib import Path
 import pyrender
 import copy
@@ -200,20 +203,63 @@ class Shape:
 
     def fuse_mesh_to_interface(self):
 
-        # Create a post that connects the interface and shape
-        post = trimesh.creation.cylinder(POST_RADIUS, POST_LENGTH + POST_OFFSET, sections=POST_SECTIONS)
+        JOIN_POSITION = 0.05  # Proportion of distance along parent axial component that the post lofts to
 
-        # Subdivide post to improve fairing
-        post = post.subdivide()
+        # Get cp for plane intersecting mesh of parent axial component
+        parent_ac = self.ac_list[0]
+        plane_origin = parent_ac.backbone.r(JOIN_POSITION)[0]
+        plane_normal = parent_ac.backbone.T(JOIN_POSITION)[0]
+        lines = trimesh.intersections.mesh_plane(self.mesh, plane_origin, plane_normal)
+        path = trimesh.load_path(lines)
+        ordered_indices = path.vertex_nodes[:, 0]
+        cs_parent_cp = path.vertices[ordered_indices]
 
-        # Transform post so that it is intersecting both shape and interface
-        R = calc_R_euler_angles([np.pi / 2, 0, 0])
-        goal_position = np.array([0, -(POST_LENGTH + POST_OFFSET / 2) / 2, 0])
-        T = np.eye(4)
-        T[:3, :3] = R
-        T[:3, 3] = goal_position
-        post = post.apply_transform(T)
-        self.post = post
+        # Rotate cs_parent_cp so that it lies on YZ plane
+        TNB = np.array(
+            [
+                parent_ac.backbone.T(JOIN_POSITION)[0],
+                parent_ac.backbone.N(JOIN_POSITION)[0],
+                parent_ac.backbone.B(JOIN_POSITION)[0],
+            ]
+        )
+
+        goal_TNB = np.eye(3)
+        R = np.linalg.inv(TNB)
+        cs_parent_cp_transformed = (cs_parent_cp - plane_origin) @ R
+
+        # Get cp for plane at interface
+        num_cp = cs_parent_cp.shape[0]
+        cs_interface_cp = np.array(
+            [
+                [-POST_LENGTH - POST_OFFSET / 2, POST_RADIUS * np.sin(i), POST_RADIUS * np.cos(i)]
+                for i in np.linspace(0, 2 * np.pi, num_cp, endpoint=False)
+            ]
+        )
+
+        # Form Backbone
+        SHIFT_FACTOR = 0.1
+        interface_origin = np.array([-POST_LENGTH - POST_OFFSET, 0, 0])
+        interface_vec = interface_origin / np.linalg.norm(interface_origin)
+        backbone_cp = np.vstack(
+            [
+                interface_origin,
+                interface_origin + interface_origin * interface_vec * SHIFT_FACTOR,
+                plane_origin - plane_origin * plane_normal * SHIFT_FACTOR,
+                plane_origin,
+            ]
+        )
+        backbone = Backbone(backbone_cp, reparameterize=True)
+
+        # From axial component
+        ac = AxialComponent(
+            backbone,
+            [
+                CrossSection(np.array(cs_interface_cp[:, 1:]), 0.0),
+                CrossSection(np.array(cs_parent_cp_transformed[:, 1:]), 1.0),
+            ],
+        )
+        trimesh.repair.fix_inversion(ac.mesh)  # TODO: This is ugly.
+        self.post = ac.mesh
 
         # Fuse interface, post, and shape
         interface_and_post = fuse_meshes(self.interface.mesh, self.post, fairing_distance=0, operation="union")

@@ -2,6 +2,7 @@ from objects.axial_component import AxialComponent
 from objects.cross_section import CrossSection
 from objects.shape import Shape
 from objects.backbone import Backbone
+from objects.components import backbone_weak_curve
 import numpy as np
 from pathlib import Path
 
@@ -30,7 +31,7 @@ cp = np.array(
         [30, 60, 0],
     ]
 )
-backbone1 = Backbone(cp, reparameterize=False)
+backbone1 = backbone_weak_curve
 
 
 def test_combine_meshes():
