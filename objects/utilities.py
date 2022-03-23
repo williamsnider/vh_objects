@@ -364,6 +364,10 @@ def fuse_meshes(meshA, meshB, fairing_distance, operation):
     mesh1 = meshA.copy()
     mesh2 = meshB.copy()
 
+    # Check that meshes are watertight
+    for mesh in [mesh1, mesh2]:
+        assert mesh.is_watertight, "Input meshes must be watertight."
+
     count = 0
     while count < 5:
 
@@ -379,10 +383,12 @@ def fuse_meshes(meshA, meshB, fairing_distance, operation):
         count += 1
     else:
         print("Mesh boolean failed to form a watertight mesh after {count} loops.".format(count=count))
-
-    neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=fairing_distance)
-    faired_mesh = fair_mesh(union_mesh, neighbors, HARMONIC_POWER)
-    return faired_mesh
+    if fairing_distance > 0:
+        neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=fairing_distance)
+        faired_mesh = fair_mesh(union_mesh, neighbors, HARMONIC_POWER)
+        return faired_mesh
+    else:
+        return union_mesh
     # if union_mesh.is_watertight is False:
     #     print("Mesh will not be faired, as it is not watertight.")
     #     return union_mesh
