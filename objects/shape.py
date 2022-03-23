@@ -1,13 +1,18 @@
 import trimesh
 import numpy as np
-import scipy
 import matplotlib.pyplot as plt
-from compas_cgal.booleans import boolean_union
-import igl
-from objects.utilities import (
-    fuse_meshes
+from objects.utilities import fuse_meshes, calc_R_euler_angles
+from objects.parameters import (
+    HARMONIC_POWER,
+    FAIRING_DISTANCE,
+    INTERFACE_PATH,
+    POST_SECTIONS,
+    POST_OFFSET,
+    POST_RADIUS,
+    POST_LENGTH,
+    POST_FAIRING_DISTANCE,
 )
-from objects.parameters import HARMONIC_POWER, FAIRING_DISTANCE
+from objects.interface import Interface
 from pathlib import Path
 import pyrender
 import copy
@@ -23,7 +28,7 @@ class Shape:
         self.mesh = None
 
         # Fuse axial components meshes
-        self.combine_meshes([ac.mesh for ac in ac_list], operation='union')
+        self.combine_meshes([ac.mesh for ac in ac_list], operation="union")
 
         # # Find oriented bounding box
         # if align_OBB is True:
@@ -188,30 +193,34 @@ class Shape:
         # Fix normals (make sure they're pointing out)
         trimesh.repair.fix_inversion(self.mesh)
 
+    def create_interface(self):
+        """Creates a mesh of the interface."""
+
+        self.interface = Interface(INTERFACE_PATH, self.label)
+
     def fuse_mesh_to_interface(self):
 
-        interface = trimesh.load_mesh("base_interface.stl")
-        self.interface = interface
+        # Create a post that connects the interface and shape
+        post = trimesh.creation.cylinder(POST_RADIUS, POST_LENGTH + POST_OFFSET, sections=POST_SECTIONS)
 
-        # trimesh.Scene([interface, self.mesh, bounds, axis]).show()
-        # fig = plt.figure()
-        # ax = plt.axes(projection="3d")
-        # ax.set_xlabel("x")
-        # ax.set_ylabel("y")
-        # ax.set_zlabel("z")
-        # ax.view_init(elev=-90, azim=90)
+        # Subdivide post to improve fairing
+        post = post.subdivide()
 
-        # x, y, z = self.mesh.vertices.T
-        # ax.plot(x, y, z, "b.")
+        # Transform post so that it is intersecting both shape and interface
+        R = calc_R_euler_angles([np.pi / 2, 0, 0])
+        goal_position = np.array([0, -(POST_LENGTH + POST_OFFSET / 2) / 2, 0])
+        T = np.eye(4)
+        T[:3, :3] = R
+        T[:3, 3] = goal_position
+        post = post.apply_transform(T)
+        self.post = post
 
-        # for x in bounds[:, 0]:
-        #     for y in bounds[:, 1]:
-        #         for z in bounds[:, 2]:
-        #             ax.plot(x, y, z, "g.")
-
-        # x, y, z = self.mesh.vertices[0].T
-        # ax.plot(x, y, z, "r*")
-        # plt.show()
+        # Fuse interface, post, and shape
+        interface_and_post = fuse_meshes(self.interface.mesh, self.post, fairing_distance=0, operation="union")
+        interface_post_and_shape = fuse_meshes(
+            interface_and_post, self.mesh, fairing_distance=POST_FAIRING_DISTANCE, operation="union"
+        )
+        self.mesh = interface_post_and_shape
 
     def construct_scene(self):
 

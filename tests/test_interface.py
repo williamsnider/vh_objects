@@ -1,15 +1,10 @@
 from objects.interface import Interface
-from objects.parameters import CUBE_SIDE_LENGTH
+from objects.parameters import INTERFACE_PATH
 
 
-# def test_make_interface():
-
-#     interface = Interface(label="test")
-
-
-# def test_fuse_interface():
-
-#     interface = Interface(label="test")
+def test_construct_interface():
+    interface = Interface(INTERFACE_PATH, label="Z_456")
+    interface.mesh.show()
 
 
 if __name__ == "__main__":

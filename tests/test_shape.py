@@ -47,7 +47,7 @@ def test_combine_meshes():
     )
     s = Shape([ac1, ac2])
     s.combine_meshes([ac1.mesh, ac2.mesh], operation="union")
-    s.mesh.show(smooth=False)
+    # s.mesh.show(smooth=False)
 
     # Debug
     import trimesh
@@ -73,6 +73,17 @@ def test_align_mesh():
     # )
     s = Shape([ac1], align_OBB=True, fuse_to_interface=True)
     # s.mesh.show()
+
+
+def test_fuse_to_interface():
+    cs0 = CrossSection(base_cp * 20, 0.2)
+    cs1 = CrossSection(base_cp * 10, 0.5)
+    cs2 = CrossSection(base_cp * 20, 0.8)
+    ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1, cs2])
+    s = Shape([ac1], label="fuse_3234", align_OBB=False, fuse_to_interface=False)
+    s.create_interface()
+    s.fuse_mesh_to_interface()
+    s.mesh.show()
 
 
 def test_export_stl():

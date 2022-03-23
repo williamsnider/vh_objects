@@ -1,5 +1,6 @@
 ### Parameters used in generating objects
 import numpy as np
+from pathlib import Path
 
 # Backbone construction
 BACKBONE_LENGTH = 80  # mm length of Backbone
@@ -19,16 +20,25 @@ HARMONIC_POWER = 2  # 2-> G1 curvature fairing, 3-> G2 curvature fairing, etc
 FAIRING_DISTANCE = 1  # How far (mm) from a junction should vertices in a union mesh be faired
 
 # Interface construction
-CUBE_SIDE_LENGTH = 25  # mm
-POST_RADIUS = 5
-POST_HEIGHT = 15
-POST_SECTIONS = 10  # Strangely, 8 causes the interface to be non-watertight
-FINGERTIP_SLOT_SIDE_LENGTH = 5
-PEG_SIDE_LENGTH = 10  # mm
-PEG_CORNER_RADIUS = 2  # mm - Round the edges to fit into waterjet cut slots better
-PEG_CORNER_NUM_STEPS = 3
-PEG_DEPTH = 20  # mm
-PEG_SPHERE_SUBDIVISIONS = 1  # Higher --> more points used to fair peg tip
+INTERFACE_PATH = Path(r"C:\Users\William\Files\OConnor\Code\Projects\objects\base_interface_0010.stl")
+FONT_PATH = Path(r"C:\Windows\Fonts\consolab.ttf")
+INTERFACE_WIDTH = 25.4  # mm
+LABEL_DEPTH = 1  # mm
+POST_LENGTH = 10  # mm  - distance between interface and endpoint of shape
+POST_RADIUS = 7.5  # mm
+POST_OFFSET = 5  # mm - additional length of post so that it is inside both interface and shape (for mesh boolean)
+POST_SECTIONS = 89  # How many sides the post has; certain values cause boolean errors
+POST_FAIRING_DISTANCE = 3  # mm
+# CUBE_SIDE_LENGTH = 25  # mm
+# POST_RADIUS = 5
+# POST_HEIGHT = 15
+# POST_SECTIONS = 10  # Strangely, 8 causes the interface to be non-watertight
+# FINGERTIP_SLOT_SIDE_LENGTH = 5
+# PEG_SIDE_LENGTH = 10  # mm
+# PEG_CORNER_RADIUS = 2  # mm - Round the edges to fit into waterjet cut slots better
+# PEG_CORNER_NUM_STEPS = 3
+# PEG_DEPTH = 20  # mm
+# PEG_SPHERE_SUBDIVISIONS = 1  # Higher --> more points used to fair peg tip
 
 # Component construction
 cs_scale_backbone = BACKBONE_LENGTH / 4  # Controls thickness of cross sections around backbone
