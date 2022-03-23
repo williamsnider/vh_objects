@@ -159,9 +159,9 @@ class Interface:
         """Transforms the interface so that it is away from the shape (with endpoint (0,0,0))."""
 
         new_interface = self.mesh.copy()
-        goal_position = np.array([0, -POST_LENGTH, 0])
+        goal_position = np.array([-POST_LENGTH, 0, 0])
         T = np.eye(4)
-        T[:3, :3] = calc_R_euler_angles([3 * np.pi / 2, 0, 0])
+        T[:3, :3] = calc_R_euler_angles([np.pi / 2, np.pi, np.pi / 2])
         T[:3, 3] = goal_position
         new_interface = new_interface.apply_transform(T)
         self.mesh = new_interface
