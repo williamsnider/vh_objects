@@ -32,7 +32,7 @@ with open(pickle_path, "rb") as f:
 """.format(
     pickle_path=pickle_path
 )
-for i in range(len(shapes)):
+for i in range(1, len(shapes)):
 
     code = "shapes[{}].mesh.show()".format(i)
     comment = "# Above shape is: {label}\n# {description}".format(

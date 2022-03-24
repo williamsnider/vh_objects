@@ -9,11 +9,6 @@ with open(pickle_path, "rb") as f:
 
 # Shapes Rendered
 
-shapes[0].mesh_with_interface.show()
-
-# Above shape is: Z_0000
-# b_flat-cs_round
-
 shapes[1].mesh_with_interface.show()
 
 # Above shape is: Z_0001
