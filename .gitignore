@@ -5,5 +5,4 @@ __pycache__
 sample_shapes
 *.stl
 *.png
-*.ipynb
 stimulus_set
