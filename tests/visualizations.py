@@ -393,6 +393,44 @@ def plot_axial_component_roundover():
     s.mesh.show()
 
 
+def show_fused_interface():
+    # Steps to constructions shapes, rendering png and forming stl
+    from objects.components import (
+        backbone_flat,
+        cp_round,
+    )
+    from objects.cross_section import CrossSection
+    from objects.axial_component import AxialComponent
+    from objects.shape import Shape
+    import numpy as np
+
+    # Dictionary linking names and arrays (helps with constructing description of each shape)
+    d = {
+        "b_flat": (backbone_flat),
+        "cs_round": (cp_round),
+    }
+    ##########################
+    ### Shape Construction ###
+    ##########################
+
+    # Varying backbones
+    for b_name in ["b_flat"]:
+        cs_name = "cs_round"
+        backbone = d[b_name]
+        cp = d[cs_name]
+        rotation = 0
+        cs_list = [CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, 0.9, 5)]
+        ac = AxialComponent(backbone=backbone, cross_sections=cs_list)
+        s = Shape([ac])
+        s.description = "{0}-{1}".format(b_name, cs_name)
+        s.cs_name = [cs_name]
+        s.sd_name = None
+
+        s.create_interface()
+        s.fuse_mesh_to_interface()
+        s.mesh.show()
+
+
 if __name__ == "__main__":
     # plot_tangent_vectors()
     # plot_tangent_vectors_digit_segment()
@@ -401,4 +439,5 @@ if __name__ == "__main__":
     # plot_align_axial_components()
     # plot_euler_angles()
     # plot_meshes_as_shape()
-    plot_axial_component_roundover()
+    # plot_axial_component_roundover()
+    show_fused_interface()

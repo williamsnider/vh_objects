@@ -103,7 +103,7 @@ for b_name in ["b_flat", "b_weak_curve", "b_strong_curve", "b_sharp_bend", "b_ho
     backbone = d[b_name]
     cp = d[cs_name]
     rotation = 0
-    cs_list = [CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, 0.9, 10)]
+    cs_list = [CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, 0.9, 5)]
     ac = AxialComponent(backbone=backbone, cross_sections=cs_list)
     s = Shape([ac])
     s.description = "{0}-{1}".format(b_name, cs_name)
