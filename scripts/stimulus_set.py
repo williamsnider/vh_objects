@@ -96,7 +96,9 @@ d = {
 ### Shape Construction ###
 ##########################
 shapes = []
+transitions_dict = {}
 
+start = len(shapes)
 # Varying backbones
 for b_name in ["b_flat", "b_weak_curve", "b_strong_curve", "b_sharp_bend", "b_hook_f", "b_hook_r"]:
     cs_name = "cs_round"
@@ -110,9 +112,12 @@ for b_name in ["b_flat", "b_weak_curve", "b_strong_curve", "b_sharp_bend", "b_ho
     s.cs_name = [cs_name]
     s.sd_name = None
     shapes.append(s)
+stop = len(shapes)
+transitions_dict["varying_backbones"] = [start, stop]
 
 # Varying cross sections
 # #TODO: rotations?
+start = len(shapes)
 for b_name in ["b_flat", "b_weak_curve"]:
     for cs_name in ["cs_round", "cs_concave", "cs_plane", "cs_convex", "cs_elliptical"]:
 
@@ -129,9 +134,12 @@ for b_name in ["b_flat", "b_weak_curve"]:
         s.cs_name = [cs_name]
         s.sd_name = None
         shapes.append(s)
+stop = len(shapes)
+transitions_dict["varying_cross_sections"] = [start, stop]
 
 # Blending cross sections
 # #TODO: rotations?
+start = len(shapes)
 for cs_name_a in ["cs_round", "cs_elliptical"]:
     for cs_name_b in ["cs_round", "cs_concave", "cs_plane", "cs_convex", "cs_elliptical"]:
 
@@ -168,8 +176,11 @@ for cs_name_a in ["cs_round", "cs_elliptical"]:
         s.cs_name = [cs_name_b, cs_name_a]
         s.sd_name = None
         shapes.append(s)
+stop = len(shapes)
+transitions_dict["blending_cross_sections"] = [start, stop]
 
 # Varying cross section relative sizes
+start = len(shapes)
 sizes = np.array(
     [
         [0.5, 1, 1.5],  # linear increase (cone)
@@ -198,8 +209,11 @@ for size in sizes:
         s.cs_name = [cs_name]
         s.sd_name = None
         shapes.append(s)
+stop = len(shapes)
+transitions_dict["varying_size"] = [start, stop]
 
 # Varying surface deformations
+start = len(shapes)
 for b_name in ["b_flat"]:
     backbone = d[b_name]
     for cs_name in ["cs_round"]:
@@ -281,6 +295,8 @@ for b_name in ["b_flat"]:
                             s.cs_name = [cs_name]
                             s.sd_name = sd_name
                             shapes.append(s)
+stop = len(shapes)
+transitions_dict["surface_deformations"] = [start, stop]
 
 # Labeling the shapes
 for i, s in enumerate(shapes):
@@ -307,11 +323,11 @@ now = datetime.now()
 timestamp = now.strftime("%d_%m_%y__%H_%M_%S")
 pickle_name = Path(base_dir, "stimulus_set_ " + timestamp + ".pickle")
 with open(pickle_name, "wb") as f:
-    pickle.dump(shapes, f)
+    pickle.dump((shapes, transitions_dict), f)
 
 # Load from pickled file
 with open(pickle_name, "rb") as f:
-    shapes = pickle.load(f)
+    (shapes, transitions_dict) = pickle.load(f)
 
 
 # ###################################
