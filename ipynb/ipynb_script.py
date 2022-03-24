@@ -12,12 +12,12 @@ from pathlib import Path
 
 
 pickle_path = Path(
-    r"C:\Users\William\Files\OConnor\Code\Projects\objects\stimulus_set\Z\stimulus_set_ 24_03_22__11_30_11.pickle"
+    r"C:\Users\William\Files\OConnor\Code\Projects\objects\stimulus_set\Z\stimulus_set_ 24_03_22__12_08_50.pickle"
 )
 with open(pickle_path, "rb") as f:
     shapes = pickle.load(f)
 
-filename = "stimulus_set_output.py"
+filename = "stimulus_set_output_0.py"
 txt = """
 import trimesh
 import pickle
