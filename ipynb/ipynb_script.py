@@ -27,7 +27,7 @@ pickle_path = Path(r"{pickle_path}")
 with open(pickle_path, "rb") as f:
     shapes = pickle.load(f)
 
-# Shapes Rendered #
+# Shapes Rendered
 
 """.format(
     pickle_path=pickle_path
