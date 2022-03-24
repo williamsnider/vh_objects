@@ -428,7 +428,7 @@ def show_fused_interface():
 
         s.create_interface()
         s.fuse_mesh_to_interface()
-        s.mesh.show()
+        s.mesh_with_interface.show()
 
 
 if __name__ == "__main__":

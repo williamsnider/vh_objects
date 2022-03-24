@@ -212,6 +212,7 @@ class Shape:
         lines = trimesh.intersections.mesh_plane(self.mesh, plane_origin, plane_normal)
         path = trimesh.load_path(lines)
         ordered_indices = path.vertex_nodes[:, 0]
+        ordered_indices = ordered_indices[::-1]
         cs_parent_cp = path.vertices[ordered_indices]
 
         # Rotate cs_parent_cp so that it lies on YZ plane
@@ -249,12 +250,42 @@ class Shape:
         )
         backbone = Backbone(backbone_cp, reparameterize=True)
 
+        # Determine whether winding of controlpoints is consistent
+        # Form Cross Sections - testing whether winding is consistent
+        cs_interface = CrossSection(np.array(cs_interface_cp[:, 1:]), 0.0)
+        cs_parent = CrossSection(np.array(cs_parent_cp_transformed[:, 1:]), 1.0)
+        dist_0 = np.linalg.norm(cs_interface.controlpoints - cs_parent.controlpoints[::1], axis=1).sum()
+        dist_1 = np.linalg.norm(cs_interface.controlpoints - cs_parent.controlpoints[::-1], axis=1).sum()
+        if dist_0 < dist_1:
+            pass
+        elif dist_1 < dist_0:
+            cs_parent = CrossSection(np.array(cs_parent_cp_transformed[::-1, 1:]), 1.0)  # Reverse winding
+
+        # # Plot alignment of controlpoints
+        # import matplotlib.pyplot as plt
+
+        # fig = plt.figure()
+        # ax = plt.axes(projection="3d")
+        # ax.set_xlabel("x")
+        # ax.set_ylabel("y")
+        # ax.set_zlabel("z")
+        # ax.view_init(elev=-90, azim=90)
+
+        # for i in range(num_cp):
+        #     # p1 = cs_interface_cp[i]
+        #     # p2 = cs_parent_cp[i]
+        #     p1 = cs_interface.controlpoints[i]
+        #     p2 = cs_parent.controlpoints[i]
+        #     x, y, z = zip(p1, p2)
+        #     ax.plot(x, y, z, "-b")
+        # plt.show()
+
         # From axial component
         ac = AxialComponent(
             backbone,
             [
-                CrossSection(np.array(cs_interface_cp[:, 1:]), 0.0),
-                CrossSection(np.array(cs_parent_cp_transformed[:, 1:]), 1.0),
+                cs_interface,
+                cs_parent,
             ],
         )
         trimesh.repair.fix_inversion(ac.mesh)  # TODO: This is ugly.
