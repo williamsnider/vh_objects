@@ -223,7 +223,6 @@ class Shape:
             ]
         )
 
-        goal_TNB = np.eye(3)
         R = np.linalg.inv(TNB)
         cs_parent_cp_transformed = (cs_parent_cp - plane_origin) @ R
 
@@ -266,7 +265,7 @@ class Shape:
         interface_post_and_shape = fuse_meshes(
             interface_and_post, self.mesh, fairing_distance=POST_FAIRING_DISTANCE, operation="union"
         )
-        self.mesh = interface_post_and_shape
+        self.mesh_with_interface = interface_post_and_shape
 
     def construct_scene(self):
 
