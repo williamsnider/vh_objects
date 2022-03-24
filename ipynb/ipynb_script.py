@@ -38,7 +38,7 @@ for i in range(len(shapes)):
     comment = "# Above shape is: {label}\n# {description}".format(
         label=shapes[i].label, description=shapes[i].description
     )
-    code = "shapes[{}].mesh.show()".format(i)
+    code = "shapes[{}].mesh_with_interface.show()".format(i)
     txt += code + "\n\n" + comment + "\n\n"
 
 with open(filename, "w") as f:
