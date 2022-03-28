@@ -100,7 +100,7 @@ transitions_dict = {}
 
 start = len(shapes)
 # Varying backbones
-for b_name in ["b_flat", "b_weak_curve", "b_strong_curve", "b_sharp_bend", "b_hook_f", "b_hook_r"]:
+for b_name in ["b_flat", "b_weak_curve", "b_strong_curve", "b_sharp_bend", "b_hook_f", "b_hook_r", "b_s"]:
     cs_name = "cs_round"
     backbone = d[b_name]
     cp = d[cs_name]
