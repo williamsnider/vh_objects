@@ -19,20 +19,138 @@ from objects.parameters import (
 from scipy.optimize import minimize
 from objects.utilities import sliding_window_mean, approximate_arc, fuse_meshes
 
+components = {}
+
+
+##################
+### Parameters ###
+##################
+MAX_BACKBONE_CURVATURE = np.pi
+BACKBONE_BASE_RADIUS = 20  # mm
+BACKBONE_STEP_RADIUS = 5  # mm
+NUM_BACKBONE_STEPS = 5
+NUM_CROSS_SECTION_CP = 8
+NUM_CROSS_SECTION_VARIATIONS = 7  # Concave --> convex :: 0,1,2,3...
+CP_PLANE_INDEX_SHIFT = 2  # Shift index of which cross section variation is planar so that it is index 0
+
+
+def calc_scale_for_thickness(radius, base_cp):
+    """Calculates the optimal scale factor that results in a B-spline surface with the requested radius."""
+
+    def radius_error(scale_factor):
+
+        # Create axial Component
+        backbone = Backbone(approximate_arc(0, BACKBONE_LENGTH), reparameterize=True)
+        cross_sections = [CrossSection(base_cp * scale_factor, i) for i in np.linspace(0.1, 0.9, 5)]
+        ac = AxialComponent(backbone, cross_sections)
+
+        # Sample points on axial component
+        (us, vs) = ac.surface.start()
+        (ue, ve) = ac.surface.end()
+        u = np.linspace(us, ue, 100)  # Sample around ac
+        v = np.linspace(0.3, 0.7, 101)  # Sample middle region of ac
+        surface_points = ac.surface(u, v)
+
+        # Calculate distance to center axis
+        surface_points_to_center = surface_points - surface_points.mean(axis=0)
+        dist = np.linalg.norm(surface_points_to_center, axis=2)
+        error = ((radius - dist) ** 2).sum()
+        return error
+
+    fun = radius_error
+    x0 = [radius]
+    bounds = [
+        [0.0, 10 * radius],
+    ]
+    result = minimize(fun=fun, x0=x0, bounds=bounds)
+    return result.x
+
+
+######################
+### Cross Sections ###
+######################
+
+# Define base_cp that forms a round cross section
+c = np.cos
+s = np.sin
+argument = np.linspace(0, 2 * np.pi, NUM_CROSS_SECTION_CP, endpoint=False).reshape(-1, 1)
+base_cp = np.hstack([c(argument), s(argument)])
+
+# Calculate the scale factor that gives the desired b-spline surface thickness (since controlpoints are not necessarily on the surface)
+radii = (np.arange(NUM_BACKBONE_STEPS) - (NUM_BACKBONE_STEPS - 1) // 2) * BACKBONE_STEP_RADIUS + BACKBONE_BASE_RADIUS
+for radius in radii:
+    cp_scale_name = "cp_scale_for_radius_{}".format(radius)
+    components[cp_scale_name] = calc_scale_for_thickness(radius, base_cp)
+
+
+# Define plane_cp that forms a cross section with a planar portion; used to determine spacing for cross sections
+# Use these spacings to generate range of cross section concavities/convexities
+# cp_variation_0 = planar
+# cp_variation_2 = normal round (cylinder)
+plane_cp = base_cp.copy()
+vec_between_neighbors = plane_cp[1] - plane_cp[-1]
+plane_cp[0] = plane_cp[-1] + 0.5 * vec_between_neighbors  # Move first cp to midpoint between neighboring cp's
+vec_between_plane_and_base = (base_cp[0] - plane_cp[0]) / 2  # Divide by two so that spacing is half this distance
+steps = np.arange(NUM_CROSS_SECTION_VARIATIONS) - CP_PLANE_INDEX_SHIFT
+for step in steps:
+    cp = base_cp.copy()
+    cp[0] = plane_cp[0] + step * vec_between_plane_and_base
+    cp_name = "cp_concave_convex_{}".format(step)
+    components[cp_name] = cp
+
+
 #################
 ### Backbones ###
 #################
 
-### Flat
-NUM_CP = 3
-cp_flat = np.array(
-    [
-        np.linspace(0, BACKBONE_LENGTH, NUM_CP),
-        np.zeros(NUM_CP),
-        np.zeros(NUM_CP),
-    ]
-).T
-backbone_flat = Backbone(cp_flat, reparameterize=True, name="Flat")
+# Backbones with different curvatures
+for max_angle in np.linspace(0, MAX_BACKBONE_CURVATURE, 5):
+    cp = approximate_arc(max_angle, BACKBONE_LENGTH)
+    b_name = "b_curvature_" + str(np.round(max_angle, 2)).replace(".", "p")
+    components[b_name] = Backbone(cp, reparameterize=True, name=b_name)
+
+
+# For clarity, define variables used in the following transformations
+cp_x = base_cp[0, 0]  # x coordinate of point we will manipulate
+cp_x_prev_next = base_cp[1, 0]  # x coordinate of points on either side of the point we will manipulate
+concave_convex_shift = cp_x_prev_next - 0.001  # How much to shift the point for concave/convex cross sections
+
+# concave_high
+cp_concave = base_cp.copy()
+cp_concave[0, 0] = cp_x_prev_next - concave_convex_shift
+cp_concave = cp_concave * cs_scale_backbone
+
+# # concave_low
+# # We want the concave low's curvature to be the opposite of the round_high. To do this, we will reflect the controlpoint across the line connecting the current and next controlpoints. In other words, the x-value of this controlpoint will be the same distance away from the previous/next controlpoint's x values, however, it will be closer to the origin.
+# cp_concave_low = base_cp.copy()
+# cp_x_flipped = cp_x_prev_next - (cp_x - cp_x_prev_next)  # shift to left of the line
+# cp_concave_low[0, 0] = cp_x_flipped
+# cp_concave_low = cp_concave_low * cs_scale_backbone
+
+# elliptical
+cp_elliptical = base_cp.copy()
+cp_elliptical[:, 0] *= 2 / 3
+cp_elliptical[:, 1] *= 4 / 3
+cp_elliptical *= cs_scale_backbone
+
+# # round_low
+# cp_round_low = base_cp.copy()
+# cp_round_low = cp_round_low * BACKBONE_LENGTH / 2 * 5 / 8 / 2
+
+# round_high
+cp_round = base_cp.copy()
+cp_round = cp_round * cs_scale_backbone
+
+# convex - inverse of concave_high
+cp_convex = base_cp.copy()
+cp_convex[0, 0] = cp_x_prev_next + concave_convex_shift
+cp_convex *= cs_scale_backbone
+
+# plane
+cp_plane = base_cp.copy()
+cp_plane[[-1, 0, 1], 0] = 0.001  # controlpoint cannot be at (0,0) for cross sections
+cp_plane = cp_plane * cs_scale_backbone
+
 
 ### Weak curve
 NUM_CP = 3

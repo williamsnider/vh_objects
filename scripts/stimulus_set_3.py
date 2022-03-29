@@ -41,6 +41,36 @@ import copy
 set_version = "Z"  # Typically a single letter
 base_dir = Path(r"C:\Users\William\Files\OConnor\Code\Projects\objects\stimulus_set", set_version)
 
+# # Backbones used
+# backbone_list = [
+#     backbone_flat,
+#     backbone_weak_curve,
+#     backbone_strong_curve,
+#     backbone_sharp_bend,
+#     backbone_hook_f,
+#     backbone_hook_r,
+#     backbone_s,
+# ]
+
+# # Controlpoints used for cross sections
+# cp_list = [
+#     cp_round,
+#     cp_concave,
+#     cp_plane,
+#     cp_convex,
+#     cp_elliptical,
+# ]
+
+# # Surface deformations used
+# sd_list = [
+#     sd_cylinder,
+#     sd_cylinder_spherical_top,
+#     sd_curved_cylinder,
+#     sd_sphere,
+#     sd_ellipsoid,
+#     sd_cone,
+# ]
+
 # Dictionary linking names and arrays (helps with constructing description of each shape)
 d = {
     "b_flat": (backbone_flat),
@@ -62,22 +92,11 @@ d = {
     "sd_ellipsoid": (sd_ellipsoid),
     "sd_cone": (sd_cone),
 }
-#################
-### Backbones ###
-################s
+##########################
+### Shape Construction ###
+##########################
 shapes = []
 transitions_dict = {}
-
-# Varying backbone thickness
-NUM_CP = 3
-cp_flat = np.array(
-    [
-        np.linspace(0, BACKBONE_LENGTH, NUM_CP),
-        np.zeros(NUM_CP),
-        np.zeros(NUM_CP),
-    ]
-).T
-backbone_flat = Backbone(cp_flat, reparameterize=True, name="Flat")
 
 start = len(shapes)
 # Varying backbones

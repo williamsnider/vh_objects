@@ -8,6 +8,7 @@ import networkx as nx
 import numpy as np
 from numpy.linalg import norm
 from scipy.optimize import minimize
+from sympy import Q
 from objects.parameters import ORDER, HARMONIC_POWER
 from splipy import BSplineBasis, Curve
 import igl
@@ -32,6 +33,18 @@ def open_uniform_knot_vector(num_cps, order):
 
 def approximate_arc(MAX_ANGLE, arc_length):
     """Construct a B-Spline curve that approximates a circular arc."""
+
+    # Handle MAX_ANGLE = 0  (straight line)
+    if MAX_ANGLE == 0:
+        NUM_CP = 5
+        cp_array = np.array(
+            [
+                np.linspace(0, arc_length, NUM_CP),
+                np.zeros(NUM_CP),
+                np.zeros(NUM_CP),
+            ]
+        ).T
+        return cp_array
 
     radius = arc_length / (2 * np.pi) * (2 * np.pi / MAX_ANGLE)
 
