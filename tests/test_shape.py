@@ -84,7 +84,7 @@ def test_fuse_to_interface():
     s = Shape([ac1], label="fuse_3234", align_OBB=False, fuse_to_interface=False)
     s.create_interface()
     s.fuse_mesh_to_interface()
-    s.mesh.show()
+    # s.mesh.show()
 
 
 def test_export_stl():
@@ -132,6 +132,14 @@ def test_save_mesh_as_png():
     ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
     s = Shape([ac1], align_OBB=False, fuse_to_interface=False)
     s.save_mesh_as_png(save_dir)
+
+
+def test_calc_curvature():
+    cs0 = CrossSection(base_cp * 15, 0.3)
+    cs1 = CrossSection(base_cp * 15, 0.7)
+    ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
+    s = Shape([ac1], align_OBB=False, fuse_to_interface=False)
+    s.calc_curvature()
 
 
 if __name__ == "__main__":

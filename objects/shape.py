@@ -1,7 +1,8 @@
+from sympy import Q
 import trimesh
 import numpy as np
 import matplotlib.pyplot as plt
-from objects.utilities import fuse_meshes, calc_R_euler_angles
+from objects.utilities import fuse_meshes, calc_R_euler_angles, calc_mesh_principal_curvatures
 from objects.parameters import (
     HARMONIC_POWER,
     FAIRING_DISTANCE,
@@ -297,6 +298,35 @@ class Shape:
             interface_and_post, self.mesh, fairing_distance=POST_FAIRING_DISTANCE, operation="union"
         )
         self.mesh_with_interface = interface_post_and_shape
+
+    def calc_curvature(self):
+        """Calculates the principal curvatures for each face of the mesh."""
+        k1, k2 = calc_mesh_principal_curvatures(self.mesh)
+
+        k1_faces = k1[self.mesh.faces].mean(axis=1)
+        k2_faces = k2[self.mesh.faces].mean(axis=1)
+
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import matplotlib.colors
+
+        cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["blue", "red"])
+        face_min = np.min([k1_faces.min(), k2_faces.min()])
+        face_max = np.max([k1_faces.max(), k2_faces.max()])
+        c1 = (k1_faces - k1_faces.min()) / (k1_faces.max() - k1_faces.min())
+        c2 = (k2_faces - k2_faces.min()) / (k2_faces.max() - k2_faces.min())
+        cmap1 = cmap(c1)
+        cmap2 = cmap(c2)
+
+        mesh = self.mesh.copy()
+        mesh.visual.face_colors = cmap2
+
+        mesh.show()
+        # # plt.scatter(x, y, c=c, cmap=cmap)
+        # plt.colorbar()
+        # plt.show()
+        # self.k1 = k1
+        # self.k2 = k2
 
     def construct_scene(self):
 

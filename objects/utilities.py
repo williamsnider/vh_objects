@@ -518,6 +518,23 @@ def transform_sd_mesh(sd_mesh, origin, ac, pos, theta_backbone, theta_linear_seg
     return sd_mesh
 
 
+def calc_mesh_principal_curvatures(mesh):
+    """Calculates the principal curvatures (k1, k2) of a triangular mesh."""
+
+    # TODO: COMPAS implementation probably faster https://compas.dev/compas/latest/api/generated/compas_rhino.geometry.trimesh.trimesh_principal_curvature.html
+    RADIUS = 1
+    K = trimesh.curvature.discrete_gaussian_curvature_measure(mesh, mesh.vertices, RADIUS)
+    H = trimesh.curvature.discrete_mean_curvature_measure(mesh, mesh.vertices, RADIUS)
+
+    # Handle nan's by replacing with 0 (k1 and k2 then both equal guassian curvature H)
+    sqrt = np.sqrt(H**2 - K)
+    sqrt[np.isnan(sqrt)] = 0
+
+    k1 = H + sqrt
+    k2 = H - sqrt
+    return k1, k2
+
+
 ##########
 # Misc Functions
 def flatten(groups):
