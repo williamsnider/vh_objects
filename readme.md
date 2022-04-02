@@ -4,6 +4,7 @@ Stimuli for visuo-haptic experiments.
 
 The main idea is to use a small number of parameters to build a diverse range of smooth, watertight triangular meshes to be used in vision and haptic neuroscience studies. By using a small number of parameters, this construction method is compatible with a genetic algorithm approach to explore shape space.
 
+![Sample shape with interface](readme/sample_object_with_interface.PNG)
 
 ## Installation
 
@@ -20,7 +21,6 @@ pip install -e .
 # Install other packages from conda (compas easily installable via conda)
 conda install -c conda-forge matplotlib trimesh rtree compas compas_cgal igl shapely opencv ipython ipykernel ipympl black pytest --yes
 ```
-![Sample shape with interface](readme/sample_object_with_interface.PNG)
 ## Usage
 
 ```python
