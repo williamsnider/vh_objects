@@ -4,3 +4,4 @@ __pycache__
 .vscode*
 sample_shapes
 stimulus_set
+*.ipynb
