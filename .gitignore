@@ -3,6 +3,5 @@
 __pycache__
 .vscode*
 sample_shapes
-*.stl
 *.png
 stimulus_set

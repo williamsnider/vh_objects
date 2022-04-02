@@ -2,7 +2,6 @@ from objects.axial_component import AxialComponent
 from objects.cross_section import CrossSection
 from objects.shape import Shape
 from objects.backbone import Backbone
-from objects.components import backbone_weak_curve
 import numpy as np
 from pathlib import Path
 
@@ -31,7 +30,7 @@ cp = np.array(
         [30, 60, 0],
     ]
 )
-backbone1 = backbone_weak_curve
+backbone1 = Backbone(cp, reparameterize=True)
 
 
 def test_combine_meshes():
@@ -84,7 +83,7 @@ def test_fuse_to_interface():
     s = Shape([ac1], label="fuse_3234", align_OBB=False, fuse_to_interface=False)
     s.create_interface()
     s.fuse_mesh_to_interface()
-    # s.mesh.show()
+    s.mesh_with_interface.show()
 
 
 def test_export_stl():
