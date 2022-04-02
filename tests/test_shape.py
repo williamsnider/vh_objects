@@ -14,7 +14,17 @@ base_cp = np.array(
         [c(2 / 6 * 2 * np.pi), s(2 / 6 * 2 * np.pi)],
         [c(3 / 6 * 2 * np.pi), s(3 / 6 * 2 * np.pi)],
         [c(4 / 6 * 2 * np.pi), s(4 / 6 * 2 * np.pi)],
-        [0.1, 0.1],
+        [0.5, 0.5],
+    ]
+)
+round_cp = np.array(
+    [
+        [c(0 / 6 * 2 * np.pi), s(0 / 6 * 2 * np.pi)],
+        [c(1 / 6 * 2 * np.pi), s(1 / 6 * 2 * np.pi)],
+        [c(2 / 6 * 2 * np.pi), s(2 / 6 * 2 * np.pi)],
+        [c(3 / 6 * 2 * np.pi), s(3 / 6 * 2 * np.pi)],
+        [c(4 / 6 * 2 * np.pi), s(4 / 6 * 2 * np.pi)],
+        [c(5 / 6 * 2 * np.pi), s(5 / 6 * 2 * np.pi)],
     ]
 )
 
@@ -22,12 +32,12 @@ base_cp = np.array(
 cp = np.array(
     [
         [0, 0, 0],
-        [0, 10, 0],
-        [0, 20, 0],
-        [0, 30, 0],
-        [10, 40, 0],
-        [20, 50, 0],
-        [30, 60, 0],
+        [10, 0, 0],
+        [20, 0, 0],
+        [30, 0, 0],
+        [40, 0, 0],
+        [50, 0, 0],
+        [60, 0, 0],
     ]
 )
 backbone1 = Backbone(cp, reparameterize=True)
@@ -76,9 +86,9 @@ def test_align_mesh():
 
 
 def test_fuse_to_interface():
-    cs0 = CrossSection(base_cp * 20, 0.2)
+    cs0 = CrossSection(round_cp * 20, 0.2)
     cs1 = CrossSection(base_cp * 10, 0.5)
-    cs2 = CrossSection(base_cp * 20, 0.8)
+    cs2 = CrossSection(base_cp * 20, 0.9)
     ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1, cs2])
     s = Shape([ac1], label="fuse_3234", align_OBB=False, fuse_to_interface=False)
     s.create_interface()
@@ -138,7 +148,7 @@ def test_calc_curvature():
     cs1 = CrossSection(base_cp * 15, 0.7)
     ac1 = AxialComponent(backbone1, cross_sections=[cs0, cs1])
     s = Shape([ac1], align_OBB=False, fuse_to_interface=False)
-    s.calc_curvature()
+    # s.calc_curvature()
 
 
 if __name__ == "__main__":

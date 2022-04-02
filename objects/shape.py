@@ -292,6 +292,7 @@ class Shape:
         trimesh.repair.fix_inversion(ac.mesh)  # TODO: This is ugly.
         self.post = ac.mesh
 
+        scene = trimesh.Scene([self.post, self.mesh, self.interface.mesh])
         # Fuse interface, post, and shape
         interface_and_post = fuse_meshes(self.interface.mesh, self.post, fairing_distance=0, operation="union")
         interface_post_and_shape = fuse_meshes(
