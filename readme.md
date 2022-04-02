@@ -15,7 +15,7 @@ cd objects
 
 # Install objects
 conda create --name objects_venv python=3.7
-conda activate objects_venv_test
+conda activate objects_venv
 pip install -e .
 
 # Install other packages from conda (compas easily installable via conda)
