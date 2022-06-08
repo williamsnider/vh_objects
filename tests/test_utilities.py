@@ -3,7 +3,6 @@ from objects.utilities import fuse_meshes, transform_sd_mesh
 from objects.axial_component import AxialComponent
 from objects.shape import Shape
 from objects.cross_section import CrossSection
-from objects.components import backbone_flat, backbone_weak_curve, cp_round, sd_sphere, sd_cylinder, sd_curved_cylinder
 import copy
 
 
@@ -31,39 +30,39 @@ import copy
 #     s.mesh.show()
 
 
-def test_transform_sd_mesh():
-    """Test that the surface deformation mesh is aligned properly."""
+# def test_transform_sd_mesh():
+#     """Test that the surface deformation mesh is aligned properly."""
 
-    # Varying surface deformations
+#     # Varying surface deformations
 
-    for backbone in [backbone_weak_curve]:
-        for cp in [cp_round]:
+#     for backbone in [backbone_weak_curve]:
+#         for cp in [cp_round]:
 
-            # Generate base shape
-            rotation = 0
-            cs_list = [CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, 0.9, 9)]
-            ac = AxialComponent(backbone=backbone, cross_sections=cs_list)
-            base_shape = Shape([ac])
+#             # Generate base shape
+#             rotation = 0
+#             cs_list = [CrossSection(cp, i, rotation=rotation) for i in np.linspace(0.1, 0.9, 9)]
+#             ac = AxialComponent(backbone=backbone, cross_sections=cs_list)
+#             base_shape = Shape([ac])
 
-            # Apply surface deformations
-            for sd in [sd_curved_cylinder]:
-                sd_mesh, origin = sd
-                for theta_backbone in [3 * np.pi / 2]:
+#             # Apply surface deformations
+#             for sd in [sd_curved_cylinder]:
+#                 sd_mesh, origin = sd
+#                 for theta_backbone in [3 * np.pi / 2]:
 
-                    s = copy.deepcopy(base_shape)
-                    for theta_linear_segment in [0, np.pi / 2, np.pi, 3 * np.pi / 2]:
+#                     s = copy.deepcopy(base_shape)
+#                     for theta_linear_segment in [0, np.pi / 2, np.pi, 3 * np.pi / 2]:
 
-                        for operation in ["union"]:
+#                         for operation in ["union"]:
 
-                            for pos_list in [[0.33]]:
-                                for pos in pos_list:
+#                             for pos_list in [[0.33]]:
+#                                 for pos in pos_list:
 
-                                    sd_mesh_transformed = transform_sd_mesh(
-                                        sd_mesh, origin, ac, pos, theta_backbone, theta_linear_segment
-                                    )
-                                    # sd_mesh_rotations = [transform_sd_mesh(sd_mesh, origin, ac, pos, theta_backbone, theta_linear_segment) for theta_linear_segment in np.linspace(0, 2*np.pi, 4, endpoint=False)]
-                                    s.combine_meshes([s.mesh, sd_mesh_transformed], operation=operation)
-                    s.mesh.show()
+#                                     sd_mesh_transformed = transform_sd_mesh(
+#                                         sd_mesh, origin, ac, pos, theta_backbone, theta_linear_segment
+#                                     )
+#                                     # sd_mesh_rotations = [transform_sd_mesh(sd_mesh, origin, ac, pos, theta_backbone, theta_linear_segment) for theta_linear_segment in np.linspace(0, 2*np.pi, 4, endpoint=False)]
+#                                     s.combine_meshes([s.mesh, sd_mesh_transformed], operation=operation)
+#                     s.mesh.show()
 
 
 if __name__ == "__main__":

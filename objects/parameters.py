@@ -20,8 +20,8 @@ HARMONIC_POWER = 2  # 2-> G1 curvature fairing, 3-> G2 curvature fairing, etc
 FAIRING_DISTANCE = 1  # How far (mm) from a junction should vertices in a union mesh be faired
 
 # Interface construction
-INTERFACE_PATH = Path(r"C:\Users\William\Files\OConnor\Code\Projects\objects\base_interface_0010.stl")
-FONT_PATH = Path(r"C:\Windows\Fonts\consolab.ttf")
+INTERFACE_PATH = Path("./assets/base_interface.stl")
+FONT_PATH = Path("./assets/consolab.ttf")
 INTERFACE_WIDTH = 25.4  # mm
 LABEL_DEPTH = 1  # mm
 POST_LENGTH = 10  # mm  - distance between interface and endpoint of shape
