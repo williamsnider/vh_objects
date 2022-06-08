@@ -430,7 +430,32 @@ def show_fused_interface():
         s.fuse_mesh_to_interface()
         s.mesh_with_interface.show()
 
+# def plot_curvature_colors()
+#     import matplotlib.colors
 
+#     cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["blue", "red"])
+
+#     def clip_colors(k_faces, percentile):
+
+#         k_min = np.percentile(k_faces, percentile)
+#         k_max = np.percentile(k_faces, 100-percentile)
+#         c = (k_faces - k_min) / (k_max -k_min)
+#         c[c<0] = 0
+#         c[c>1] = 1
+#         return c
+
+#     percentile = 10
+#     c1 = clip_colors(k1_faces, percentile)
+#     c2 = clip_colors(k2_faces, percentile )
+#     # c2 = (k2_faces - k2_faces.min()) / (k2_faces.max() - k2_faces.min())
+#     cmap1 = cmap(c1)
+#     cmap2 = cmap(c2)
+#     # cmap2 = cmap(c2)
+
+#     mesh = self.mesh.copy()
+#     mesh.visual.face_colors = cmap2
+
+#     mesh.show(smooth=False)
 if __name__ == "__main__":
     # plot_tangent_vectors()
     # plot_tangent_vectors_digit_segment()
@@ -441,3 +466,4 @@ if __name__ == "__main__":
     # plot_meshes_as_shape()
     # plot_axial_component_roundover()
     show_fused_interface()
+    plot_curvature_colors()

@@ -312,17 +312,28 @@ class Shape:
         import matplotlib.colors
 
         cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["blue", "red"])
-        face_min = np.min([k1_faces.min(), k2_faces.min()])
-        face_max = np.max([k1_faces.max(), k2_faces.max()])
-        c1 = (k1_faces - k1_faces.min()) / (k1_faces.max() - k1_faces.min())
-        c2 = (k2_faces - k2_faces.min()) / (k2_faces.max() - k2_faces.min())
+
+        def clip_colors(k_faces, percentile):
+
+            k_min = np.percentile(k_faces, percentile)
+            k_max = np.percentile(k_faces, 100-percentile)
+            c = (k_faces - k_min) / (k_max -k_min)
+            c[c<0] = 0
+            c[c>1] = 1
+            return c
+
+        percentile = 10
+        c1 = clip_colors(k1_faces, percentile)
+        c2 = clip_colors(k2_faces, percentile )
+        # c2 = (k2_faces - k2_faces.min()) / (k2_faces.max() - k2_faces.min())
         cmap1 = cmap(c1)
         cmap2 = cmap(c2)
+        # cmap2 = cmap(c2)
 
         mesh = self.mesh.copy()
         mesh.visual.face_colors = cmap2
 
-        mesh.show()
+        mesh.show(smooth=False)
         # # plt.scatter(x, y, c=c, cmap=cmap)
         # plt.colorbar()
         # plt.show()
