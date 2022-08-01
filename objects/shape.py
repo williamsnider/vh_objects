@@ -307,33 +307,10 @@ class Shape:
         k1_faces = k1[self.mesh.faces].mean(axis=1)
         k2_faces = k2[self.mesh.faces].mean(axis=1)
 
-        import numpy as np
-        import matplotlib.pyplot as plt
-        import matplotlib.colors
+        self.k1 = k1_faces
+        self.k2 = k2_faces
 
-        cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["blue", "red"])
 
-        def clip_colors(k_faces, percentile):
-
-            k_min = np.percentile(k_faces, percentile)
-            k_max = np.percentile(k_faces, 100-percentile)
-            c = (k_faces - k_min) / (k_max -k_min)
-            c[c<0] = 0
-            c[c>1] = 1
-            return c
-
-        percentile = 10
-        c1 = clip_colors(k1_faces, percentile)
-        c2 = clip_colors(k2_faces, percentile )
-        # c2 = (k2_faces - k2_faces.min()) / (k2_faces.max() - k2_faces.min())
-        cmap1 = cmap(c1)
-        cmap2 = cmap(c2)
-        # cmap2 = cmap(c2)
-
-        mesh = self.mesh.copy()
-        mesh.visual.face_colors = cmap2
-
-        mesh.show(smooth=False)
         # # plt.scatter(x, y, c=c, cmap=cmap)
         # plt.colorbar()
         # plt.show()
