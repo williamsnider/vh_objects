@@ -1,27 +1,16 @@
-# Make several random shapes
-
-from objects.axial_component import AxialComponent
+from objects.backbone import Backbone
 from objects.cross_section import CrossSection
+from objects.axial_component import AxialComponent
 from objects.shape import Shape
 import numpy as np
 
-# Set random seed for debugging
-# np.random.seed(1)
-
-CP_GAUSSIAN_SIGMA = 10
-CS_RADIUS_RANGE = [20, 40]
-CS_NUM_RANGE = [2, 4]
-CS_TILT_RANGE = [-np.pi / 8, np.pi / 8]
-AC_LENGTH_RANGE = [25, 100]
-AC_CURVATURE_RANGE = [0, 10]
-AC_EULER_ANGLES_RANGE = [0, np.pi]
-AC_POSITION_RANGE = [0, 1]
-AC_NUM_RANGE = [1, 1]
-ALIGN_OBB = False
-
+# Parameters
+y_max = 20  # Backbone
+cs_all_scale = [2/3, 4/3]
+cs_single_scale = [1/4, 2]
 c = np.cos
 s = np.sin
-base_cp = np.array(
+round_cp = np.array(
     [
         [c(0 / 6 * 2 * np.pi), s(0 / 6 * 2 * np.pi)],
         [c(1 / 6 * 2 * np.pi), s(1 / 6 * 2 * np.pi)],
@@ -31,85 +20,56 @@ base_cp = np.array(
         [c(5 / 6 * 2 * np.pi), s(5 / 6 * 2 * np.pi)],
     ]
 )
+round_cp *= 10
 
+count = 0
 
-def make_random_cs(base_cp, position, CP_GAUSSIAN_SIGMA, CS_RADIUS_RANGE):
+def rand_backbone():
 
-    # Scale base_cp
-    scale = np.random.uniform(low=CS_RADIUS_RANGE[0], high=CS_RADIUS_RANGE[1])
-    cp = base_cp * scale
+    # Create controlpoints
+    x = np.linspace(0,40, 5)
 
-    # Shift individual cp
-    shift = np.random.normal(scale=CP_GAUSSIAN_SIGMA, size=cp.shape)
-    cp += shift
+    # Choose random y value
+    y_peak = np.random.rand(1)*y_max
+    y_sub = np.linspace(0, y_peak, 3).ravel()
+    y = np.zeros(5)
+    y[:3] = y_sub
+    y[3:] = y_sub[1::-1]
 
-    # Rotation -implement later (more relevant for GA)
+    z = np.zeros(5)
 
-    # Tilt angle
-    tilt = np.random.uniform(low=CS_TILT_RANGE[0], high=CS_TILT_RANGE[1])
+    backbone_cp = np.vstack([x,y,z]).T
+    backbone = Backbone(controlpoints = backbone_cp, reparameterize=True)
 
-    return CrossSection(cp, position, tilt=tilt)
+    return backbone
 
+def rand_cross_section(position):
+    
+    concave_cp = round_cp.copy()
 
-def make_random_ac(AC_LENGTH_RANGE, AC_CURVATURE_RANGE, CS_NUM_RANGE, AC_EULER_ANGLES_RANGE, parent=None):
+    # Scale one cp
+    num_cp = concave_cp.shape[0]
+    cp_idx = np.random.randint(0, num_cp)
+    concave_cp[cp_idx] *= np.random.uniform(cs_single_scale[0], cs_single_scale[1])
 
-    # Length
-    length = np.random.uniform(low=AC_LENGTH_RANGE[0], high=AC_LENGTH_RANGE[1])
+    # Scale all cps
+    concave_cp *= np.random.uniform(cs_all_scale[0], cs_all_scale[1])
 
-    # Curvature - not implemented
-    curvature = 0
+    cs = CrossSection(controlpoints=concave_cp, position=position)
 
-    # Euler angles
-    euler_angles = np.random.uniform(low=AC_EULER_ANGLES_RANGE[0], high=AC_EULER_ANGLES_RANGE[1], size=3).T
+    return cs
 
-    # Generate cross sections
-    num_cs = np.random.randint(low=CS_NUM_RANGE[0], high=CS_NUM_RANGE[1] + 1)
-    cs_positions = np.sort(np.random.uniform(size=num_cs))
-    cross_sections = []
-    for i in range(num_cs):
-        position = cs_positions[i]
-        cs = make_random_cs(base_cp, position, CP_GAUSSIAN_SIGMA, CS_RADIUS_RANGE)
-        cross_sections.append(cs)
+def rand_shape():
+    global count
 
-    # Position along self
+    backbone = rand_backbone()
 
-    # Position along parent
+    cs_list = []
+    for position in [0.1, 0.5, 0.9]:
+        cs_list.append(rand_cross_section(position=position))
 
-    return AxialComponent(length, curvature, cross_sections, euler_angles, parent_axial_component=parent)
-
-
-def make_random_shape(AC_NUM_RANGE, label="test", save_dir=None):
-
-    num_ac = np.random.randint(low=AC_NUM_RANGE[0], high=AC_NUM_RANGE[1] + 1)
-    ac_list = []
-    for i in range(num_ac):
-
-        # Assign parent
-        if i == 0:
-            parent = None
-        else:
-            parent = np.random.choice(ac_list)
-
-        # Create Axial Component
-        ac = make_random_ac(AC_LENGTH_RANGE, AC_CURVATURE_RANGE, CS_NUM_RANGE, AC_EULER_ANGLES_RANGE, parent=parent)
-        ac_list.append(ac)
-
-    return Shape(ac_list, align_OBB=ALIGN_OBB, fuse_to_interface=True, label=label, save_dir=save_dir)
-
-
-s = make_random_shape(AC_NUM_RANGE)
-s.mesh.show()
-# cs0 = CrossSection(base_cp * 0.5, 0.3)
-# cs1 = CrossSection(base_cp * 0.5, 0.7)
-# ac1 = AxialComponent(2 * np.pi * 1 * 0.25, curvature=0, cross_sections=[cs0, cs1])
-# ac2 = AxialComponent(
-#     2 * np.pi * 1 * 0.25,
-#     curvature=1 / 1,
-#     cross_sections=[cs0, cs1],
-#     parent_axial_component=ac1,
-#     position_along_parent=0.75,
-#     position_along_self=0.0,
-#     euler_angles=np.array([0, np.pi / 3, 0]),
-# )
-# s = Shape([ac1, ac2])
-# s.fuse_meshes(ac1.mesh, ac2.mesh)
+    ac = AxialComponent(backbone=backbone, cross_sections=cs_list)
+    
+    s = Shape([ac], label='Test_{}'.format(count))
+    count += 1
+    return s

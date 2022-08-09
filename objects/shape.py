@@ -377,7 +377,7 @@ class Shape:
         with open(filename, "wb") as f:
             f.write(png)
 
-    def save_mesh_as_png(self, save_dir, return_img=False, rotation=None):
+    def save_mesh_as_png(self, save_dir, return_img=False, rotation=None, resolution=(1920, 1080)):
         """
         Saves the mesh as a png.
         """
@@ -465,7 +465,7 @@ class Shape:
         scene.add(camera, pose=camera_pose)
 
         # TODO: This is not 16 bit depth
-        r = pyrender.OffscreenRenderer(7680, 4320, bitdepth="16bit")
+        r = pyrender.OffscreenRenderer(resolution[0], resolution[1], bitdepth="16bit")
         color, _ = r.render(scene)
 
         if return_img is True:
