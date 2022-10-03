@@ -120,7 +120,7 @@ def approximate_arc(MAX_ANGLE, arc_length):
     # Shift so that the curve begins at the origin
     arc_array[:, 0] -= radius
     arc_array[:, [0, 1]] = arc_array[:, [1, 0]]  # Flip x and y-axis so long portion points in +X direction
-    arc_array[:, 1] = -arc_array[:, 1]  # Negate y axis so curves upward (towards +Y)
+    # arc_array[:, 1] = -arc_array[:, 1]  # Negate y axis so curves upward (towards +Y)
 
     return arc_array
 
@@ -457,6 +457,39 @@ def find_closest_surface_point(backbone_point, N, surface_points):
 
     # plt.show()
     return closest_surface_point
+
+
+def get_deformation_points_along_plane(mesh, N, point):
+
+    lines, face_index = trimesh.intersections.mesh_plane(mesh, N.ravel(), point.ravel(), return_faces=True)
+    pts = lines.mean(axis=1)
+    normals = mesh.face_normals[face_index]
+
+    return pts, normals
+
+
+def get_deformation_vertex(mesh, ac, dist_along_backbone, N_rotation=0):
+
+    r = ac.r(dist_along_backbone)
+    T = ac.T(dist_along_backbone)
+    N = ac.N(dist_along_backbone)
+    v = mesh.vertices
+
+    rot = Rotation.from_rotvec(N_rotation * T)
+    N_rot = rot.apply(N)
+
+    # Limit vertices to those that N_rot points to
+    vec = v - r
+    mask = angle_between(vec, N_rot) < np.pi / 2
+
+    dist = np.linalg.norm(np.cross((v - r), N_rot), axis=1) / np.linalg.norm(N)
+    dist[mask] = dist.max()
+    idx = dist.argmin()
+
+    pts = mesh.vertices[idx].reshape(1, -1)
+    normals = mesh.vertex_normals[idx].reshape(1, -1)
+
+    return pts, normals
 
 
 def transform_sd_mesh(sd_mesh, origin, ac, pos, theta_backbone, theta_linear_segment):

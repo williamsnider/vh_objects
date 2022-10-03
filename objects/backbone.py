@@ -6,7 +6,7 @@ from copy import deepcopy
 
 
 class Backbone:
-    def __init__(self, controlpoints, reparameterize=True, name=None):
+    def __init__(self, controlpoints, reparameterize=True, align_center=True, name=None):
 
         self.controlpoints = controlpoints
         self.num_controlpoints = self.controlpoints.shape[0]
@@ -18,6 +18,12 @@ class Backbone:
         # Arc length parameterization
         if reparameterize is True:
             self.backbone = self.reparameterize()
+
+        # Align center
+        if align_center is True:
+            self = self.align_backbone_center()
+
+        pass
 
     def construct_B_spline(self):
         """Construct the initial B-spline. This is formed by the relatively small number of control points that will give the curve its shape. An open uniform knot vector is used so that the endpoints are the first and last controlpoints. The resulting curved must be reparameterized to be arc length parameterized."""
@@ -147,3 +153,22 @@ class Backbone:
     def copy(self):
 
         return deepcopy(self)
+
+    def align_backbone_center(self):
+        """Rotates the backbone so that the midpoint (t=0.5) is parallel to the +x-axis.
+
+        This improves the alignment with the interface."""
+
+        # Rotate to reach T(0.5) == +X axis
+        original = np.vstack([self.T(0.5), self.N(0.5), self.B(0.5)])
+        goal = np.array(
+            [
+                [1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 1],
+            ]
+        )
+
+        rot = goal @ np.linalg.inv(original)
+        cp = self.controlpoints @ rot
+        return Backbone(controlpoints=cp, align_center=False, reparameterize=True)

@@ -10,8 +10,8 @@ NUM_SAMPLES_FOR_REPARAMETERIZATION = 10 * NUM_INTERPOLATION_POINTS
 EPSILON = 1e-2  # Used to estimate b-spline derivative
 
 # AxialComponent construction
-SAMPLING_DENSITY_U = 100  # Number of samples along round axis of 'cylinder' axial component
-SAMPLING_DENSITY_V = 100  # Number of samples along long axis of 'cylinder' axial component
+SAMPLING_DENSITY_U = 500  # Number of samples along round axis of 'cylinder' axial component
+SAMPLING_DENSITY_V = 500  # Number of samples along long axis of 'cylinder' axial component
 SHRINK_FACTOR = 0.5  # Impacts surface slope near endpoints
 ORDER = 3  # quadratic B-spline
 
@@ -28,7 +28,7 @@ POST_LENGTH = 10  # mm  - distance between interface and endpoint of shape
 POST_RADIUS = 7.5  # mm
 POST_OFFSET = 5  # mm - additional length of post so that it is inside both interface and shape (for mesh boolean)
 POST_SECTIONS = 89  # How many sides the post has; certain values cause boolean errors
-POST_FAIRING_DISTANCE = 3  # mm
+POST_FAIRING_DISTANCE = 0  # mm
 # CUBE_SIDE_LENGTH = 25  # mm
 # POST_RADIUS = 5
 # POST_HEIGHT = 15

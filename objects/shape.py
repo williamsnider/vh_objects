@@ -2,7 +2,11 @@ from sympy import Q
 import trimesh
 import numpy as np
 import matplotlib.pyplot as plt
-from objects.utilities import fuse_meshes, calc_R_euler_angles, calc_mesh_principal_curvatures
+from objects.utilities import (
+    fuse_meshes,
+    calc_R_euler_angles,
+    calc_mesh_principal_curvatures,
+)
 from objects.parameters import (
     HARMONIC_POWER,
     FAIRING_DISTANCE,
@@ -21,10 +25,19 @@ from pathlib import Path
 import pyrender
 import copy
 import cv2
+import scipy.stats
+import scipy.spatial
 
 
 class Shape:
-    def __init__(self, ac_list, align_OBB=False, fuse_to_interface=False, label="test", save_dir=None):
+    def __init__(
+        self,
+        ac_list,
+        align_OBB=False,
+        fuse_to_interface=False,
+        label="test",
+        save_dir=None,
+    ):
 
         self.ac_list = ac_list
         self.label = label
@@ -232,7 +245,11 @@ class Shape:
         num_cp = cs_parent_cp.shape[0]
         cs_interface_cp = np.array(
             [
-                [-POST_LENGTH - POST_OFFSET / 2, POST_RADIUS * np.sin(i), POST_RADIUS * np.cos(i)]
+                [
+                    -POST_LENGTH - POST_OFFSET / 2,
+                    POST_RADIUS * np.sin(i),
+                    POST_RADIUS * np.cos(i),
+                ]
                 for i in np.linspace(0, 2 * np.pi, num_cp, endpoint=False)
             ]
         )
@@ -292,12 +309,24 @@ class Shape:
         trimesh.repair.fix_inversion(ac.mesh)  # TODO: This is ugly.
         self.post = ac.mesh
 
-        scene = trimesh.Scene([self.post, self.mesh, self.interface.mesh])
-        # Fuse interface, post, and shape
-        interface_and_post = fuse_meshes(self.interface.mesh, self.post, fairing_distance=0, operation="union")
+        scene = trimesh.Scene([self.mesh, self.interface.mesh])
+
+        # # Fuse interface, post, and shape
+        # interface_and_post = fuse_meshes(self.interface.mesh, self.post, fairing_distance=0, operation="union")
+        # interface_post_and_shape = fuse_meshes(
+        #     interface_and_post,
+        #     self.mesh,
+        #     fairing_distance=POST_FAIRING_DISTANCE,
+        #     operation="union",
+        # )
         interface_post_and_shape = fuse_meshes(
-            interface_and_post, self.mesh, fairing_distance=POST_FAIRING_DISTANCE, operation="union"
+            self.interface.mesh,
+            self.mesh,
+            fairing_distance=POST_FAIRING_DISTANCE,
+            operation="union",
         )
+
+        # interface_post_and_shape.show()
         self.mesh_with_interface = interface_post_and_shape
 
     def calc_curvature(self):
@@ -377,7 +406,7 @@ class Shape:
         with open(filename, "wb") as f:
             f.write(png)
 
-    def save_mesh_as_png(self, save_dir, return_img=False, rotation=None, resolution=(1920, 1080)):
+    def save_mesh_as_png(self, save_dir, return_img=False, rotation=None, resolution=(1920, 1080), interface=False):
         """
         Saves the mesh as a png.
         """
@@ -409,13 +438,16 @@ class Shape:
             mesh_pose = mesh_pose @ rotation
 
         # Add mesh to scene
-        mesh = pyrender.Mesh.from_trimesh(self.mesh, smooth=False)
+        if interface == True:
+            mesh = pyrender.Mesh.from_trimesh(self.mesh_with_interface, smooth=False)
+        else:
+            mesh = pyrender.Mesh.from_trimesh(self.mesh, smooth=False)
         scene.add(mesh, pose=mesh_pose)
 
-        # Add interface to scene
-        if self.fuse_to_interface is True:
-            interface = pyrender.Mesh.from_trimesh(self.interface, smooth=False)
-            scene.add(interface, pose=mesh_pose)
+        # # Add interface to scene
+        # if self.fuse_to_interface is True:
+        #     interface = pyrender.Mesh.from_trimesh(self.interface, smooth=False)
+        #     scene.add(interface, pose=mesh_pose)
 
         # Add directional light
         light_pose = np.array(
@@ -438,7 +470,7 @@ class Shape:
         v = np.array([0, 1, 0])
         n = np.cross(u, v)
         # e = np.array([0, 0, -150])  #  eye: camera position in world coordinates
-        e = np.array([35, 0, -80])  #  eye: camera position in world coordinates
+        e = np.array([5, 0, -70])  #  eye: camera position in world coordinates
         camera_pose = np.array(
             [
                 [u[0], u[1], u[2], e[0]],
@@ -461,7 +493,7 @@ class Shape:
         #     ]
         # )
 
-        camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
+        camera = pyrender.PerspectiveCamera(yfov=np.pi / 4.0)
         scene.add(camera, pose=camera_pose)
 
         # TODO: This is not 16 bit depth
@@ -477,3 +509,39 @@ class Shape:
     def plot_meshes(self):
 
         trimesh.Scene([ac.mesh for ac in self.ac_list]).show()
+
+    def apply_gaussian_deformation(self, pts, normals, height, sigma, num_smoothing=1):
+        """Apply a gaussian deformation to a mesh at a list of points."""
+
+        assert pts.shape[1] == 3, "pts must be a numpy array with shape Nx3"
+        assert normals.shape[1] == 3, "normals must be a numpy array with shape Nx3"
+        assert num_smoothing <= len(pts), "num_smoothing must be <= num_pts"
+
+        mesh = self.mesh
+        gaussian = scipy.stats.norm(0, sigma)
+        num_verts = len(mesh.vertices)
+
+        # Calculate distance between each vertex and deformation point
+        dists = scipy.spatial.distance.cdist(pts, mesh.vertices)
+
+        # Calculate weights based on gaussian distribution (normalized)
+        weight_matrix = gaussian.pdf(dists) / gaussian.pdf(0)  # Replace with for loop if RAM exceeded
+
+        # Smooth by averaging the weight/normals of the NUM_SMOOTHING deformation points with the highest weights
+        pts_within_smoothing_indices = weight_matrix.argsort(axis=0)[-5:, :]
+        vert_indices = np.repeat(np.arange(num_verts).reshape(1, -1), num_smoothing, axis=0)
+        mean_weight = weight_matrix[pts_within_smoothing_indices, vert_indices].mean(axis=0)  # 2D fancy indexing
+        mean_normal = normals[pts_within_smoothing_indices].mean(axis=0)
+
+        # Apply deformation according to weighted height and at the calculated normal
+        bump = height * mean_normal * mean_weight.reshape(-1, 1)
+        new_verts = mesh.vertices + bump
+
+        # Update vertices on mesh
+        mesh.vertices = new_verts
+
+        self.mesh = mesh
+
+    def copy(self):
+
+        return copy.deepcopy(self)

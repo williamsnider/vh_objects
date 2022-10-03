@@ -1,12 +1,10 @@
 # Find the 5 CP that most closely approximate a circular arc, using radius/distance from origin as the error.
-from objects.parameters import NUM_CP_PER_SEGMENT, GOAL_LENGTH_SEGMENT
 from scipy.optimize import minimize
 from objects.backbone import Backbone
 import numpy as np
-import matplotlib.pyplot as plt
 
 
-def approximate_arc(MAX_ANGLE):
+def approximate_arc(MAX_ANGLE, GOAL_LENGTH_SEGMENT, NUM_CP_PER_SEGMENT=5):
     """Construct a B-Spline curve that approximates a circular arc."""
 
     radius = GOAL_LENGTH_SEGMENT / (2 * np.pi) * (2 * np.pi / MAX_ANGLE)
