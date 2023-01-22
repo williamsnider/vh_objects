@@ -7,7 +7,7 @@ from mpl_toolkits import mplot3d
 import networkx as nx
 import numpy as np
 from numpy.linalg import norm
-from scipy.optimize import minimize
+from scipy.optimize import minimize, minimize_scalar
 from sympy import Q
 from objects.parameters import ORDER, HARMONIC_POWER
 from splipy import BSplineBasis, Curve
@@ -16,6 +16,8 @@ import trimesh
 import scipy
 from scipy.spatial.transform import Rotation
 from compas_cgal.booleans import boolean_union, boolean_difference
+
+
 
 ##########
 # B-Spline Functions
@@ -123,6 +125,56 @@ def approximate_arc(MAX_ANGLE, arc_length):
     # arc_array[:, 1] = -arc_array[:, 1]  # Negate y axis so curves upward (towards +Y)
 
     return arc_array
+
+
+
+
+
+def fit_radius(target_radius, num_cp_per_cross_section):
+    """Calculates the radius of controlpoints that will result in a B-spline with the target radius.
+    
+    B-splines do not pass through the controlpoints, so a larger controlpoint radius is needed to achieve a target B-spline radius."""
+    ORDER = 3
+
+    def make_bspline_curve(cp_r):
+        
+        # Make controlpoints
+        c = np.cos
+        s = np.sin
+        th = np.linspace(0, 2*np.pi, num_cp_per_cross_section, endpoint=False).reshape(-1,1)
+        cp = np.hstack((cp_r*c(th), cp_r*s(th)))
+
+        # Make curve
+        degree = ORDER - 1
+        num_knots = num_cp_per_cross_section + ORDER + degree
+        knot = np.linspace(0, 1, num_knots)
+        basis1 = BSplineBasis(order=ORDER, knots=knot, periodic=1)
+        curve = Curve(basis1, controlpoints=cp, rational=False)
+
+        # Sample curve
+        curve.reparam()
+        t = np.linspace(0, 1, num_cp_per_cross_section)
+        xy = curve(t)
+
+        return xy
+
+    def objective_function(cp_r):
+
+        # Make curve
+        xy = make_bspline_curve(cp_r)
+
+        # Calc distances
+        dists = np.linalg.norm(xy, axis=1)
+        avg_radius = dists.mean()
+
+        return (avg_radius-target_radius)**2
+
+
+    res = minimize_scalar(objective_function, method='bounded', bounds=(0, target_radius**2))
+    if res.success == True:
+        return res.x
+    else:
+        return None
 
 
 ##########

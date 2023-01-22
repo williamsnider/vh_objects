@@ -20,6 +20,7 @@ class AxialComponent:
         parent_axial_component=None,
         position_along_parent=1.0,
         position_along_self=0.0,
+        smooth_with_post=False,
     ):
         self.backbone = backbone
         self.cross_sections = cross_sections
@@ -27,6 +28,7 @@ class AxialComponent:
         self.parent_axial_component = parent_axial_component
         self.position_along_parent = position_along_parent
         self.position_along_self = position_along_self
+        self.smooth_with_post = smooth_with_post
         self.length = self.backbone.length()
 
         # Do calculations
@@ -244,55 +246,140 @@ class AxialComponent:
         # (-1, :, :) - controlpoints at endpoint 1.0
         """
 
-        # Construct empty controlpoint array
-        num_cross_sections = len(self.cross_sections)
-        num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + num_cross_sections
-        self.num_rows = num_rows
-        num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
-        controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
+        if self.smooth_with_post == False:
+            
+            # Construct empty controlpoint array
+            num_cross_sections = len(self.cross_sections)
+            num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + num_cross_sections
+            self.num_rows = num_rows
+            num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
+            controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
 
-        # Assign controlpoints - endpoints
-        controlpoints[0, :, :] = np.repeat(self.r(0.0), num_cp_per_cross_section, axis=0)  # 0.0 endpoint
-        controlpoints[-1, :, :] = np.repeat(self.r(1.0), num_cp_per_cross_section, axis=0)  # 1.0 endpoint
+            # Assign controlpoints - endpoints
+            controlpoints[0, :, :] = np.repeat(self.r(0.0), num_cp_per_cross_section, axis=0)  # 0.0 endpoint
+            controlpoints[-1, :, :] = np.repeat(self.r(1.0), num_cp_per_cross_section, axis=0)  # 1.0 endpoint
 
-        # Assign controlpoints - cross sections
-        idx = 2
-        for cs in self.cross_sections:
+            # Assign controlpoints - cross sections
+            idx = 2
+            for cs in self.cross_sections:
 
-            cp = cs.controlpoints
-            pos = cs.position
+                cp = cs.controlpoints
+                pos = cs.position
 
-            # Rotate and translate cross section
-            cp = self.align_cross_section_to_position(cp, pos)
+                # Rotate and translate cross section
+                cp = self.align_cross_section_to_position(cp, pos)
 
-            # Assign to controlpoint array
-            controlpoints[idx, :, :] = cp
-            idx += 1
+                # Assign to controlpoint array
+                controlpoints[idx, :, :] = cp
+                idx += 1
 
-        # Assign controlpoints - extra to determine slope at endpoint
-        for idx in [1, -2]:
+            # Assign controlpoints - extra to determine slope at endpoint
+            for idx in [1, -2]:
 
-            # Get the cross section we will use.
-            if idx == 1:
-                cs = self.cross_sections[0]
-                pos = 0.0
-            if idx == -2:
-                cs = self.cross_sections[-1]
-                pos = 1.0
+                # Get the cross section we will use.
+                if idx == 1:
+                    cs = self.cross_sections[0]
+                    pos = 0.0
+                if idx == -2:
+                    cs = self.cross_sections[-1]
+                    pos = 1.0
 
-            # Grab the cp we are going to shrink
-            cp = cs.controlpoints
+                # Grab the cp we are going to shrink
+                cp = cs.controlpoints
 
-            # Shrink the cross section
-            cp = cp * SHRINK_FACTOR
+                # Shrink the cross section
+                cp = cp * SHRINK_FACTOR
 
-            # Rotate and translate cross section
-            cp = self.align_cross_section_to_position(cp, pos)
+                # Rotate and translate cross section
+                cp = self.align_cross_section_to_position(cp, pos)
 
-            # Assign to controlpoint array
-            controlpoints[idx, :, :] = cp
+                # Assign to controlpoint array
+                controlpoints[idx, :, :] = cp
 
-        self.controlpoints = controlpoints
+            self.controlpoints = controlpoints
+        else:
+
+            """
+            # controlpoints array structure
+            # (0, :, :) - controlpoints at center of post/interface intersection
+            # (1, :, :) - controlpoints at outer radius of post/interface intersection
+            # (2, :, :) - controlpoints at outer radius of post/interface intersection slightly shifted
+            # (3, :, :) - controlpoints at outer radius of post/interface intersection at midpoint
+            # (4, :, :) - controlpoints at outer radius of post/interface intersection at 0.0 point
+            # (5, :, :) - controlpoints of cross section 0
+            # (6, :, :) - controlpoints of cross section 1
+            # ...
+            # (-4, :, :) - controlpoints of cross section -2
+            # (-3, :, :) - controlpoints of cross section -1
+            # (-2, :, :) - controlpoints controlling slope at endpoint 1.0
+            # (-1, :, :) - controlpoints at endpoint 1.0
+            """
+
+            # Construct empty controlpoint array
+            num_cross_sections = len(self.cross_sections)
+            NUM_POST_POINTS=5
+            NUM_SINGLE_ENDCAP_POINT = 2
+            num_rows = NUM_POST_POINTS + NUM_SINGLE_ENDCAP_POINT + num_cross_sections
+            self.num_rows = num_rows
+            num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
+            controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
+
+            # Assign controlpoints - post
+            POST_LENGTH = 15
+            POST_INTERFACE_POINT = np.array([-POST_LENGTH,0,0])+ self.r(0.0)
+            controlpoints[0, :, :] = np.repeat(POST_INTERFACE_POINT, num_cp_per_cross_section, axis=0)  # 1.0 endpoint
+
+            # TODO: Make this just linear
+            POST_RADIUS = 5.404  # This gives a B-spline radius of 5.00mm with 8 controlpoints.
+            c = np.cos
+            s = np.sin
+            th = np.linspace(0, 2*np.pi, num_cp_per_cross_section, endpoint=False).reshape(-1,1)
+            cp = np.hstack(( np.zeros((num_cp_per_cross_section,1)), POST_RADIUS*c(th), POST_RADIUS*s(th)))
+            controlpoints[1,:,:] = cp + self.r(0.0) + np.array([-POST_LENGTH,0,0]) 
+            controlpoints[2,:,:] = cp + self.r(0.0) + np.array([-POST_LENGTH,0,0]) * 0.8
+            controlpoints[3,:,:] = cp + self.r(0.0) + np.array([-POST_LENGTH,0,0])* 0.5
+            controlpoints[4,:,:] = cp + self.r(0.0) +  np.array([-POST_LENGTH,0,0])*0.2
+
+            # Assign controlpoints - endpoints
+            controlpoints[-1, :, :] = np.repeat(self.r(1.0), num_cp_per_cross_section, axis=0)  # 1.0 endpoint
+
+            # Assign controlpoints - cross sections
+            idx = 5
+            for cs in self.cross_sections:
+
+                cp = cs.controlpoints
+                pos = cs.position
+
+                # Rotate and translate cross section
+                cp = self.align_cross_section_to_position(cp, pos)
+
+                # Assign to controlpoint array
+                controlpoints[idx, :, :] = cp
+                idx += 1
+
+            # Assign controlpoints - extra to determine slope at endpoint
+            for idx in [-2]:
+
+                # Get the cross section we will use.
+                if idx == 1:
+                    cs = self.cross_sections[0]
+                    pos = 0.0
+                if idx == -2:
+                    cs = self.cross_sections[-1]
+                    pos = 1.0
+
+                # Grab the cp we are going to shrink
+                cp = cs.controlpoints
+
+                # Shrink the cross section
+                cp = cp * SHRINK_FACTOR
+
+                # Rotate and translate cross section
+                cp = self.align_cross_section_to_position(cp, pos)
+
+                # Assign to controlpoint array
+                controlpoints[idx, :, :] = cp
+            self.controlpoints = controlpoints
 
     # def get_controlpoints(self):
     #     """
