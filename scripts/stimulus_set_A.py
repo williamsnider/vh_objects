@@ -101,10 +101,16 @@ ac.mesh.show(smooth=False)
 old_verts = ac.mesh.vertices
 bottommost_vert = old_verts[old_verts[:,1].argmin()]
 new_verts = old_verts - bottommost_vert
+new_verts += np.array([0, 5, 0])
+ac.mesh.vertices = new_verts
 
 # Add in interface
-
-
+import trimesh
+scene = trimesh.Scene()
+scene.add_geometry(ac.mesh)
+interface = trimesh.load_mesh("/home/oconnorlab/code/objects/assets/Interface_0023_aligned_to_origin v3.stl")
+scene.add_geometry(interface)
+scene.show()
 
 fig = plt.figure()
 ax = plt.axes(projection='3d')
