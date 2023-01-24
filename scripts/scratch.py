@@ -66,10 +66,16 @@ s = Shape([ac], label="cylinder_curve_{}".format(str(round(angle, 2)).replace(".
 s.label = "NeedsALabel"
 t = 1 / 3
 ang = 0
-magnitude = 3
-sigma = 2
+magnitude = 4
+sigma = 1
 
 pts, normals = get_deformation_vertex(s.mesh, s.ac_list[0], t, N_rotation=ang)
+
+
+# Flatten points around deformation so that bump will be consistent
+# s.flatten_around_vertex(pts, normals, magnitude, sigma)
+
+# Apply deformation
 s.apply_gaussian_deformation(pts, normals, magnitude, sigma)
 
 s.create_interface()

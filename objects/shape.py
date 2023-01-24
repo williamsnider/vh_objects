@@ -6,6 +6,7 @@ from objects.utilities import (
     fuse_meshes,
     calc_R_euler_angles,
     calc_mesh_principal_curvatures,
+    fair_mesh,
 )
 from objects.parameters import (
     HARMONIC_POWER,
@@ -57,7 +58,9 @@ class Shape:
 
     def check_inputs(self):
 
-        assert type(self.ac_list) is list, "ac_list must be a list, even if it has just 1 ac."
+        assert (
+            type(self.ac_list) is list
+        ), "ac_list must be a list, even if it has just 1 ac."
 
     def combine_meshes(self, meshes_to_fuse, operation="union"):
         """Joins meshes together by iterating through the list of meshes."""
@@ -161,9 +164,13 @@ class Shape:
             plane_verts[:, 0, :] - plane_verts[:, 1, :],
             plane_verts[:, 0, :] - plane_verts[:, 2, :],
         )
-        plane_normals = plane_normals / np.linalg.norm(plane_normals, axis=1, keepdims=True)
+        plane_normals = plane_normals / np.linalg.norm(
+            plane_normals, axis=1, keepdims=True
+        )
         vec_from_plane_to_point = point_on_mesh - corners[sides[:, 0]]
-        distance_to_planes = np.abs(np.dot(vec_from_plane_to_point, plane_normals.T)).diagonal()
+        distance_to_planes = np.abs(
+            np.dot(vec_from_plane_to_point, plane_normals.T)
+        ).diagonal()
         closest_side = np.argmin(distance_to_planes)
 
         # Find 2 corners on plane that are closest to point on mesh
@@ -173,9 +180,13 @@ class Shape:
 
         # Use these corners to assign a coordinate system
         short_edge = corner_verts[closest_corners[1]] - corner_verts[closest_corners[0]]
-        middle_edge = corner_verts[closest_corners[2]] - corner_verts[closest_corners[0]]
+        middle_edge = (
+            corner_verts[closest_corners[2]] - corner_verts[closest_corners[0]]
+        )
         corners_in_plane = set(sides[closest_side])
-        corners_neighboring_closest_corner = set(corner_neighbors[sides[closest_side][closest_corners[0]]])
+        corners_neighboring_closest_corner = set(
+            corner_neighbors[sides[closest_side][closest_corners[0]]]
+        )
         other_neighbor = (corners_neighboring_closest_corner - corners_in_plane).pop()
         long_edge = corners[other_neighbor] - corner_verts[closest_corners[0]]
         curr = np.stack(
@@ -199,7 +210,9 @@ class Shape:
         R = np.linalg.inv(curr) @ goal  # Rotation matrix
 
         # Perform transformations
-        self.mesh.vertices -= corner_verts[closest_corners[0]]  # Translate corner to origin
+        self.mesh.vertices -= corner_verts[
+            closest_corners[0]
+        ]  # Translate corner to origin
         self.mesh.vertices = self.mesh.vertices @ R  # Rotate
         assert np.all(self.mesh.bounds[0, :] == 0), "Corner not aligned at 0."
 
@@ -272,12 +285,18 @@ class Shape:
         # Form Cross Sections - testing whether winding is consistent
         cs_interface = CrossSection(np.array(cs_interface_cp[:, 1:]), 0.0)
         cs_parent = CrossSection(np.array(cs_parent_cp_transformed[:, 1:]), 1.0)
-        dist_0 = np.linalg.norm(cs_interface.controlpoints - cs_parent.controlpoints[::1], axis=1).sum()
-        dist_1 = np.linalg.norm(cs_interface.controlpoints - cs_parent.controlpoints[::-1], axis=1).sum()
+        dist_0 = np.linalg.norm(
+            cs_interface.controlpoints - cs_parent.controlpoints[::1], axis=1
+        ).sum()
+        dist_1 = np.linalg.norm(
+            cs_interface.controlpoints - cs_parent.controlpoints[::-1], axis=1
+        ).sum()
         if dist_0 < dist_1:
             pass
         elif dist_1 < dist_0:
-            cs_parent = CrossSection(np.array(cs_parent_cp_transformed[::-1, 1:]), 1.0)  # Reverse winding
+            cs_parent = CrossSection(
+                np.array(cs_parent_cp_transformed[::-1, 1:]), 1.0
+            )  # Reverse winding
 
         # # Plot alignment of controlpoints
         # import matplotlib.pyplot as plt
@@ -362,7 +381,14 @@ class Shape:
 
         # Bounds
         bounds = self.mesh.bounds
-        bounds_pts = np.array([[x, y, z] for x in bounds[:, 0] for y in bounds[:, 1] for z in bounds[:, 2]])
+        bounds_pts = np.array(
+            [
+                [x, y, z]
+                for x in bounds[:, 0]
+                for y in bounds[:, 1]
+                for z in bounds[:, 2]
+            ]
+        )
         bounds = trimesh.points.PointCloud(bounds_pts)
 
         # Axes
@@ -406,7 +432,14 @@ class Shape:
         with open(filename, "wb") as f:
             f.write(png)
 
-    def save_mesh_as_png(self, save_dir, return_img=False, rotation=None, resolution=(1920, 1080), interface=False):
+    def save_mesh_as_png(
+        self,
+        save_dir,
+        return_img=False,
+        rotation=None,
+        resolution=(1920, 1080),
+        interface=False,
+    ):
         """
         Saves the mesh as a png.
         """
@@ -510,37 +543,140 @@ class Shape:
 
         trimesh.Scene([ac.mesh for ac in self.ac_list]).show()
 
+    # def flatten_around_vertex(self, pts, normals, height, sigma):
+
+    #     assert pts.shape[1] == 3, "pts must be a numpy array with shape Nx3"
+    #     assert normals.shape[1] == 3, "normals must be a numpy array with shape Nx3"
+    #     assert sigma>0
+
+    #     mesh = self.mesh
+    #     gaussian = scipy.stats.norm(0, sigma)
+    #     num_verts = len(mesh.vertices)
+
+    #     # Calculate distance between each vertex and deformation point
+    #     dists = scipy.spatial.distance.cdist(pts, mesh.vertices)
+
+    #     # Calculate weights based on gaussian distribution (normalized)
+    #     num_std_devs = 2
+    #     weight_matrix = gaussian.pdf(dists) / gaussian.pdf(-sigma*num_std_devs)  # Replace with for loop if RAM exceeded
+    #     weight_matrix[weight_matrix>1] = 1  # Clip values; all verts within -sigma*num_std_devs will be part of flat region
+    #     indices = weight_matrix == 1
+    #     indices = indices.ravel()
+
+    #     # Calculate vec needed to
+    #     dists_to_plane = np.dot(mesh.vertices - pts[0], normals[0])
+    #     new_verts = mesh.vertices - normals[0]*(dists_to_plane*weight_matrix).reshape(-1,1)
+    #     new_mesh = mesh
+    #     new_mesh.vertices = new_verts
+
+    #     # Apply gaussian
+    #     new_mesh.show()
+
+    #     # Plot to visualize
+    #     fig = plt.figure()
+    #     ax = plt.axes(projection='3d')
+    #     ax.plot(new_verts[::577,0],new_verts[::577,1], new_verts[::577,2], "k.")
+    #     ax.plot(mesh.vertices[::577,0],mesh.vertices[::577,1], mesh.vertices[::577,2], "r.")
+    #     ax.set_xlabel('x')
+    #     ax.set_ylabel('y')
+    #     ax.set_zlabel('z')
+    #     plt.show()
+
+    #     new_verts = mesh.vertices + bump
+    #     #dist = |dot ( p-p0 , n )|
+
+    #     # Smooth by averaging the weight/normals of the NUM_SMOOTHING deformation points with the highest weights
+    #     num_smoothing=1
+    #     pts_within_smoothing_indices = weight_matrix.argsort(axis=0)[-5:, :]
+    #     vert_indices = np.repeat(np.arange(num_verts).reshape(1, -1), num_smoothing, axis=0)
+    #     mean_weight = weight_matrix[pts_within_smoothing_indices, vert_indices].mean(axis=0)  # 2D fancy indexing
+    #     mean_normal = normals[pts_within_smoothing_indices].mean(axis=0)
+
+    #     # Apply deformation according to weighted height and at the calculated normal
+    #     bump = height * mean_normal * mean_weight.reshape(-1, 1)
+    #     new_verts = mesh.vertices + bump
+
+    #     # Update vertices on mesh
+    #     mesh.vertices = new_verts
+
+    #     self.mesh = mesh
+
+    #     pass
+
     def apply_gaussian_deformation(self, pts, normals, height, sigma, num_smoothing=1):
         """Apply a gaussian deformation to a mesh at a list of points."""
 
         assert pts.shape[1] == 3, "pts must be a numpy array with shape Nx3"
         assert normals.shape[1] == 3, "normals must be a numpy array with shape Nx3"
-        assert num_smoothing <= len(pts), "num_smoothing must be <= num_pts"
+        assert sigma > 0
 
-        mesh = self.mesh
+        mesh = self.mesh.copy()
         gaussian = scipy.stats.norm(0, sigma)
         num_verts = len(mesh.vertices)
 
-        # Calculate distance between each vertex and deformation point
-        dists = scipy.spatial.distance.cdist(pts, mesh.vertices)
+        ### Flatten the mesh region to get consistent deformations
+
+        # Calculate distance between each vertex and the center of the flat region
+        flat_dists = scipy.spatial.distance.cdist(pts, mesh.vertices)
 
         # Calculate weights based on gaussian distribution (normalized)
-        weight_matrix = gaussian.pdf(dists) / gaussian.pdf(0)  # Replace with for loop if RAM exceeded
+        num_std_devs = 2
+        flat_weight_matrix = gaussian.pdf(flat_dists) / gaussian.pdf(
+            -sigma * num_std_devs
+        )  # Replace with for loop if RAM exceeded
+        flat_weight_matrix[
+            flat_weight_matrix > 1
+        ] = 1  # Clip values; all verts within -sigma*num_std_devs will be part of flat region
+
+        # Shift vertices based on weights and distance from flattening plane
+        dists_to_plane = np.dot(mesh.vertices - pts[0], normals[0])
+        flat_verts = mesh.vertices - normals[0] * (
+            dists_to_plane * flat_weight_matrix
+        ).reshape(-1, 1)
+        flat_mesh = mesh.copy()
+        flat_mesh.vertices = flat_verts
+
+        ### Fair the flat mesh
+        EDGE_FAIRING_DISTANCE = 3  # mm - how wide of region to fair
+        edge_mask = (flat_dists > sigma * num_std_devs * 0.80) & (
+            flat_dists < sigma * num_std_devs + EDGE_FAIRING_DISTANCE
+        )
+        # bump_mesh.visual.vertex_colors[edge_mask[0]] = [255,0,0,255]
+        # bump_mesh.show()
+        edge_neighbors = np.arange(len(edge_mask[0]))[edge_mask[0]]
+        new_mesh = fair_mesh(flat_mesh, edge_neighbors, 3)
+
+        ### Apply the surface deformation to the flattened region
+        assert num_smoothing <= len(pts), "num_smoothing must be <= num_pts"
+
+        # Calculate distance between each vertex and deformation point
+        bump_dists = scipy.spatial.distance.cdist(pts, flat_mesh.vertices)
+
+        # Calculate weights based on gaussian distribution (normalized)
+        bump_weight_matrix = gaussian.pdf(bump_dists) / gaussian.pdf(
+            0
+        )  # Replace with for loop if RAM exceeded
 
         # Smooth by averaging the weight/normals of the NUM_SMOOTHING deformation points with the highest weights
-        pts_within_smoothing_indices = weight_matrix.argsort(axis=0)[-5:, :]
-        vert_indices = np.repeat(np.arange(num_verts).reshape(1, -1), num_smoothing, axis=0)
-        mean_weight = weight_matrix[pts_within_smoothing_indices, vert_indices].mean(axis=0)  # 2D fancy indexing
+        pts_within_smoothing_indices = bump_weight_matrix.argsort(axis=0)[-5:, :]
+        vert_indices = np.repeat(
+            np.arange(num_verts).reshape(1, -1), num_smoothing, axis=0
+        )
+        mean_weight = bump_weight_matrix[
+            pts_within_smoothing_indices, vert_indices
+        ].mean(
+            axis=0
+        )  # 2D fancy indexing
         mean_normal = normals[pts_within_smoothing_indices].mean(axis=0)
 
         # Apply deformation according to weighted height and at the calculated normal
-        bump = height * mean_normal * mean_weight.reshape(-1, 1)
-        new_verts = mesh.vertices + bump
+        bump_verts = flat_mesh.vertices + height * mean_normal * mean_weight.reshape(
+            -1, 1
+        )
+        bump_mesh = mesh.copy()
+        bump_mesh.vertices = bump_verts
 
-        # Update vertices on mesh
-        mesh.vertices = new_verts
-
-        self.mesh = mesh
+        self.mesh = bump_mesh
 
     def copy(self):
 
