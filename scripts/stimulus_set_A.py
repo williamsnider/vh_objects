@@ -42,12 +42,22 @@ sd_table = np.array(
     ]
 )
 
-# Stimulus set
+arg_list = []
 for j in range(len(BACKBONE_ANGLE_LIST)):
-    j = 4
+    backbone_angle = BACKBONE_ANGLE_LIST[j]
+    for i in range(len(RADIUS_LIST)):
+        radius = RADIUS_LIST[i]
+        for mag1, mag2 in sd_table:
+            arg_list.append([backbone_angle, radius, mag1, mag2])
+
+
+def construct_shapes(args):
+    s = np.sin
+    c = np.cos
+
+    backbone_angle, radius, mag1, mag2 = args
 
     # Construct medial-axis backbone
-    backbone_angle = BACKBONE_ANGLE_LIST[j]
     backbone_cp = approximate_arc(backbone_angle, LENGTH)
 
     # Rotate to align along +Y axis
@@ -61,99 +71,106 @@ for j in range(len(BACKBONE_ANGLE_LIST)):
     backbone_R = backbone_cp @ R
     backbone = Backbone(backbone_R, reparameterize=True)
 
-    # Radii
-    for i in range(len(RADIUS_LIST)):
-        i = 0
+    # Construct cross sections of shape
+    cp_radius = find_cp_for_desired_radius(radius, NUM_CP_PER_CROSS_SECTION)
+    cs_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(
+        -1, 1
+    )
+    cs_cp = np.hstack((cp_radius * np.cos(cs_th), cp_radius * np.sin(cs_th)))
+    cs_list = [
+        CrossSection(controlpoints=cs_cp, position=position)
+        for position in np.linspace(0.0, 1, 20)
+    ]
 
-        # Construct cross sections of shape
-        radius = RADIUS_LIST[i]
-        cp_radius = find_cp_for_desired_radius(radius, NUM_CP_PER_CROSS_SECTION)
-        cs_th = np.linspace(
-            0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False
-        ).reshape(-1, 1)
-        cs_cp = np.hstack((cp_radius * np.cos(cs_th), cp_radius * np.sin(cs_th)))
-        cs_list = [
-            CrossSection(controlpoints=cs_cp, position=position)
-            for position in np.linspace(0.0, 1, 20)
+    # Axial Component
+    ac = AxialComponent(backbone, cs_list, smooth_with_post=False)
+
+    # Shape
+    s = Shape([ac], label="NeedsALabel")
+
+    pt1, normal1 = get_deformation_vertex(
+        s.mesh, s.ac_list[0], SD_POSITIONS[0], N_rotation=np.pi
+    )
+    pt2, normal2 = get_deformation_vertex(
+        s.mesh, s.ac_list[0], SD_POSITIONS[1], N_rotation=np.pi
+    )
+
+    if mag1 != 0:
+        s.apply_gaussian_deformation(pt1, normal1, mag1, SD_SIGMA, num_smoothing=1)
+    if mag2 != 0:
+        s.apply_gaussian_deformation(pt2, normal2, mag2, SD_SIGMA, num_smoothing=1)
+
+    # Post
+
+    if backbone_angle == 0:
+        INTERFACE_Y_SHIFT = 0
+    else:
+        INTERFACE_Y_SHIFT = s.mesh.vertices[:, 1].min() + 6
+    OVERLAP_OFFSET = 1
+    post_backbone_cp = np.array(
+        [
+            [s.mesh.vertices[:, 0].min() - 2 * OVERLAP_OFFSET, INTERFACE_Y_SHIFT, 0],
+            [
+                s.mesh.vertices[:, 0].min() / 2 - 1 * OVERLAP_OFFSET,
+                INTERFACE_Y_SHIFT,
+                0,
+            ],
+            [OVERLAP_OFFSET, INTERFACE_Y_SHIFT, 0],
         ]
+    )
+    post_backbone = Backbone(post_backbone_cp, reparameterize=True)
+    post_radius = 5
+    post_cp_radius = find_cp_for_desired_radius(post_radius, NUM_CP_PER_CROSS_SECTION)
+    post_th = np.linspace(
+        0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False
+    ).reshape(-1, 1)
+    post_cp = np.hstack(
+        (post_cp_radius * np.cos(post_th), post_cp_radius * np.sin(post_th))
+    )
+    post_cs_list = [
+        CrossSection(controlpoints=post_cp, position=0.0),
+        CrossSection(controlpoints=post_cp, position=1.0),
+    ]
+    post_ac = AxialComponent(post_backbone, post_cs_list, smooth_with_post=False)
 
-        # Axial Component
-        ac = AxialComponent(backbone, cs_list, smooth_with_post=False)
+    # Interface
+    scene = trimesh.Scene()
+    interface = trimesh.load_mesh(
+        "/home/oconnorlab/code/objects/assets/Interface_0024 v2.stl"
+    )
+    R = trimesh.transformations.rotation_matrix(-np.pi / 2, np.array([0, 0, 1]))
+    R[0, 3] = s.mesh.vertices[:, 0].min() - OVERLAP_OFFSET
+    R[1, 3] = INTERFACE_Y_SHIFT  # Radius of post if 5mm
+    interface = interface.apply_transform(R)
 
-        # Surface deformations
-        for mag1, mag2 in sd_table:
+    # Fuse post and interface
+    post_shape = fuse_meshes(
+        post_ac.mesh, s.mesh, fairing_distance=3, operation="union"
+    )
+    interface_post_shape = fuse_meshes(post_shape, interface, 0, "union")
+    s.mesh_with_interface = interface_post_shape
 
-            mag1 = SD_MAGNITUDE
-            mag2 = SD_MAGNITUDE
+    R = trimesh.transformations.rotation_matrix(-np.pi / 4, np.array([1, 0, 0]))
+    s.save_mesh_as_png(
+        "/home/oconnorlab/code/objects/sample_shapes/stimlus_set_A",
+        return_img=False,
+        rotation=R,
+        interface=True,
+    )
 
-            # Shape
-            s = Shape([ac], label="NeedsALabel")
+    return s
 
-            pt1, normal1 = get_deformation_vertex(
-                s.mesh, s.ac_list[0], SD_POSITIONS[0], N_rotation=np.pi
-            )
-            pt2, normal2 = get_deformation_vertex(
-                s.mesh, s.ac_list[0], SD_POSITIONS[1], N_rotation=np.pi
-            )
 
-            if mag1 != 0:
-                s.apply_gaussian_deformation(
-                    pt1, normal1, mag1, SD_SIGMA, num_smoothing=1
-                )
-            if mag2 != 0:
-                s.apply_gaussian_deformation(
-                    pt2, normal2, mag2, SD_SIGMA, num_smoothing=1
-                )
+s = construct_shapes([np.pi / 4, 15, 3, 3])
+s.mesh_with_interface.show()
+# broken = trimesh.repair.broken_faces(interface, color=[255, 0, 0, 255])
+# interface.show(smooth=False)
 
-            # Post
-            OVERLAP_OFFSET = 1
-            post_backbone_cp = np.array(
-                [
-                    [s.mesh.vertices[:, 0].min() - 2 * OVERLAP_OFFSET, 5, 0],
-                    [s.mesh.vertices[:, 0].min() / 2 - 1 * OVERLAP_OFFSET, 5, 0],
-                    [0, 5, 0],
-                ]
-            )
-            post_backbone = Backbone(post_backbone_cp, reparameterize=True)
-            post_radius = 5
-            post_cp_radius = find_cp_for_desired_radius(
-                post_radius, NUM_CP_PER_CROSS_SECTION
-            )
-            post_th = np.linspace(
-                0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False
-            ).reshape(-1, 1)
-            post_cp = np.hstack(
-                (post_cp_radius * np.cos(post_th), post_cp_radius * np.sin(post_th))
-            )
-            post_cs_list = [
-                CrossSection(controlpoints=post_cp, position=0.0),
-                CrossSection(controlpoints=post_cp * 0.1, position=1.0),
-            ]
-            post_ac = AxialComponent(
-                post_backbone, post_cs_list, smooth_with_post=False
-            )
-
-            # Interface
-            scene = trimesh.Scene()
-            interface = trimesh.load_mesh(
-                "/home/oconnorlab/code/objects/assets/Interface_0023.stl"
-            )
-            R = trimesh.transformations.rotation_matrix(-np.pi / 2, np.array([0, 0, 1]))
-            R[0, 3] = s.mesh.vertices[:, 0].min() - OVERLAP_OFFSET
-            R[1, 3] = 5  # Radius of post if 5mm
-            interface = interface.apply_transform(R)
-
-            # Fuse post and interface
-            fuse
-
-            scene.add_geometry(interface)
-            scene.add_geometry(s.mesh)
-            scene.add_geometry(post_ac.mesh)
-            scene.show()
-            # s.mesh.show()
-            break
-        break
-    break
+# scene.add_geometry(interface)
+# scene.add_geometry(s.mesh)
+# scene.add_geometry(post_ac.mesh)
+# scene.show()
+# s.mesh.show()
 
 
 # # Hook

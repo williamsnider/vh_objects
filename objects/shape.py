@@ -503,7 +503,7 @@ class Shape:
         v = np.array([0, 1, 0])
         n = np.cross(u, v)
         # e = np.array([0, 0, -150])  #  eye: camera position in world coordinates
-        e = np.array([5, 0, -70])  #  eye: camera position in world coordinates
+        e = np.array([25, 0, -100])  #  eye: camera position in world coordinates
         camera_pose = np.array(
             [
                 [u[0], u[1], u[2], e[0]],
@@ -530,7 +530,8 @@ class Shape:
         scene.add(camera, pose=camera_pose)
 
         # TODO: This is not 16 bit depth
-        r = pyrender.OffscreenRenderer(resolution[0], resolution[1], bitdepth="16bit")
+        r = pyrender.OffscreenRenderer(resolution[0], resolution[1])
+        # r = pyrender.OffscreenRenderer(resolution[0], resolution[1], bitdepth="16bit")
         color, _ = r.render(scene)
 
         if return_img is True:
