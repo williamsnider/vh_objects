@@ -4,6 +4,7 @@ from objects.utilities import (
     find_cp_for_desired_radius,
     approximate_arc,
     get_deformation_vertex,
+    fuse_meshes,
 )
 from objects.cross_section import CrossSection
 from objects.axial_component import AxialComponent
@@ -104,15 +105,53 @@ for j in range(len(BACKBONE_ANGLE_LIST)):
                     pt2, normal2, mag2, SD_SIGMA, num_smoothing=1
                 )
 
+            # Post
+            OVERLAP_OFFSET = 1
+            post_backbone_cp = np.array(
+                [
+                    [s.mesh.vertices[:, 0].min() - 2 * OVERLAP_OFFSET, 5, 0],
+                    [s.mesh.vertices[:, 0].min() / 2 - 1 * OVERLAP_OFFSET, 5, 0],
+                    [0, 5, 0],
+                ]
+            )
+            post_backbone = Backbone(post_backbone_cp, reparameterize=True)
+            post_radius = 5
+            post_cp_radius = find_cp_for_desired_radius(
+                post_radius, NUM_CP_PER_CROSS_SECTION
+            )
+            post_th = np.linspace(
+                0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False
+            ).reshape(-1, 1)
+            post_cp = np.hstack(
+                (post_cp_radius * np.cos(post_th), post_cp_radius * np.sin(post_th))
+            )
+            post_cs_list = [
+                CrossSection(controlpoints=post_cp, position=0.0),
+                CrossSection(controlpoints=post_cp * 0.1, position=1.0),
+            ]
+            post_ac = AxialComponent(
+                post_backbone, post_cs_list, smooth_with_post=False
+            )
+
             # Interface
             scene = trimesh.Scene()
             interface = trimesh.load_mesh(
-                "/home/oconnorlab/code/objects/assets/Interface_0023_aligned_to_origin v3.stl"
+                "/home/oconnorlab/code/objects/assets/Interface_0023.stl"
             )
+            R = trimesh.transformations.rotation_matrix(-np.pi / 2, np.array([0, 0, 1]))
+            R[0, 3] = s.mesh.vertices[:, 0].min() - OVERLAP_OFFSET
+            R[1, 3] = 5  # Radius of post if 5mm
+            interface = interface.apply_transform(R)
+
+            # Fuse post and interface
+            fuse
+
             scene.add_geometry(interface)
             scene.add_geometry(s.mesh)
+            scene.add_geometry(post_ac.mesh)
             scene.show()
             # s.mesh.show()
+            break
         break
     break
 
