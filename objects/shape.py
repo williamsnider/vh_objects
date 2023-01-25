@@ -1,4 +1,3 @@
-from sympy import Q
 import trimesh
 import numpy as np
 import matplotlib.pyplot as plt
@@ -28,6 +27,7 @@ import copy
 import cv2
 import scipy.stats
 import scipy.spatial
+import pickle
 
 
 class Shape:
@@ -455,89 +455,46 @@ class Shape:
         filename = str(Path(save_dir, self.label).with_suffix(".png"))
 
         # Compose scene
-        scene = pyrender.Scene(ambient_light=[0.1, 0.1, 0.3], bg_color=[1, 1, 1])
-
-        # Add mesh and interface
-        mesh_pose = np.array(
-            [
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, 0],
-                [0, 0, 0, 1],
-            ]
-        )
-
-        if rotation is not None:
-            mesh_pose = mesh_pose @ rotation
+        scene = pyrender.Scene(ambient_light=[0.1, 0.5, 0.3], bg_color=[1, 1, 1])
 
         # Add mesh to scene
+        if rotation is not None:
+            mesh_pose = rotation
+        else:
+            mesh_pose = np.eye(4)
         if interface == True:
             mesh = pyrender.Mesh.from_trimesh(self.mesh_with_interface, smooth=False)
         else:
             mesh = pyrender.Mesh.from_trimesh(self.mesh, smooth=False)
         scene.add(mesh, pose=mesh_pose)
 
-        # # Add interface to scene
-        # if self.fuse_to_interface is True:
-        #     interface = pyrender.Mesh.from_trimesh(self.interface, smooth=False)
-        #     scene.add(interface, pose=mesh_pose)
+        # Camera pose explained:
+        # +X axis is towards the right of the screen
+        # +Y axis is towards the top of the screen
+        # -Z axis points into the screen (camera looks into the screen)
+        yfov = np.pi / 4.0
+        ywidth = 100  # mm
+        camera_pose = np.eye(4)
+        camera_pose[2, 3] = (
+            ywidth / 2 / np.tan(yfov / 2)
+        )  # Calculate correct distance for camera to have ywidth and yfov
+        camera = pyrender.PerspectiveCamera(yfov=yfov)
+        scene.add(camera, pose=camera_pose)
 
         # Add directional light
-        light_pose = np.array(
-            [
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, -1, 0],
-                [0, 0, 0, 1],
-            ]
-        )
+        light_euler = np.array([-np.pi / 4, 0, 0])
+        R = scipy.spatial.transform.Rotation.from_euler("xyz", light_euler).as_matrix()
+        light_pose = np.eye(4)
+        light_pose[:3, :3] = R
         light = pyrender.DirectionalLight(color=[1, 1, 1], intensity=2.5e3)
         scene.add(light, pose=light_pose)
 
-        # Set camera pose parameters
-        # With these settings, the resulting image lines up with our shape coordinate system:
-        # Image left = shape +X
-        # Image up = shape +Y
-        # Out of image (Towards viewer) = shape +Z  (check this one)
-        u = np.array([-1, 0, 0])
-        v = np.array([0, 1, 0])
-        n = np.cross(u, v)
-        # e = np.array([0, 0, -150])  #  eye: camera position in world coordinates
-        e = np.array([25, 0, -100])  #  eye: camera position in world coordinates
-        camera_pose = np.array(
-            [
-                [u[0], u[1], u[2], e[0]],
-                [v[0], v[1], v[2], e[1]],
-                [n[0], n[1], n[2], e[2]],
-                [0, 0, 0, 1],
-            ]
-        )
-        # # Set camera pose parameters such that camera lies on positive z-axis looking towards the origin
-        # u = np.array([1, 0, 0])  # up vector
-        # n = np.array([0, 1, 0])  # view direction; opposite vector of camera's "view"
-        # v = np.cross(u, n)
-        # e = np.array([0, 30, 0])  #  eye: camera position in world coordinates
-        # camera_pose = np.array(
-        #
-        #         [u[0], v[0], -n[0], -e[0]],
-        #         [u[1], v[1], -n[1], -e[1]],
-        #         [u[2], v[2], -n[2], -e[2]],
-        #         [0, 0, 0, 1],
-        #     ]
-        # )
-
-        camera = pyrender.PerspectiveCamera(yfov=np.pi / 4.0)
-        scene.add(camera, pose=camera_pose)
-
-        # TODO: This is not 16 bit depth
         r = pyrender.OffscreenRenderer(resolution[0], resolution[1])
-        # r = pyrender.OffscreenRenderer(resolution[0], resolution[1], bitdepth="16bit")
         color, _ = r.render(scene)
 
         if return_img is True:
             return color
         else:
-            # Save png - at 16bit depth
             cv2.imwrite(filename, color)
 
     def plot_meshes(self):
@@ -678,6 +635,21 @@ class Shape:
         bump_mesh.vertices = bump_verts
 
         self.mesh = bump_mesh
+
+    def save_as_pickle(self, save_dir):
+
+        # Convert to Path class
+        if type(save_dir) == str:
+            save_dir = Path(save_dir)
+
+        # Construct save_dir
+        if save_dir.is_dir() is False:
+            save_dir.mkdir(parents=True)
+
+        filename = str(Path(save_dir, self.label).with_suffix(".pkl"))
+
+        with open(filename, "wb") as f:
+            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     def copy(self):
 

@@ -11,6 +11,8 @@ from objects.axial_component import AxialComponent
 from objects.backbone import Backbone
 from objects.shape import Shape
 import trimesh
+import scipy
+from multiprocessing import Pool
 
 # Parameters
 RADIUS_LIST = [6, 9, 12, 15]  # mm
@@ -29,33 +31,12 @@ NUM_CP_PER_CROSS_SECTION = 8
 c = np.cos
 s = np.sin
 
-# Surface deformation magnitude in left or right position
-sd_table = np.array(
-    [
-        [-SD_MAGNITUDE, -SD_MAGNITUDE],
-        [-SD_MAGNITUDE, 0],
-        [0, -SD_MAGNITUDE],
-        [0, 0],
-        [SD_MAGNITUDE, 0],
-        [0, SD_MAGNITUDE],
-        [SD_MAGNITUDE, SD_MAGNITUDE],
-    ]
-)
-
-arg_list = []
-for j in range(len(BACKBONE_ANGLE_LIST)):
-    backbone_angle = BACKBONE_ANGLE_LIST[j]
-    for i in range(len(RADIUS_LIST)):
-        radius = RADIUS_LIST[i]
-        for mag1, mag2 in sd_table:
-            arg_list.append([backbone_angle, radius, mag1, mag2])
-
 
 def construct_shapes(args):
     s = np.sin
     c = np.cos
 
-    backbone_angle, radius, mag1, mag2 = args
+    backbone_angle, radius, sd_list, label = args
 
     # Construct medial-axis backbone
     backbone_cp = approximate_arc(backbone_angle, LENGTH)
@@ -86,23 +67,31 @@ def construct_shapes(args):
     ac = AxialComponent(backbone, cs_list, smooth_with_post=False)
 
     # Shape
-    s = Shape([ac], label="NeedsALabel")
+    s = Shape([ac], label=label)
 
-    pt1, normal1 = get_deformation_vertex(
-        s.mesh, s.ac_list[0], SD_POSITIONS[0], N_rotation=np.pi
-    )
-    pt2, normal2 = get_deformation_vertex(
-        s.mesh, s.ac_list[0], SD_POSITIONS[1], N_rotation=np.pi
-    )
+    # Get correct point and normal to apply surface deformations
+    point_and_normal = []
+    for sd in sd_list:
 
-    if mag1 != 0:
-        s.apply_gaussian_deformation(pt1, normal1, mag1, SD_SIGMA, num_smoothing=1)
-    if mag2 != 0:
-        s.apply_gaussian_deformation(pt2, normal2, mag2, SD_SIGMA, num_smoothing=1)
+        if sd == []:
+            continue
 
-    # Post
+        mag, t = sd
+        pt1, normal1 = get_deformation_vertex(s.mesh, s.ac_list[0], t, N_rotation=np.pi)
+        point_and_normal.append([pt1, normal1])
 
-    if backbone_angle == 0:
+    # Apply surface deformations
+    for i, sd in enumerate(sd_list):
+
+        if sd == []:
+            continue
+
+        mag, t = sd
+        pt, normal = point_and_normal[i]
+        if mag != 0:
+            s.apply_gaussian_deformation(pt, normal, mag, SD_SIGMA, num_smoothing=1)
+
+    if backbone_angle <= np.pi / 2:
         INTERFACE_Y_SHIFT = 0
     else:
         INTERFACE_Y_SHIFT = s.mesh.vertices[:, 1].min() + 6
@@ -115,7 +104,7 @@ def construct_shapes(args):
                 INTERFACE_Y_SHIFT,
                 0,
             ],
-            [OVERLAP_OFFSET, INTERFACE_Y_SHIFT, 0],
+            [3 * OVERLAP_OFFSET, INTERFACE_Y_SHIFT, 0],
         ]
     )
     post_backbone = Backbone(post_backbone_cp, reparameterize=True)
@@ -150,19 +139,99 @@ def construct_shapes(args):
     interface_post_shape = fuse_meshes(post_shape, interface, 0, "union")
     s.mesh_with_interface = interface_post_shape
 
-    R = trimesh.transformations.rotation_matrix(-np.pi / 4, np.array([1, 0, 0]))
+    COM = backbone.r(0.5)[0]
+    # Rotate shape for easier viewing
+    shape_euler = np.array([7 * np.pi / 8, 0, np.pi])
+    R = np.eye(4)
+    R[:3, :3] = scipy.spatial.transform.Rotation.from_euler(
+        "xyz", shape_euler
+    ).as_matrix()
+    COM_rot = R[:3, :3] @ COM  # Rotate center of mass as well
+    R[:3, 3] = -COM_rot  # Add COM to transformation matrix
+
+    # new_mesh = mesh_rot
+    # # new_mesh = new_mesh.apply_transform(R)
+    # fig = plt.figure()
+    # ax = plt.axes(projection="3d")
+    # ax.plot(
+    #     new_mesh.vertices[::100, 0],
+    #     new_mesh.vertices[::100, 1],
+    #     new_mesh.vertices[::100, 2],
+    #     "k.",
+    # )
+    # ax.plot(
+    #     s.mesh.vertices[::100, 0],
+    #     s.mesh.vertices[::100, 1],
+    #     s.mesh.vertices[::100, 2],
+    #     "g.",
+    # )
+    # ax.plot(
+    #     new_mesh.center_mass[0], new_mesh.center_mass[1], new_mesh.center_mass[2], "r."
+    # )
+    # ax.set_xlabel("x")
+    # ax.set_ylabel("y")
+    # ax.set_zlabel("z")
+    # plt.show()
+
+    base_dir = "/home/oconnorlab/code/objects/sample_shapes/stimulus_set_A"
     s.save_mesh_as_png(
-        "/home/oconnorlab/code/objects/sample_shapes/stimlus_set_A",
+        base_dir + "/png",
         return_img=False,
         rotation=R,
         interface=True,
     )
 
-    return s
+    # Pickle object
+    s.save_as_pickle(base_dir + "/pkl")
+
+    print("Finished", s.label)
 
 
-s = construct_shapes([np.pi / 4, 15, 3, 3])
-s.mesh_with_interface.show()
+# List of list of list containing surface deformation magnitudes and locations (t)
+sd_table = [
+    [[]],
+    [[SD_MAGNITUDE, 3 / 9]],
+    [[SD_MAGNITUDE, 3 / 9], [SD_MAGNITUDE, 4 / 9]],
+    [[SD_MAGNITUDE, 3 / 9], [SD_MAGNITUDE, 5 / 9]],
+    [[SD_MAGNITUDE, 3 / 9], [SD_MAGNITUDE, 6 / 9]],
+]
+
+arg_list = []
+count = 0
+for j in range(len(BACKBONE_ANGLE_LIST)):
+    backbone_angle = BACKBONE_ANGLE_LIST[j]
+    for i in range(len(RADIUS_LIST)):
+        radius = RADIUS_LIST[i]
+        for sd_list in sd_table:
+            arg_list.append([backbone_angle, radius, sd_list, "shape_{}".format(count)])
+            count += 1
+
+# construct_shapes(arg_list[33])
+with Pool() as pool:
+    pool.map(construct_shapes, arg_list)
+
+# # s = construct_shapes([np.pi, 15, 3, 3, "label_1"])
+# # s.mesh_with_interface.show()
+# import matplotlib.pyplot as plt
+
+# fig = plt.figure()
+# ax = plt.axes(projection="3d")
+# ax.plot(
+#     s.mesh.vertices[::100, 0],
+#     s.mesh.vertices[::100, 1],
+#     s.mesh.vertices[::100, 2],
+#     "k.",
+# )
+# ax.plot(s.mesh.center_mass[0], s.mesh.center_mass[1], s.mesh.center_mass[2], "r.")
+# ax.set_xlabel("x")
+# ax.set_ylabel("y")
+# ax.set_zlabel("z")
+# plt.show()
+
+
+# Plot verts and center of mass
+
+
 # broken = trimesh.repair.broken_faces(interface, color=[255, 0, 0, 255])
 # interface.show(smooth=False)
 
