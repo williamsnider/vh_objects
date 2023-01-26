@@ -13,6 +13,7 @@ from objects.shape import Shape
 import trimesh
 import scipy
 from multiprocessing import Pool
+import pickle
 
 # Parameters
 RADIUS_LIST = [6, 9, 12, 15]  # mm
@@ -210,6 +211,11 @@ for j in range(len(BACKBONE_ANGLE_LIST)):
 with Pool() as pool:
     pool.map(construct_shapes, arg_list)
 
+
+# Load a shape
+filename = "/home/oconnorlab/code/objects/sample_shapes/stimulus_set_A/pkl/shape_20.pkl"
+with open(filename) as f:
+    shape = pickle.load(f)
 # # s = construct_shapes([np.pi, 15, 3, 3, "label_1"])
 # # s.mesh_with_interface.show()
 # import matplotlib.pyplot as plt
