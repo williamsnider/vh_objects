@@ -214,7 +214,7 @@ with Pool() as pool:
 
 # Load a shape
 filename = "/home/oconnorlab/code/objects/sample_shapes/stimulus_set_A/pkl/shape_20.pkl"
-with open(filename) as f:
+with open(filename, "rb") as f:
     shape = pickle.load(f)
 # # s = construct_shapes([np.pi, 15, 3, 3, "label_1"])
 # # s.mesh_with_interface.show()
