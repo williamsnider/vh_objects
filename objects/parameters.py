@@ -10,14 +10,20 @@ NUM_SAMPLES_FOR_REPARAMETERIZATION = 10 * NUM_INTERPOLATION_POINTS
 EPSILON = 1e-2  # Used to estimate b-spline derivative
 
 # AxialComponent construction
-SAMPLING_DENSITY_U = 500  # Number of samples along round axis of 'cylinder' axial component
-SAMPLING_DENSITY_V = 500  # Number of samples along long axis of 'cylinder' axial component
+SAMPLING_DENSITY_U = (
+    100  # Number of samples along round axis of 'cylinder' axial component
+)
+SAMPLING_DENSITY_V = (
+    100  # Number of samples along long axis of 'cylinder' axial component
+)
 SHRINK_FACTOR = 0.5  # Impacts surface slope near endpoints
 ORDER = 3  # quadratic B-spline
 
 # Shape construction
 HARMONIC_POWER = 2  # 2-> G1 curvature fairing, 3-> G2 curvature fairing, etc
-FAIRING_DISTANCE = 1  # How far (mm) from a junction should vertices in a union mesh be faired
+FAIRING_DISTANCE = (
+    1  # How far (mm) from a junction should vertices in a union mesh be faired
+)
 
 # Interface construction
 INTERFACE_PATH = Path("./assets/base_interface.stl")
@@ -41,8 +47,12 @@ POST_FAIRING_DISTANCE = 0  # mm
 # PEG_SPHERE_SUBDIVISIONS = 1  # Higher --> more points used to fair peg tip
 
 # Component construction
-cs_scale_backbone = BACKBONE_LENGTH / 4  # Controls thickness of cross sections around backbone
-cs_scale_surface_deformation = 5  # Controls thickness of cross sections in surface deformations
+cs_scale_backbone = (
+    BACKBONE_LENGTH / 4
+)  # Controls thickness of cross sections around backbone
+cs_scale_surface_deformation = (
+    5  # Controls thickness of cross sections in surface deformations
+)
 SD_LENGTH = 12  # Part of this will be inside parent shape
 STRAIGHT_PROPORTION = 0.25
 ARC_ANGLE = np.pi / 4

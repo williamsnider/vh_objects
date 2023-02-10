@@ -354,7 +354,8 @@ def move_verts_on_broken_faces(union_mesh, mesh1, mesh2):
     Doing this retroactively (as opposed to shifting all vertices that lie on an edge of the other mesh) is a lot faster."""
 
     # Identify vertices of broken faces (indexed by union_mesh)
-    broken = trimesh.repair.broken_faces(union_mesh)
+    broken = trimesh.repair.broken_faces(union_mesh, color=[255, 0, 0, 255])
+    union_mesh.show()
     vert_indices = union_mesh.faces[broken].ravel()
     verts_to_shift = union_mesh.vertices[vert_indices]
 
@@ -426,8 +427,9 @@ def find_neighbors(mesh, group, distance):
     return list(neighbors)
 
 
-def fair_mesh(union_mesh, neighbors, harmonic_power):
+def fair_mesh(input_mesh, neighbors, harmonic_power):
 
+    union_mesh = input_mesh.copy()
     v = union_mesh.vertices.__array__()
     f = union_mesh.faces.__array__().astype("int64")
     num_verts = v.shape[0]
