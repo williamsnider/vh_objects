@@ -1,83 +1,50 @@
-# Test interface joining on curved cylinder
-from objects.backbone import Backbone
-from objects.cross_section import CrossSection
-from objects.axial_component import AxialComponent
-from objects.shape import Shape
-from objects.utilities import approximate_arc, get_deformation_vertex, get_deformation_points_along_plane
+import trimesh
+import objects.utilities
+
+# Load mesh
+mesh = trimesh.load("test.stl")
+
+# Analyze curvature
+k1, k2 = objects.utilities.calc_mesh_principal_curvatures(mesh)
+
+k1_faces = k1[mesh.faces].mean(axis=1)
+k2_faces = k2[mesh.faces].mean(axis=1)
+
 import numpy as np
-from scipy.spatial.transform import Rotation as R
-import scipy
+import matplotlib.pyplot as plt
+import matplotlib.colors
 
-from objects.utilities import approximate_arc
+cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["blue", "red"])
+face_min = np.min([k1_faces.min(), k2_faces.min()])
+face_max = np.max([k1_faces.max(), k2_faces.max()])
+c1 = (k1_faces - k1_faces.min()) / (k1_faces.max() - k1_faces.min())
+c2 = (k2_faces - k2_faces.min()) / (k2_faces.max() - k2_faces.min())
+cmap1 = cmap(c1)
+cmap2 = cmap(c2)
 
+mesh = mesh.copy()
+mesh.visual.face_colors = cmap1
 
-def align_backbone_center(backbone):
-    # Rotate to reach T(0.5) == +X axis
-    original = np.vstack([backbone.T(0.5), backbone.N(0.5), backbone.B(0.5)])
-    goal = np.array(
-        [
-            [1, 0, 0],
-            [0, 1, 0],
-            [0, 0, 1],
-        ]
-    )
-
-    rot = goal @ np.linalg.inv(original)
-    cp = arc_array @ rot
-    return Backbone(controlpoints=cp, reparameterize=True)
+# mesh.show()
 
 
-BACKBONE_LENGTH = 40
-CS_SCALE = BACKBONE_LENGTH / 3
-c = np.cos
-s = np.sin
-base_cp = np.array(
-    [
-        [c(0 / 8 * 2 * np.pi), s(0 / 8 * 2 * np.pi)],
-        [c(1 / 8 * 2 * np.pi), s(1 / 8 * 2 * np.pi)],
-        [c(2 / 8 * 2 * np.pi), s(2 / 8 * 2 * np.pi)],
-        [c(3 / 8 * 2 * np.pi), s(3 / 8 * 2 * np.pi)],
-        [c(4 / 8 * 2 * np.pi), s(4 / 8 * 2 * np.pi)],
-        [c(5 / 8 * 2 * np.pi), s(5 / 8 * 2 * np.pi)],
-        [c(6 / 8 * 2 * np.pi), s(6 / 8 * 2 * np.pi)],
-        [c(7 / 8 * 2 * np.pi), s(7 / 8 * 2 * np.pi)],
-    ]
-)
-cp_round = base_cp.copy()
-cp_round *= CS_SCALE
+import igl
+import scipy as sp
+import numpy as np
+from meshplot import plot, subplot, interact
 
+import os
 
-# Varying curvature of constant curvature medial-axis
-scale = 0.75
-NUM_CS = 10
-angle = np.pi / 4
-arc_array = approximate_arc(angle, 40)
-backbone = Backbone(controlpoints=arc_array, reparameterize=True)
+root_folder = os.getcwd()
+v, f = igl.read_triangle_mesh("test.stl")
+k = igl.gaussian_curvature(v, f)
+my_plot = plot(v, f, k)
+my_plot.save("my_plot.html")
 
+v1, v2, k1, k2 = igl.principal_curvature(v, f)
+h2 = 0.5 * (k1 + k2)
+p = plot(v, f, h2, shading={"wireframe": False}, return_plot=True)
 
-backbone = align_backbone_center(backbone)
-
-cs_list = [CrossSection(cp_round * scale, i) for i in np.linspace(0.05, 0.95, NUM_CS)]
-ac = AxialComponent(backbone=backbone, cross_sections=cs_list)
-s = Shape([ac], label="cylinder_curve_{}".format(str(round(angle, 2)).replace(".", "-")))
-
-
-# Add surface deformations
-s.label = "NeedsALabel"
-t = 1 / 3
-ang = 0
-magnitude = 4
-sigma = 1
-
-pts, normals = get_deformation_vertex(s.mesh, s.ac_list[0], t, N_rotation=ang)
-
-
-# Flatten points around deformation so that bump will be consistent
-# s.flatten_around_vertex(pts, normals, magnitude, sigma)
-
-# Apply deformation
-s.apply_gaussian_deformation(pts, normals, magnitude, sigma)
-
-s.create_interface()
-s.fuse_mesh_to_interface()
-s.mesh_with_interface.show()
+avg = igl.avg_edge_length(v, f) / 2.0
+p.add_lines(v + v1 * avg, v - v1 * avg, shading={"line_color": "red"})
+p.add_lines(v + v2 * avg, v - v2 * avg, shading={"line_color": "green"})
