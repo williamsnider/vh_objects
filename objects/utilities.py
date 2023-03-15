@@ -126,9 +126,7 @@ def approximate_arc(MAX_ANGLE, arc_length):
 
     # Shift so that the curve begins at the origin
     arc_array[:, 0] -= radius
-    arc_array[:, [0, 1]] = arc_array[
-        :, [1, 0]
-    ]  # Flip x and y-axis so long portion points in +X direction
+    arc_array[:, [0, 1]] = arc_array[:, [1, 0]]  # Flip x and y-axis so long portion points in +X direction
     # arc_array[:, 1] = -arc_array[:, 1]  # Negate y axis so curves upward (towards +Y)
 
     return arc_array
@@ -145,9 +143,7 @@ def find_cp_for_desired_radius(target_radius, num_cp_per_cross_section):
         # Make controlpoints
         c = np.cos
         s = np.sin
-        th = np.linspace(
-            0, 2 * np.pi, num_cp_per_cross_section, endpoint=False
-        ).reshape(-1, 1)
+        th = np.linspace(0, 2 * np.pi, num_cp_per_cross_section, endpoint=False).reshape(-1, 1)
         cp = np.hstack((cp_r * c(th), cp_r * s(th)))
 
         # Make curve
@@ -175,9 +171,7 @@ def find_cp_for_desired_radius(target_radius, num_cp_per_cross_section):
 
         return (avg_radius - target_radius) ** 2
 
-    res = minimize_scalar(
-        objective_function, method="bounded", bounds=(0, target_radius**2)
-    )
+    res = minimize_scalar(objective_function, method="bounded", bounds=(0, target_radius**2))
     if res.success == True:
         return res.x
     else:
@@ -279,9 +273,7 @@ def check_and_move_identical_verts(mesh1, mesh2):
     # Check that this shift was successful
     dd, ii = tree.query(mesh2.vertices, k=1)
     identical_verts = np.isclose(dd, 0)
-    assert (
-        np.any(identical_verts) == False
-    ), "Shifting the identical vertex did not work."
+    assert np.any(identical_verts) == False, "Shifting the identical vertex did not work."
 
     return mesh1, mesh2
 
@@ -295,9 +287,7 @@ def check_and_move_verts_on_edges(mesh1, mesh2):
 
         # Cross product reveals whether 3 poitns are
         edges = mesh1.vertices[mesh1.edges]
-        edges_vec = (
-            edges[:, 1, :] - edges[:, 0, :]
-        )  # Vector between two points defining edge
+        edges_vec = edges[:, 1, :] - edges[:, 0, :]  # Vector between two points defining edge
         verts_vec = (
             mesh2.vertices.reshape(-1, 1, 3) - edges[:, 0, :]
         )  # Vector between putative point in between edge and on point defining edge
@@ -332,18 +322,10 @@ def check_and_move_verts_on_edges(mesh1, mesh2):
 
         # Except loop if successful
         if none_colinear == True:
-            print(
-                "Shifting colinear vertices worked after {count} loops.".format(
-                    count=count
-                )
-            )
+            print("Shifting colinear vertices worked after {count} loops.".format(count=count))
             break
     else:
-        print(
-            "Shifting colinear vertices did not work after {count} loops.".format(
-                count=count
-            )
-        )
+        print("Shifting colinear vertices did not work after {count} loops.".format(count=count))
 
     return mesh1, mesh2
 
@@ -355,7 +337,7 @@ def move_verts_on_broken_faces(union_mesh, mesh1, mesh2):
 
     # Identify vertices of broken faces (indexed by union_mesh)
     broken = trimesh.repair.broken_faces(union_mesh, color=[255, 0, 0, 255])
-    union_mesh.show()
+    # union_mesh.show()
     vert_indices = union_mesh.faces[broken].ravel()
     verts_to_shift = union_mesh.vertices[vert_indices]
 
@@ -433,9 +415,7 @@ def fair_mesh(input_mesh, neighbors, harmonic_power):
     v = union_mesh.vertices.__array__()
     f = union_mesh.faces.__array__().astype("int64")
     num_verts = v.shape[0]
-    b = np.array(list(set(range(num_verts)) - set(neighbors))).astype(
-        "int64"
-    )  # Bounday indices - NOT to be faired
+    b = np.array(list(set(range(num_verts)) - set(neighbors))).astype("int64")  # Bounday indices - NOT to be faired
     bc = v[b]  # XYZ coordinates of the boundary indices
     z = igl.harmonic_weights(v, f, b, bc, harmonic_power)  # Smooths indices at creases
 
@@ -460,9 +440,7 @@ def fuse_meshes(meshA, meshB, fairing_distance, operation):
     while count < 5:
 
         # Compute boolean
-        union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(
-            mesh1, mesh2, operation
-        )
+        union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(mesh1, mesh2, operation)
 
         # Check watertightness; shift vertices slightly if not and repeat loop
         if union_mesh.is_watertight == False:
@@ -472,15 +450,9 @@ def fuse_meshes(meshA, meshB, fairing_distance, operation):
 
         count += 1
     else:
-        print(
-            "Mesh boolean failed to form a watertight mesh after {count} loops.".format(
-                count=count
-            )
-        )
+        print("Mesh boolean failed to form a watertight mesh after {count} loops.".format(count=count))
     if fairing_distance > 0:
-        neighbors = find_neighbors(
-            union_mesh, edge_verts_indices, distance=fairing_distance
-        )
+        neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=fairing_distance)
         faired_mesh = fair_mesh(union_mesh, neighbors, HARMONIC_POWER)
         return faired_mesh
     else:
@@ -544,9 +516,7 @@ def find_closest_surface_point(backbone_point, N, surface_points):
 
 def get_deformation_points_along_plane(mesh, N, point):
 
-    lines, face_index = trimesh.intersections.mesh_plane(
-        mesh, N.ravel(), point.ravel(), return_faces=True
-    )
+    lines, face_index = trimesh.intersections.mesh_plane(mesh, N.ravel(), point.ravel(), return_faces=True)
     pts = lines.mean(axis=1)
     normals = mesh.face_normals[face_index]
 
@@ -605,9 +575,7 @@ def transform_sd_mesh(sd_mesh, origin, ac, pos, theta_backbone, theta_linear_seg
 
     # Rotate goal_TNB about T  (rotation about vector through backbone and surface point)
     R_about_B = Rotation.from_rotvec(theta_linear_segment * goal_T).as_matrix()
-    surface_point = find_closest_surface_point(
-        backbone_point, N_rotated, surface_points
-    )
+    surface_point = find_closest_surface_point(backbone_point, N_rotated, surface_points)
     T = np.eye(4)
     T[:3, :3] = np.linalg.inv(goal_TNB @ R_about_B)
     T[:3, 3] = surface_point
@@ -659,9 +627,7 @@ def calc_mesh_principal_curvatures(mesh):
 
     # TODO: COMPAS implementation probably faster https://compas.dev/compas/latest/api/generated/compas_rhino.geometry.trimesh.trimesh_principal_curvature.html
     RADIUS = 1
-    K = trimesh.curvature.discrete_gaussian_curvature_measure(
-        mesh, mesh.vertices, RADIUS
-    )
+    K = trimesh.curvature.discrete_gaussian_curvature_measure(mesh, mesh.vertices, RADIUS)
     H = trimesh.curvature.discrete_mean_curvature_measure(mesh, mesh.vertices, RADIUS)
 
     # Handle nan's by replacing with 0 (k1 and k2 then both equal guassian curvature H)
@@ -687,9 +653,7 @@ def sliding_window_mean(arr, window_size, axis):
 
     assert window_size % 2 == 1, "window_size must be odd."
 
-    big_arr = np.zeros(
-        arr.shape + (window_size,)
-    )  # Add extra dimension along which we will average
+    big_arr = np.zeros(arr.shape + (window_size,))  # Add extra dimension along which we will average
     for idx in range(window_size):
 
         shift = (window_size - 1) // 2 - idx

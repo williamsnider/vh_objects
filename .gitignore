@@ -7,3 +7,4 @@ __pycache__
 stimulus_set
 *.ipynb
 samples
+*.png
