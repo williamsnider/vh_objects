@@ -4,6 +4,8 @@ import trimesh
 from objects.parameters import ORDER, SHRINK_FACTOR, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V
 from objects.utilities import open_uniform_knot_vector
 from objects.backbone import Backbone
+import scipy.interpolate
+import scipy.spatial
 
 # Fixed variables - used to built controlpoints array with the correct size.
 NUM_ENDPOINTS = 2  # Position 0.0 and 1.0 on the axial component's backbone
@@ -60,6 +62,7 @@ class AxialComponent:
         self.calc_transformation_matrices()
         self.calc_R_euler_angles()
         self.get_controlpoints()
+        self.adjust_controlpoints()
         self.make_surface()
         self.make_mesh()
 
@@ -247,7 +250,7 @@ class AxialComponent:
         """
 
         if self.smooth_with_post == False:
-            
+
             # Construct empty controlpoint array
             num_cross_sections = len(self.cross_sections)
             num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + num_cross_sections
@@ -317,7 +320,7 @@ class AxialComponent:
 
             # Construct empty controlpoint array
             num_cross_sections = len(self.cross_sections)
-            NUM_POST_POINTS=5
+            NUM_POST_POINTS = 5
             NUM_SINGLE_ENDCAP_POINT = 2
             num_rows = NUM_POST_POINTS + NUM_SINGLE_ENDCAP_POINT + num_cross_sections
             self.num_rows = num_rows
@@ -326,19 +329,19 @@ class AxialComponent:
 
             # Assign controlpoints - post
             POST_LENGTH = 15
-            POST_INTERFACE_POINT = np.array([-POST_LENGTH,0,0])+ self.r(0.0)
+            POST_INTERFACE_POINT = np.array([-POST_LENGTH, 0, 0]) + self.r(0.0)
             controlpoints[0, :, :] = np.repeat(POST_INTERFACE_POINT, num_cp_per_cross_section, axis=0)  # 1.0 endpoint
 
             # TODO: Make this just linear
             POST_RADIUS = 5.404  # This gives a B-spline radius of 5.00mm with 8 controlpoints.
             c = np.cos
             s = np.sin
-            th = np.linspace(0, 2*np.pi, num_cp_per_cross_section, endpoint=False).reshape(-1,1)
-            cp = np.hstack(( np.zeros((num_cp_per_cross_section,1)), POST_RADIUS*c(th), POST_RADIUS*s(th)))
-            controlpoints[1,:,:] = cp + self.r(0.0) + np.array([-POST_LENGTH,0,0]) 
-            controlpoints[2,:,:] = cp + self.r(0.0) + np.array([-POST_LENGTH,0,0]) * 0.8
-            controlpoints[3,:,:] = cp + self.r(0.0) + np.array([-POST_LENGTH,0,0])* 0.5
-            controlpoints[4,:,:] = cp + self.r(0.0) +  np.array([-POST_LENGTH,0,0])*0.2
+            th = np.linspace(0, 2 * np.pi, num_cp_per_cross_section, endpoint=False).reshape(-1, 1)
+            cp = np.hstack((np.zeros((num_cp_per_cross_section, 1)), POST_RADIUS * c(th), POST_RADIUS * s(th)))
+            controlpoints[1, :, :] = cp + self.r(0.0) + np.array([-POST_LENGTH, 0, 0])
+            controlpoints[2, :, :] = cp + self.r(0.0) + np.array([-POST_LENGTH, 0, 0]) * 0.8
+            controlpoints[3, :, :] = cp + self.r(0.0) + np.array([-POST_LENGTH, 0, 0]) * 0.5
+            controlpoints[4, :, :] = cp + self.r(0.0) + np.array([-POST_LENGTH, 0, 0]) * 0.2
 
             # Assign controlpoints - endpoints
             controlpoints[-1, :, :] = np.repeat(self.r(1.0), num_cp_per_cross_section, axis=0)  # 1.0 endpoint
@@ -484,6 +487,73 @@ class AxialComponent:
     #         controlpoints[idx, :, :] = cp
 
     #     self.controlpoints = controlpoints
+
+    def adjust_controlpoints(self):
+        """Adjusts controlpoints to prevent self intersections.
+
+        Makes the assumption that the largest extent of shapes are in the xy plane."""
+        cp = self.controlpoints
+        adjusted_cp = cp.copy()
+        for i in range(cp.shape[1]):
+            pts = cp[:, i, :]
+
+            # Project into xy plane for purposes of finding loop
+            pts_xy = pts.copy()
+            pts_xy[:, 2] = 0
+
+            t = np.arange(pts.shape[0])
+            spline = scipy.interpolate.make_interp_spline(t, pts_xy, k=1)
+
+            # Identify regions of overlap
+            NUM_SAMPLES = 100
+            tt = np.linspace(t[0], t[-1], NUM_SAMPLES)
+            spl = spline(tt)
+            tree = scipy.spatial.KDTree(spl)
+            d, indices = tree.query(spl, 2)
+
+            # Overlaps occur when the index of the 1st (self) and 2nd nearest neighbors are far apart
+            THRESHOLD = int(0.1 * NUM_SAMPLES)
+            diff = np.abs(indices[:, 0] - indices[:, 1])
+            overlap_indices = np.where(diff > THRESHOLD)[0]
+
+            if len(overlap_indices) == 0:
+                continue
+
+            start = np.ceil(overlap_indices.min() / NUM_SAMPLES * t[-1]).astype("int")
+            stop = np.floor(overlap_indices.max() / NUM_SAMPLES * t[-1]).astype("int")
+
+            # Cubic hermite spline
+            x = np.array([0, 1])
+            y = pts[[start - 1, stop + 1]]
+            dydx = np.array(
+                [
+                    pts[start - 1] - pts[start - 2],
+                    pts[stop + 2] - pts[stop + 1],
+                ]
+            )
+            chs = scipy.interpolate.CubicHermiteSpline(x, y, dydx)
+
+            # New cp
+            inner_t = np.linspace(0, 1, stop - start + 3)[1:-1]
+            new_cp = np.vstack(
+                [
+                    pts[:start],
+                    chs(inner_t),
+                    pts[stop + 1 :],
+                ]
+            )
+            adjusted_cp[:, i, :] = new_cp
+
+            # ax = plt.figure().add_subplot(projection="3d")
+            # ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], "-r*")
+            # ax.plot(new_cp[:, 0], new_cp[:, 1], new_cp[:, 2], "-k*")
+
+            # # ax.plot(spl[:, 0], spl[:, 1], spl[:, 2], "-g")
+            # # ax.plot(new_spl[:, 0], new_spl[:, 1], new_spl[:, 2], "-b")
+
+            # plt.show()
+
+        self.controlpoints = adjusted_cp
 
     def align_cross_section_to_position(self, cp, pos):
 
