@@ -497,12 +497,26 @@ class AxialComponent:
         for i in range(cp.shape[1]):
             pts = cp[:, i, :]
 
-            # Project into xy plane for purposes of finding loop
-            pts_xy = pts.copy()
-            pts_xy[:, 2] = 0
+            # Project into plane connecting endpoints and midpoint of controlpoint vector
+            pA = pts[0]
+            pB = pts[cp.shape[0] // 2]
+            pC = pts[-1]
+            vecAB = (pB - pA) / np.linalg.norm(pB - pA)
+            vecAC = (pC - pA) / np.linalg.norm(pC - pA)
+            N = (np.cross(vecAB, vecAC) / np.linalg.norm(np.cross(vecAB, vecAC))).reshape(-1, 3)
+            T = vecAB.reshape(-1, 3)
+            B = np.cross(N, vecAB).reshape(-1, 3)
+            curr = np.vstack([T, B, N])
+            goal = np.eye(3)
+            R = goal @ np.linalg.inv(curr.T).T
+            pts_flat = pts @ R
+
+            # # Project into xy plane for purposes of finding loop
+            # pts_xy = pts.copy()
+            # pts_xy[:, 2] = 0
 
             t = np.arange(pts.shape[0])
-            spline = scipy.interpolate.make_interp_spline(t, pts_xy, k=1)
+            spline = scipy.interpolate.make_interp_spline(t, pts_flat, k=1)
 
             # Identify regions of overlap
             NUM_SAMPLES = 100
@@ -518,6 +532,13 @@ class AxialComponent:
 
             if len(overlap_indices) == 0:
                 continue
+
+            # # Test if the angle between line segments is >90
+            # segments_as_vectors = np.diff(spl, axis=0)
+            # ANGLE_THRESHOLD = np.pi
+            # large_angles = (
+            #     np.where(angle_between(segments_as_vectors[1:], segments_as_vectors[:-1]) > ANGLE_THRESHOLD)[0] + 1
+            # )
 
             start = np.ceil(overlap_indices.min() / NUM_SAMPLES * t[-1]).astype("int")
             stop = np.floor(overlap_indices.max() / NUM_SAMPLES * t[-1]).astype("int")
@@ -544,13 +565,19 @@ class AxialComponent:
             )
             adjusted_cp[:, i, :] = new_cp
 
+            # import matplotlib.pyplot as plt
+
             # ax = plt.figure().add_subplot(projection="3d")
-            # ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], "-r*")
-            # ax.plot(new_cp[:, 0], new_cp[:, 1], new_cp[:, 2], "-k*")
+            # # ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], "-r*")
+            # ax.plot(pts_flat[:, 0], pts_flat[:, 1], pts_flat[:, 2], "-b*")
+            # # ax.plot(new_cp[:, 0], new_cp[:, 1], new_cp[:, 2], "-k*")
 
-            # # ax.plot(spl[:, 0], spl[:, 1], spl[:, 2], "-g")
+            # ax.plot(spl[overlap_indices, 0], spl[overlap_indices, 1], spl[overlap_indices, 2], "og")
             # # ax.plot(new_spl[:, 0], new_spl[:, 1], new_spl[:, 2], "-b")
-
+            # # xlim = ax.get_xlim3d()
+            # # ylim = ax.get_ylim3d()
+            # # zlim = ax.get_zlim3d()
+            # # ax.set_box_aspect((xlim[1] - xlim[0], ylim[1] - ylim[0], zlim[1] - zlim[0]))
             # plt.show()
 
         self.controlpoints = adjusted_cp

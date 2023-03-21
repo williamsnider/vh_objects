@@ -424,7 +424,7 @@ class Shape:
 
         # Construct save_dir
         if return_img is False:
-            if save_dir.is_dir() is False:
+            if save_dir.exists() is False:
                 save_dir.mkdir(parents=True)
 
         filename = str(Path(save_dir, self.label).with_suffix(".png"))
