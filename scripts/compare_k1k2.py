@@ -80,8 +80,8 @@ k2_clamp[k2 < -THRES] = -THRES
 k2_clamp[k2 > THRES] = THRES
 fig, axes = plt.subplots(nrows=1, ncols=1)
 
-axes.set_title("Linear normalization")
-h = axes.hist2d(k1_clamp, k2_clamp, bins=10, norm=mcolors.PowerNorm(0.3))
+axes.set_title("K1 vs K2")
+h = axes.hist2d(k1_clamp, k2_clamp, bins=10, norm=mcolors.PowerNorm(0.2))
 axes.set_xlabel("K1 (Max Curv)")
 axes.set_ylabel("K2 (Min Curv)")
 

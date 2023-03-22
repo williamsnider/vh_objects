@@ -84,8 +84,9 @@ def approximate_arc(MAX_ANGLE, GOAL_LENGTH_SEGMENT, NUM_CP_PER_SEGMENT=5):
     return arc_array
 
 
-cp_arc_1_4 = approximate_arc(np.pi / 4)
-cp_arc_1_8 = approximate_arc(np.pi / 8)
+if __name__ == "__main__":
+    cp_arc_1_4 = approximate_arc(np.pi / 4)
+    cp_arc_1_8 = approximate_arc(np.pi / 8)
 
 # # Make backbone and plot
 # backbone = Backbone(cp_arc_1_4, reparameterize=False)

@@ -132,6 +132,118 @@ def approximate_arc(MAX_ANGLE, arc_length):
     return arc_array
 
 
+# def make_arc(radius):
+#     def make_arc_array(a, b, c):
+
+#         # We can think of the second to last arc controlpoint as lying along a vector from the last controlpoint. The vector's slope can be determined from the tangent line of the circle (which is negated). We then can use a single parameter (d) as a measure of how far along this vector we are travelling. This reduces the number of parameters we need, and also ensures that the tangent of the resulting arc at the end will match that of the circle
+
+#         def tan_vec(MAX_ANGLE):
+#             tangent_vec = np.array(
+#                 [
+#                     -radius * np.sin(MAX_ANGLE),
+#                     radius * np.cos(MAX_ANGLE),
+#                 ]
+#             )
+#             return tangent_vec
+
+#         start_tan_vec = tan_vec(0)
+#         end_tan_vec = -tan_vec(np.pi / 2)  # Negate so this points toward start
+
+#         arc_array = np.array(
+#             [
+#                 [radius, 0, 0],
+#                 [
+#                     radius * np.cos(0) + a * start_tan_vec[0],
+#                     radius * np.sin(0) + a * start_tan_vec[1],
+#                     0,
+#                 ],  # Tangent line from start
+#                 [b, c, 0],
+#                 [
+#                     radius * np.cos(np.pi / 2) + a * end_tan_vec[0],
+#                     radius * np.sin(np.pi / 2) + a * end_tan_vec[1],
+#                     0,
+#                 ],  # Tangent line from end
+#                 [radius * np.cos(np.pi / 2), radius * np.sin(np.pi / 2), 0],
+#             ]
+#         )
+#         return arc_array
+
+#     def radius_error(vars):
+
+#         # Make the arc array
+#         [a, b, c] = vars
+#         arc_array = make_arc_array(a, b, c)
+
+#         # Make backbone
+#         backbone = Backbone(arc_array, reparameterize=False)
+
+#         # Sample points along the backbone
+#         t = np.linspace(0, 1, 10)
+#         r = backbone.r(t)
+
+#         # distance from origin should be close to radius if points are well_aligned
+#         dist = np.linalg.norm(r, axis=1)
+#         return ((dist - radius) ** 2).sum()
+
+#     fun = radius_error
+#     x0 = [0.1, radius, radius]
+#     bounds = [
+#         [0.0, 100 * radius],
+#         [radius * np.cos(np.pi / 2 / 2), 100 * radius],  # Convex hull property of B-Splines
+#         [radius * np.sin(np.pi / 2 / 2), 100 * radius],  # Convex hull property of B-Splines
+#     ]
+#     result = minimize(fun=fun, x0=x0, bounds=bounds)
+#     [a, b, c] = result.x
+
+#     arc_array = make_arc_array(a, b, c)
+
+#     # Shift so that the curve begins at the origin
+#     arc_array[:, 0] -= radius
+#     arc_array[:, [0, 1]] = arc_array[:, [1, 0]]  # Flip x and y-axis so long portion points in +X direction
+#     arc_array[:, 1] = -arc_array[:, 1]  # Negate y axis so curves upward (towards +Y)
+
+#     return arc_array
+
+
+# Calculate arc
+radius = 1
+out1 = approximate_arc(np.pi / 2, radius * np.pi / 2)
+# out1 = make_arc(1)
+vec_frac = out1[:, 0].reshape(-1, 1, 1)
+
+
+def calc_cp_hemisphere(base_cp, endpoint, tan_vec):
+
+    # Calculate radius  TODO: Improvement would be passing the goal radius and not the calculated cross section controlpoint radius (which is slightly larger).
+
+    radius = np.linalg.norm(base_cp - endpoint, axis=1).mean(axis=0)
+
+    # Rotate base_cp to line in yz plane
+    vecA = base_cp[0] - base_cp[1]
+    vecB = base_cp[0] - base_cp[2]
+    N = np.cross(vecA, vecB) / np.linalg.norm(np.cross(vecA, vecB))
+    assert np.all(np.isclose(N, tan_vec)) or np.all(np.isclose(N, -tan_vec))
+    T = np.cross(vecA, N) / np.linalg.norm(np.cross(vecA, N))
+    B = np.cross(T, N)
+    curr = np.vstack([N.reshape(1, -1), T.reshape(1, -1), B.reshape(1, -1)])
+    goal = np.eye(3)
+    R = (goal @ np.linalg.inv(curr.T)).T
+
+    yz_cp = (base_cp - endpoint) @ R
+
+    cp = np.tile(yz_cp, (5, 1, 1))
+    cp_scale = cp * out1[::-1, 0].reshape(-1, 1, 1)
+    cp_scale[:, :, 0] = yz_cp[:, 0]
+
+    vec_rotated = tan_vec @ R
+    cp_shift = cp_scale + vec_rotated * vec_frac * radius
+
+    # Transform back to original plane
+    result = (cp_shift) @ R.T + endpoint
+
+    return result
+
+
 def find_cp_for_desired_radius(target_radius, num_cp_per_cross_section):
     """Calculates the radius of controlpoints that will result in a B-spline with the target radius.
 
