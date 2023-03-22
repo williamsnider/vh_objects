@@ -2,7 +2,7 @@ import numpy as np
 from splipy import BSplineBasis, Surface
 import trimesh
 from objects.parameters import ORDER, SHRINK_FACTOR, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V
-from objects.utilities import open_uniform_knot_vector, calc_cp_hemisphere
+from objects.utilities import open_uniform_knot_vector, calc_cp_hemisphere, fair_mesh
 from objects.backbone import Backbone
 import scipy.interpolate
 import scipy.spatial
@@ -616,3 +616,21 @@ class AxialComponent:
             faces=faces,
             process=False,
         )
+
+        # Fair mesh at intersection of hemisphere and axial component
+        if self.hemisphere_ends == True:
+
+            mesh = self.mesh.copy()
+
+            # Determine the indices in the vv dimension that correspond to the intersection
+            lower = 2.75
+            upper = 3.5
+            l_start = round((vv - 2) * lower / self.num_rows)
+            l_end = round((vv - 2) * upper / self.num_rows)
+            l_indices = np.arange(uu * l_start, uu * l_end)
+            r_start = round((vv - 2) * (self.num_rows - upper) / self.num_rows)
+            r_end = round((vv - 2) * (self.num_rows - lower) / self.num_rows)
+            r_indices = np.arange(uu * r_start, uu * r_end)
+            indices = np.concatenate([l_indices, r_indices])
+            faired_mesh = fair_mesh(mesh, indices, harmonic_power=3)
+            self.mesh = faired_mesh
