@@ -24,6 +24,7 @@ class AxialComponent:
         position_along_self=0.0,
         smooth_with_post=False,
         hemisphere_ends=False,
+        endpoint_offsets=np.array([0, 0]),
     ):
         self.backbone = backbone
         self.cross_sections = cross_sections
@@ -34,6 +35,7 @@ class AxialComponent:
         self.smooth_with_post = smooth_with_post
         self.length = self.backbone.length()
         self.hemisphere_ends = hemisphere_ends
+        self.endpoint_offsets = endpoint_offsets
 
         # Do calculations
         self.calc_points()
@@ -251,248 +253,53 @@ class AxialComponent:
         # (-1, :, :) - controlpoints at endpoint 1.0
         """
 
-        if self.smooth_with_post == False:
+        # Construct empty controlpoint array
+        num_cross_sections = len(self.cross_sections)
+        num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + num_cross_sections
+        self.num_rows = num_rows
+        num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
+        controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
 
-            # Construct empty controlpoint array
-            num_cross_sections = len(self.cross_sections)
-            num_rows = NUM_ENDPOINTS + NUM_ENDPOINTS_SLOPE + num_cross_sections
-            self.num_rows = num_rows
-            num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
-            controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
+        # Assign left side controlpoints
+        SHRINK_FACTOR = 0.75
+        pos = 0.0
+        cs_idx = 0
+        R = self.calc_R_cs_to_pos(pos)
+        cs_rot = self.cross_sections[cs_idx].controlpoints @ R
+        controlpoints[0] = cs_rot * 0 + self.r(pos) - self.T(pos) * self.endpoint_offsets[0]  # Endpoint
+        controlpoints[1] = (
+            cs_rot * SHRINK_FACTOR + self.r(pos) - self.T(pos) * self.endpoint_offsets[0]
+        )  # Determines slope at endpoint
 
-            # Assign controlpoints - endpoints
-            controlpoints[0, :, :] = np.repeat(self.r(0.0), num_cp_per_cross_section, axis=0)  # 0.0 endpoint
-            controlpoints[-1, :, :] = np.repeat(self.r(1.0), num_cp_per_cross_section, axis=0)  # 1.0 endpoint
+        # Assign right side controlpoints
+        pos = 1.0
+        cs_idx = -1
+        R = self.calc_R_cs_to_pos(pos)
+        cs_rot = self.cross_sections[cs_idx].controlpoints @ R
+        controlpoints[-1] = cs_rot * 0 + self.r(pos) + self.T(pos) * self.endpoint_offsets[1]  # Endpoint
+        controlpoints[-2] = (
+            cs_rot * SHRINK_FACTOR + self.r(pos) + self.T(pos) * self.endpoint_offsets[1]
+        )  # Determines slope at endpoint
 
-            # Assign controlpoints - cross sections
-            idx = 2
-            for cs in self.cross_sections:
+        # Assign interior controlpoints
+        idx = 2
+        for cs in self.cross_sections:
 
-                cp = cs.controlpoints
-                pos = cs.position
+            cp = cs.controlpoints
+            pos = cs.position
 
-                # Rotate and translate cross section
-                cp = self.align_cross_section_to_position(cp, pos)
+            # Rotate and translate cross section
+            R = self.calc_R_cs_to_pos(pos)
+            cs_rot = cp @ R
+            cs_T = cs_rot + self.r(pos)
 
-                # Assign to controlpoint array
-                controlpoints[idx, :, :] = cp
-                idx += 1
+            # Assign to controlpoint array
+            controlpoints[idx] = cs_T
+            idx += 1
+        self.controlpoints = controlpoints
+        return
 
-            # Assign controlpoints - extra to determine slope at endpoint
-            for idx in [1, -2]:
-
-                # Get the cross section we will use.
-                if idx == 1:
-                    cs = self.cross_sections[0]
-                    pos = 0.0
-                if idx == -2:
-                    cs = self.cross_sections[-1]
-                    pos = 1.0
-
-                # Grab the cp we are going to shrink
-                cp = cs.controlpoints
-
-                # Shrink the cross section
-                cp = cp * SHRINK_FACTOR
-
-                # Rotate and translate cross section
-                cp = self.align_cross_section_to_position(cp, pos)
-
-                # Assign to controlpoint array
-                controlpoints[idx, :, :] = cp
-
-            self.controlpoints = controlpoints
-        else:
-
-            """
-            # controlpoints array structure
-            # (0, :, :) - controlpoints at center of post/interface intersection
-            # (1, :, :) - controlpoints at outer radius of post/interface intersection
-            # (2, :, :) - controlpoints at outer radius of post/interface intersection slightly shifted
-            # (3, :, :) - controlpoints at outer radius of post/interface intersection at midpoint
-            # (4, :, :) - controlpoints at outer radius of post/interface intersection at 0.0 point
-            # (5, :, :) - controlpoints of cross section 0
-            # (6, :, :) - controlpoints of cross section 1
-            # ...
-            # (-4, :, :) - controlpoints of cross section -2
-            # (-3, :, :) - controlpoints of cross section -1
-            # (-2, :, :) - controlpoints controlling slope at endpoint 1.0
-            # (-1, :, :) - controlpoints at endpoint 1.0
-            """
-
-            # Construct empty controlpoint array
-            num_cross_sections = len(self.cross_sections)
-            NUM_POST_POINTS = 5
-            NUM_SINGLE_ENDCAP_POINT = 2
-            num_rows = NUM_POST_POINTS + NUM_SINGLE_ENDCAP_POINT + num_cross_sections
-            self.num_rows = num_rows
-            num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
-            controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
-
-            # Assign controlpoints - post
-            POST_LENGTH = 15
-            POST_INTERFACE_POINT = np.array([-POST_LENGTH, 0, 0]) + self.r(0.0)
-            controlpoints[0, :, :] = np.repeat(POST_INTERFACE_POINT, num_cp_per_cross_section, axis=0)  # 1.0 endpoint
-
-            # TODO: Make this just linear
-            POST_RADIUS = 5.404  # This gives a B-spline radius of 5.00mm with 8 controlpoints.
-            c = np.cos
-            s = np.sin
-            th = np.linspace(0, 2 * np.pi, num_cp_per_cross_section, endpoint=False).reshape(-1, 1)
-            cp = np.hstack((np.zeros((num_cp_per_cross_section, 1)), POST_RADIUS * c(th), POST_RADIUS * s(th)))
-            controlpoints[1, :, :] = cp + self.r(0.0) + np.array([-POST_LENGTH, 0, 0])
-            controlpoints[2, :, :] = cp + self.r(0.0) + np.array([-POST_LENGTH, 0, 0]) * 0.8
-            controlpoints[3, :, :] = cp + self.r(0.0) + np.array([-POST_LENGTH, 0, 0]) * 0.5
-            controlpoints[4, :, :] = cp + self.r(0.0) + np.array([-POST_LENGTH, 0, 0]) * 0.2
-
-            # Assign controlpoints - endpoints
-            controlpoints[-1, :, :] = np.repeat(self.r(1.0), num_cp_per_cross_section, axis=0)  # 1.0 endpoint
-
-            # Assign controlpoints - cross sections
-            idx = 5
-            for cs in self.cross_sections:
-
-                cp = cs.controlpoints
-                pos = cs.position
-
-                # Rotate and translate cross section
-                cp = self.align_cross_section_to_position(cp, pos)
-
-                # Assign to controlpoint array
-                controlpoints[idx, :, :] = cp
-                idx += 1
-
-            # Assign controlpoints - extra to determine slope at endpoint
-            for idx in [-2]:
-
-                # Get the cross section we will use.
-                if idx == 1:
-                    cs = self.cross_sections[0]
-                    pos = 0.0
-                if idx == -2:
-                    cs = self.cross_sections[-1]
-                    pos = 1.0
-
-                # Grab the cp we are going to shrink
-                cp = cs.controlpoints
-
-                # Shrink the cross section
-                cp = cp * SHRINK_FACTOR
-
-                # Rotate and translate cross section
-                cp = self.align_cross_section_to_position(cp, pos)
-
-                # Assign to controlpoint array
-                controlpoints[idx, :, :] = cp
-            self.controlpoints = controlpoints
-
-        if self.hemisphere_ends == True:
-            """Adjust controlpoints so that ends are hemispherical"""
-            orig_cp = self.controlpoints
-            center_cp = orig_cp[2:-2]
-
-            cp_hemisphere_right = calc_cp_hemisphere(center_cp[-1], self.r(1.0), self.T(1.0))
-            cp_hemisphere_left = calc_cp_hemisphere(center_cp[0], self.r(0.0), -self.T(0.0))
-
-            new_cp = np.vstack([cp_hemisphere_left[:0:-1], center_cp, cp_hemisphere_right[1:]])
-            self.controlpoints = new_cp
-            self.num_rows = new_cp.shape[0]
-
-    def adjust_controlpoints(self):
-        """Adjusts controlpoints to prevent self intersections.
-
-        Makes the assumption that the largest extent of shapes are in the xy plane."""
-        cp = self.controlpoints
-        adjusted_cp = cp.copy()
-        for i in range(cp.shape[1]):
-            pts = cp[:, i, :]
-
-            # Project into plane connecting endpoints and midpoint of controlpoint vector
-            pA = pts[0]
-            pB = pts[cp.shape[0] // 2]
-            pC = pts[-1]
-            vecAB = (pB - pA) / np.linalg.norm(pB - pA)
-            vecAC = (pC - pA) / np.linalg.norm(pC - pA)
-            N = (np.cross(vecAB, vecAC) / np.linalg.norm(np.cross(vecAB, vecAC))).reshape(-1, 3)
-            T = vecAB.reshape(-1, 3)
-            B = np.cross(N, vecAB).reshape(-1, 3)
-            curr = np.vstack([T, B, N])
-            goal = np.eye(3)
-            R = goal @ np.linalg.inv(curr.T).T
-            pts_flat = pts @ R
-
-            # # Project into xy plane for purposes of finding loop
-            # pts_xy = pts.copy()
-            # pts_xy[:, 2] = 0
-
-            t = np.arange(pts.shape[0])
-            spline = scipy.interpolate.make_interp_spline(t, pts_flat, k=1)
-
-            # Identify regions of overlap
-            NUM_SAMPLES = 100
-            tt = np.linspace(t[0], t[-1], NUM_SAMPLES)
-            spl = spline(tt)
-            tree = scipy.spatial.KDTree(spl)
-            d, indices = tree.query(spl, 2)
-
-            # Overlaps occur when the index of the 1st (self) and 2nd nearest neighbors are far apart
-            THRESHOLD = int(0.1 * NUM_SAMPLES)
-            diff = np.abs(indices[:, 0] - indices[:, 1])
-            overlap_indices = np.where(diff > THRESHOLD)[0]
-
-            if len(overlap_indices) == 0:
-                continue
-
-            # # Test if the angle between line segments is >90
-            # segments_as_vectors = np.diff(spl, axis=0)
-            # ANGLE_THRESHOLD = np.pi
-            # large_angles = (
-            #     np.where(angle_between(segments_as_vectors[1:], segments_as_vectors[:-1]) > ANGLE_THRESHOLD)[0] + 1
-            # )
-
-            start = np.ceil(overlap_indices.min() / NUM_SAMPLES * t[-1]).astype("int")
-            stop = np.floor(overlap_indices.max() / NUM_SAMPLES * t[-1]).astype("int")
-
-            # Cubic hermite spline
-            x = np.array([0, 1])
-            y = pts[[start - 1, stop + 1]]
-            dydx = np.array(
-                [
-                    pts[start - 1] - pts[start - 2],
-                    pts[stop + 2] - pts[stop + 1],
-                ]
-            )
-            chs = scipy.interpolate.CubicHermiteSpline(x, y, dydx)
-
-            # New cp
-            inner_t = np.linspace(0, 1, stop - start + 3)[1:-1]
-            new_cp = np.vstack(
-                [
-                    pts[:start],
-                    chs(inner_t),
-                    pts[stop + 1 :],
-                ]
-            )
-            adjusted_cp[:, i, :] = new_cp
-
-            # import matplotlib.pyplot as plt
-
-            # ax = plt.figure().add_subplot(projection="3d")
-            # # ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], "-r*")
-            # ax.plot(pts_flat[:, 0], pts_flat[:, 1], pts_flat[:, 2], "-b*")
-            # # ax.plot(new_cp[:, 0], new_cp[:, 1], new_cp[:, 2], "-k*")
-
-            # ax.plot(spl[overlap_indices, 0], spl[overlap_indices, 1], spl[overlap_indices, 2], "og")
-            # # ax.plot(new_spl[:, 0], new_spl[:, 1], new_spl[:, 2], "-b")
-            # # xlim = ax.get_xlim3d()
-            # # ylim = ax.get_ylim3d()
-            # # zlim = ax.get_zlim3d()
-            # # ax.set_box_aspect((xlim[1] - xlim[0], ylim[1] - ylim[0], zlim[1] - zlim[0]))
-            # plt.show()
-
-        self.controlpoints = adjusted_cp
-
-    def align_cross_section_to_position(self, cp, pos):
+    def calc_R_cs_to_pos(self, pos):
 
         # Rotate so that cross tangent, normal, and binormal vectors are aligned
         current = np.array(
@@ -504,13 +311,14 @@ class AxialComponent:
         )
         target = np.stack([self.T(pos)[0], self.N(pos)[0], self.B(pos)[0]], axis=0)
         rot = np.linalg.inv(current) @ target
-        cp = cp @ rot
+        return rot
+        # cp = cp @ rot
 
-        # Translate to point on backbone
-        # point = self.r(pos)
-        cp = cp + self.r(pos)
+        # # Translate to point on backbone
+        # # point = self.r(pos)
+        # cp = cp + self.r(pos)
 
-        return cp
+        # return cp
 
     def make_surface(self):
 
@@ -623,14 +431,18 @@ class AxialComponent:
             mesh = self.mesh.copy()
 
             # Determine the indices in the vv dimension that correspond to the intersection
-            lower = 2.75
-            upper = 3.5
-            l_start = round((vv - 2) * lower / self.num_rows)
+            # lower = 2.75
+            upper = 5
+            # l_start = round((vv - 2) * lower / self.num_rows)
+            l_start = 1
+            r_end = (vv - 2) - l_start
             l_end = round((vv - 2) * upper / self.num_rows)
             l_indices = np.arange(uu * l_start, uu * l_end)
             r_start = round((vv - 2) * (self.num_rows - upper) / self.num_rows)
-            r_end = round((vv - 2) * (self.num_rows - lower) / self.num_rows)
+            # r_end = round((vv - 2) * (self.num_rows - lower) / self.num_rows)
             r_indices = np.arange(uu * r_start, uu * r_end)
             indices = np.concatenate([l_indices, r_indices])
-            faired_mesh = fair_mesh(mesh, indices, harmonic_power=3)
+            mesh.visual.vertex_colors[indices] = [255, 255, 0, 255]
+            # mesh.show(smooth=False)
+            faired_mesh = fair_mesh(mesh, indices, harmonic_power=2)
             self.mesh = faired_mesh
