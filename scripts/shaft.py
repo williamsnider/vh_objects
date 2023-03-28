@@ -139,7 +139,7 @@ if __name__ == "__main__":
     b_cp = make_arc(15)
     b = Backbone(b_cp)
     NUM_CS = 11
-    scale = np.geomspace(0.25, 1.5, NUM_CS)
+    scale = np.geomspace(0.25, 1.5, NUM_CS) * 5
     pos = np.linspace(0, 1, NUM_CS)
     cs_list = [CrossSection(scale[i] * base_cp[:, :2], pos[i]) for i in range(NUM_CS)]
     ac = AxialComponent(b, cs_list)
@@ -175,4 +175,4 @@ if __name__ == "__main__":
     new_ac.num_rows = new_cp.shape[0]
     new_ac.make_surface()
     new_ac.make_mesh()
-    new_ac.mesh.show(smooth=True)
+    new_ac.mesh.show(smooth=False)

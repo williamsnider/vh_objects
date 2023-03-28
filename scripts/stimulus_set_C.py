@@ -12,6 +12,7 @@ NUM_CP_PER_BACKBONE = 5
 SEGMENT_LENGTH = 15
 NUM_CS = 11
 CS_RADII = np.array([0, 7.5, 15])
+X_WIDTH = 2.5  # Radii off which other features are derived
 
 #################
 ### Backbones ###
@@ -36,6 +37,7 @@ b_cur2 = Backbone(b_cur2_cp, reparameterize=True)
 ######################
 
 pos = np.linspace(0, 1, NUM_CS)
+pos_seg = pos * SEGMENT_LENGTH
 t = np.linspace(0, 2 * np.pi, 8, endpoint=False).reshape(-1, 1)
 base_cp = np.hstack([np.cos(t), np.sin(t)])
 
@@ -44,11 +46,21 @@ scale_1_1_1 = np.ones(NUM_CS) * CS_RADII[2]
 cs_1_1_1 = [CrossSection(scale_1_1_1[i] * base_cp, pos[i]) for i in range(NUM_CS)]
 
 # 1_2_1 football
-x = np.array([0, 0.5, 1])
-y = CS_RADII[[1, 2, 1]]
+x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH
+y = np.array([X_WIDTH, 4 * X_WIDTH, X_WIDTH])
 poly = np.polyfit(x, y, 2)
-scale_1_2_1 = np.polyval(poly, pos)
+scale_1_2_1 = np.polyval(poly, pos_seg)
+roots = np.sort(np.roots(poly))
+endpoint_offset = np.abs(roots) - np.array([0, SEGMENT_LENGTH])
 cs_1_2_1 = [CrossSection(scale_1_2_1[i] * base_cp, pos[i]) for i in range(NUM_CS)]
+football = AxialComponent(
+    b_lin2,
+    cs_1_2_1,
+    endpoint_offsets=endpoint_offset,
+    fair_ends=True,
+)
+football.mesh.show(smooth=False)
+# Calculate when polynomial would hit zero
 
 # 1_2_1 sheet
 sheet_thickness_to_width = 4
@@ -56,12 +68,13 @@ sheet_cp = base_cp.copy()
 sheet_cp[[0, 1, 7], 0] = 1 / sheet_thickness_to_width
 sheet_cp[[3, 4, 5], 0] = -1 / sheet_thickness_to_width
 scale_1_1_1 = np.ones(NUM_CS) * CS_RADII[2]
-cs_sheet_1_1_1 = [CrossSection(scale_1_1_1[i] * sheet_cp, pos[i]) for i in range(NUM_CS)]
-endpoint_offset = np.linalg.norm(sheet_cp[-1] - sheet_cp[1]) / 2
+cs_sheet_1_1_1 = [CrossSection(scale_1_2_1[i] * sheet_cp, pos[i]) for i in range(NUM_CS)]
+# endpoint_offset = np.linalg.norm(sheet_cp[-1] - sheet_cp[1]) / 2
 sheet = AxialComponent(
     b_cur2,
     cs_sheet_1_1_1,
-    endpoint_offsets=np.array([endpoint_offset * scale_1_1_1[0], endpoint_offset * scale_1_1_1[1]]),
+    endpoint_offsets=endpoint_offset,
+    fair_ends=False,
 )
 sheet.mesh.show(smooth=False)
 

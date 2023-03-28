@@ -23,7 +23,7 @@ class AxialComponent:
         position_along_parent=1.0,
         position_along_self=0.0,
         smooth_with_post=False,
-        hemisphere_ends=False,
+        fair_ends=False,
         endpoint_offsets=np.array([0, 0]),
     ):
         self.backbone = backbone
@@ -34,7 +34,7 @@ class AxialComponent:
         self.position_along_self = position_along_self
         self.smooth_with_post = smooth_with_post
         self.length = self.backbone.length()
-        self.hemisphere_ends = hemisphere_ends
+        self.fair_ends = fair_ends
         self.endpoint_offsets = endpoint_offsets
 
         # Do calculations
@@ -261,7 +261,7 @@ class AxialComponent:
         controlpoints = np.zeros([num_rows, num_cp_per_cross_section, 3])
 
         # Assign left side controlpoints
-        SHRINK_FACTOR = 0.75
+        SHRINK_FACTOR = 0.5
         pos = 0.0
         cs_idx = 0
         R = self.calc_R_cs_to_pos(pos)
@@ -426,13 +426,13 @@ class AxialComponent:
         )
 
         # Fair mesh at intersection of hemisphere and axial component
-        if self.hemisphere_ends == True:
+        if self.fair_ends == True:
 
             mesh = self.mesh.copy()
 
             # Determine the indices in the vv dimension that correspond to the intersection
             # lower = 2.75
-            upper = 5
+            upper = 3
             # l_start = round((vv - 2) * lower / self.num_rows)
             l_start = 1
             r_end = (vv - 2) - l_start
@@ -444,5 +444,5 @@ class AxialComponent:
             indices = np.concatenate([l_indices, r_indices])
             mesh.visual.vertex_colors[indices] = [255, 255, 0, 255]
             # mesh.show(smooth=False)
-            faired_mesh = fair_mesh(mesh, indices, harmonic_power=2)
+            faired_mesh = fair_mesh(mesh, indices, harmonic_power=3)
             self.mesh = faired_mesh
