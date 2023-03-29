@@ -1,8 +1,17 @@
 import numpy as np
 from splipy import BSplineBasis, Surface
 import trimesh
-from objects.parameters import ORDER, SHRINK_FACTOR, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V
-from objects.utilities import open_uniform_knot_vector, calc_cp_hemisphere, fair_mesh
+from objects.parameters import (
+    ORDER,
+    SHRINK_FACTOR,
+    SAMPLING_DENSITY_U,
+    SAMPLING_DENSITY_V,
+)
+from objects.utilities import (
+    open_uniform_knot_vector,
+    fair_mesh,
+    calc_hemisphere_controlpoints,
+)
 from objects.backbone import Backbone
 import scipy.interpolate
 import scipy.spatial
@@ -23,8 +32,9 @@ class AxialComponent:
         position_along_parent=1.0,
         position_along_self=0.0,
         smooth_with_post=False,
-        fair_ends=False,
-        endpoint_offsets=np.array([0, 0]),
+        hemispherical_ends=False,
+        hemispherical_polynomial=None,
+        hemisphere_x=[None, None],
     ):
         self.backbone = backbone
         self.cross_sections = cross_sections
@@ -34,15 +44,18 @@ class AxialComponent:
         self.position_along_self = position_along_self
         self.smooth_with_post = smooth_with_post
         self.length = self.backbone.length()
-        self.fair_ends = fair_ends
-        self.endpoint_offsets = endpoint_offsets
+        self.hemispherical_ends = hemispherical_ends
+        self.hemispherical_polynomial = hemispherical_polynomial
+        self.hemisphere_x = hemisphere_x
 
         # Do calculations
         self.calc_points()
 
     def check_inputs(self):
 
-        assert type(self.cross_sections) is list, "cross_sections must be input as a list."
+        assert (
+            type(self.cross_sections) is list
+        ), "cross_sections must be input as a list."
 
         current_position = -1
         for cs in self.cross_sections:
@@ -51,7 +64,9 @@ class AxialComponent:
                 position > current_position
             ), "cross_sections must be ordered by increasing position, and these positions cannot repeat"
 
-        assert type(self.euler_angles) is np.ndarry, "Euler angles must be input as a numpy array"
+        assert (
+            type(self.euler_angles) is np.ndarry
+        ), "Euler angles must be input as a numpy array"
 
         assert self.euler_angles.shape == (
             1,
@@ -66,7 +81,8 @@ class AxialComponent:
         self.calc_transformation_matrices()
         self.calc_R_euler_angles()
         self.get_controlpoints()
-        # self.adjust_controlpoints()
+        if self.hemispherical_ends == True:
+            self.make_hemispherical_ends()
         self.make_surface()
         self.make_mesh()
 
@@ -89,7 +105,9 @@ class AxialComponent:
 
         else:
             # Translation matrix
-            parent_join_point = self.parent_axial_component.r(self.position_along_parent)
+            parent_join_point = self.parent_axial_component.r(
+                self.position_along_parent
+            )
             child_join_point = self.r(self.position_along_self, local=True)
             self.child_join_point = child_join_point
             self.parent_join_point = parent_join_point
@@ -251,6 +269,8 @@ class AxialComponent:
         # (-3, :, :) - controlpoints of cross section -1
         # (-2, :, :) - controlpoints controlling slope at endpoint 1.0
         # (-1, :, :) - controlpoints at endpoint 1.0
+
+        This function results in rounded ends, but not hemispherical (see make_hemispherical_ends for that).
         """
 
         # Construct empty controlpoint array
@@ -266,9 +286,9 @@ class AxialComponent:
         cs_idx = 0
         R = self.calc_R_cs_to_pos(pos)
         cs_rot = self.cross_sections[cs_idx].controlpoints @ R
-        controlpoints[0] = cs_rot * 0 + self.r(pos) - self.T(pos) * self.endpoint_offsets[0]  # Endpoint
-        controlpoints[1] = (
-            cs_rot * SHRINK_FACTOR + self.r(pos) - self.T(pos) * self.endpoint_offsets[0]
+        controlpoints[0] = cs_rot * 0 + self.r(pos)  # Endpoint
+        controlpoints[1] = cs_rot * SHRINK_FACTOR + self.r(
+            pos
         )  # Determines slope at endpoint
 
         # Assign right side controlpoints
@@ -276,9 +296,9 @@ class AxialComponent:
         cs_idx = -1
         R = self.calc_R_cs_to_pos(pos)
         cs_rot = self.cross_sections[cs_idx].controlpoints @ R
-        controlpoints[-1] = cs_rot * 0 + self.r(pos) + self.T(pos) * self.endpoint_offsets[1]  # Endpoint
-        controlpoints[-2] = (
-            cs_rot * SHRINK_FACTOR + self.r(pos) + self.T(pos) * self.endpoint_offsets[1]
+        controlpoints[-1] = cs_rot * 0 + self.r(pos)  # Endpoint
+        controlpoints[-2] = cs_rot * SHRINK_FACTOR + self.r(
+            pos
         )  # Determines slope at endpoint
 
         # Assign interior controlpoints
@@ -298,6 +318,46 @@ class AxialComponent:
             idx += 1
         self.controlpoints = controlpoints
         return
+
+    def make_hemispherical_ends(self):
+        """Adjusts the controlpoints on the ends so that the axial component has hemispherical ends that smoothly fit with a quadratic scaleprofile."""
+
+        # Left side
+        t = 0.0
+        x = self.hemisphere_x[0]
+        base_cp = self.controlpoints[2]
+        tan_vec = self.T(t)
+        endpoint = self.r(t)
+        result_left = calc_hemisphere_controlpoints(
+            base_cp,
+            tan_vec,
+            endpoint,
+            self.hemispherical_polynomial,
+            x,
+        )
+
+        # Right side
+        t = 1.0
+        x = self.hemisphere_x[1]
+        base_cp = self.controlpoints[-3]
+        tan_vec = self.T(t)
+        endpoint = self.r(t)
+        result_right = calc_hemisphere_controlpoints(
+            base_cp,
+            tan_vec,
+            endpoint,
+            self.hemispherical_polynomial,
+            x,
+        )
+
+        mid_cp = self.controlpoints[2:-2]
+        new_cp = np.zeros([mid_cp.shape[0] + 2 * 4, *mid_cp.shape[1:]])
+        new_cp[:4] = result_left[:4]
+        new_cp[4:-4] = mid_cp
+        new_cp[-4:] = result_right[-2::-1]
+
+        self.controlpoints = new_cp
+        self.num_rows = self.controlpoints.shape[0]
 
     def calc_R_cs_to_pos(self, pos):
 
@@ -357,7 +417,9 @@ class AxialComponent:
         v = np.linspace(vs, ve, vv)
         verts_array = self.surface(u, v)
         verts = np.zeros(((uu) * (vv - 2) + NUM_ENDPOINTS, 3))
-        verts[:-2, :] = verts_array[:, 1:-1, :].reshape(-1, 3, order="F")  # Skip endpoints
+        verts[:-2, :] = verts_array[:, 1:-1, :].reshape(
+            -1, 3, order="F"
+        )  # Skip endpoints
         verts[-2, :] = self.surface(0, 0)  # Add 0.0 endpoint
         verts[-1, :] = self.surface(1, 1)  # Add 1.0 endpoint
         self.verts = verts
@@ -425,24 +487,24 @@ class AxialComponent:
             process=False,
         )
 
-        # Fair mesh at intersection of hemisphere and axial component
-        if self.fair_ends == True:
+        # # Fair mesh at intersection of hemisphere and axial component
+        # if self.fair_ends == True:
 
-            mesh = self.mesh.copy()
+        #     mesh = self.mesh.copy()
 
-            # Determine the indices in the vv dimension that correspond to the intersection
-            # lower = 2.75
-            upper = 3
-            # l_start = round((vv - 2) * lower / self.num_rows)
-            l_start = 1
-            r_end = (vv - 2) - l_start
-            l_end = round((vv - 2) * upper / self.num_rows)
-            l_indices = np.arange(uu * l_start, uu * l_end)
-            r_start = round((vv - 2) * (self.num_rows - upper) / self.num_rows)
-            # r_end = round((vv - 2) * (self.num_rows - lower) / self.num_rows)
-            r_indices = np.arange(uu * r_start, uu * r_end)
-            indices = np.concatenate([l_indices, r_indices])
-            mesh.visual.vertex_colors[indices] = [255, 255, 0, 255]
-            # mesh.show(smooth=False)
-            faired_mesh = fair_mesh(mesh, indices, harmonic_power=3)
-            self.mesh = faired_mesh
+        #     # Determine the indices in the vv dimension that correspond to the intersection
+        #     # lower = 2.75
+        #     upper = 3
+        #     # l_start = round((vv - 2) * lower / self.num_rows)
+        #     l_start = 1
+        #     r_end = (vv - 2) - l_start
+        #     l_end = round((vv - 2) * upper / self.num_rows)
+        #     l_indices = np.arange(uu * l_start, uu * l_end)
+        #     r_start = round((vv - 2) * (self.num_rows - upper) / self.num_rows)
+        #     # r_end = round((vv - 2) * (self.num_rows - lower) / self.num_rows)
+        #     r_indices = np.arange(uu * r_start, uu * r_end)
+        #     indices = np.concatenate([l_indices, r_indices])
+        #     mesh.visual.vertex_colors[indices] = [255, 255, 0, 255]
+        #     # mesh.show(smooth=False)
+        #     faired_mesh = fair_mesh(mesh, indices, harmonic_power=3)
+        #     self.mesh = faired_mesh
