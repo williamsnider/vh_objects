@@ -11,15 +11,11 @@ from objects.utilities import (
     open_uniform_knot_vector,
     fair_mesh,
     calc_hemisphere_controlpoints,
+    make_surface,
+    make_mesh,
 )
 from objects.backbone import Backbone
-import scipy.interpolate
 import scipy.spatial
-
-# Fixed variables - used to built controlpoints array with the correct size.
-NUM_ENDPOINTS = 2  # Position 0.0 and 1.0 on the axial component's backbone
-NUM_ENDPOINTS_SLOPE = 2  # Controlpoints used to control surface slope near endpoints
-# NUM_CROSS_SECTION_SLOPE = 2  # Controlpoints used to control surface slope near cross sections adjacent to endpoints
 
 
 class AxialComponent:
@@ -83,8 +79,8 @@ class AxialComponent:
         self.get_controlpoints()
         if self.hemispherical_ends == True:
             self.make_hemispherical_ends()
-        self.make_surface()
-        self.make_mesh()
+        self.surface = make_surface(self.controlpoints)
+        self.mesh = make_mesh(self.surface, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V)
 
     def calc_transformation_matrices(self):
 
@@ -272,6 +268,8 @@ class AxialComponent:
 
         This function results in rounded ends, but not hemispherical (see make_hemispherical_ends for that).
         """
+        NUM_ENDPOINTS = 2
+        NUM_ENDPOINTS_SLOPE = 2
 
         # Construct empty controlpoint array
         num_cross_sections = len(self.cross_sections)
@@ -379,113 +377,6 @@ class AxialComponent:
         # cp = cp + self.r(pos)
 
         # return cp
-
-    def make_surface(self):
-
-        # Inputs
-        degree = ORDER - 1
-
-        # Basis 1 - cross section
-        num_cp_per_cross_section = self.cross_sections[0].controlpoints.shape[0]
-        num_knots = num_cp_per_cross_section + ORDER + degree
-        knot = np.linspace(0, 1, num_knots)
-        basis1 = BSplineBasis(order=ORDER, knots=knot, periodic=1)
-
-        # Basis 2 - along the major axis of the axial component
-        num_rows = self.num_rows
-        knot = open_uniform_knot_vector(num_rows, ORDER)
-        basis2 = BSplineBasis(order=ORDER, knots=knot, periodic=-1)
-
-        # Controlpoints
-        cp = self.controlpoints
-        cp = cp.reshape(num_rows * num_cp_per_cross_section, cp.shape[2])
-
-        # Surface
-        surface = Surface(basis1, basis2, cp, rational=False)
-        self.surface = surface
-
-    def make_mesh(self):
-
-        uu = SAMPLING_DENSITY_U
-        vv = SAMPLING_DENSITY_V
-
-        ####################
-        # Vertices
-        (us, vs) = self.surface.start()
-        (ue, ve) = self.surface.end()
-        u = np.linspace(us, ue, uu, endpoint=False)
-        v = np.linspace(vs, ve, vv)
-        verts_array = self.surface(u, v)
-        verts = np.zeros(((uu) * (vv - 2) + NUM_ENDPOINTS, 3))
-        verts[:-2, :] = verts_array[:, 1:-1, :].reshape(
-            -1, 3, order="F"
-        )  # Skip endpoints
-        verts[-2, :] = self.surface(0, 0)  # Add 0.0 endpoint
-        verts[-1, :] = self.surface(1, 1)  # Add 1.0 endpoint
-        self.verts = verts
-
-        ####################
-        # Faces - CCW Winding (for consistent normals)
-        faces = np.zeros((uu * (vv - 2) * 2, 3), dtype="int")
-        # faces_array = np.zeros((SD * 2, SD - 2, 3), dtype="int")
-        base_column = np.zeros((uu * 2, 3), dtype="int")
-        base_column[::2, 0] = np.arange(0, uu)
-        base_column[1::2, 0] = np.arange(0, uu)
-        base_column[::2, 1] = np.arange(uu, uu * 2)
-        base_column[1::2, 1] = np.arange(uu + 1, uu * 2 + 1)
-        base_column[::2, 2] = np.arange(uu + 1, uu * 2 + 1)
-        base_column[1:-1:2, 2] = np.arange(1, uu)
-        base_column[-2, 2] = uu  # Fix wrapping
-        base_column[-1, 1] = uu  # Fix wrapping
-        base_column[:, 1:] = base_column[:, :-3:-1]  # Reverse for CCW winding
-
-        # Grid faces
-        for i in range(vv - 3):
-            add_to_column = i * uu
-            column = base_column + add_to_column
-            start = uu * i * 2
-            stop = uu * (i + 1) * 2
-            faces[start:stop, :] = column
-            # faces_array[:, i, :] = column
-
-        # Endpoint faces
-        num_verts = verts.shape[0]
-        endpoint_idx = num_verts - 2  # 0.0 endpoint
-        column = np.zeros((uu, 3), dtype="int")
-        column[:, 0] = np.arange(0, uu)
-        column[:-1, 1] = np.arange(1, uu)
-        column[:, 2] = endpoint_idx
-        column[:, 1:] = column[:, :-3:-1]  # Reverse for CCW winding
-        faces[-uu * 2 : -uu] = column
-
-        # Endpoint faces
-        endpoint_idx = num_verts - 1  # 1.0 endpoint
-        column = np.zeros((uu, 3), dtype="int")
-        column[:, 0] = np.arange(
-            uu * (vv - 3),
-            uu * (vv - 2),
-        )
-        column[:, 1] = endpoint_idx
-        column[:-1, 2] = np.arange(
-            uu * (vv - 3) + 1,
-            uu * (vv - 2),
-        )
-        column[-1, 2] = uu * (vv - 3)
-        column[:, 1:] = column[:, :-3:-1]  # Reverse for CCW winding
-        faces[-uu:] = column
-        assert ~np.any(faces > num_verts), "Faces include vertices that don't exist."
-        self.faces = faces
-
-        ####################
-        # Skip calculations for face and vertex normals since that should be done after fusing all axial components
-
-        ####################
-        # Construct trimesh
-        self.mesh = trimesh.Trimesh(
-            vertices=verts,
-            faces=faces,
-            process=False,
-        )
 
         # # Fair mesh at intersection of hemisphere and axial component
         # if self.fair_ends == True:
