@@ -12,7 +12,16 @@ above = mesh.vertices[:, 1] > thres
 below = mesh.vertices[:, 1] < -thres
 
 mesh.vertices[above, 1] = thres
-mesh.vertices[below, 1] = -thres
+mesh.vertices[below, 1] = -thre
+
+
+
+
+
+''''
+
+
+s
 
 # Expand to hit radius
 outside_mask = above + below

@@ -11,6 +11,7 @@ from objects.utilities import (
 from objects.parameters import ORDER
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
+from objects.backbone import Backbone
 
 
 def calc_sphere_controlpoints(base_cp, num_cp, tan_vec, endpoint, x):
@@ -20,8 +21,8 @@ def calc_sphere_controlpoints(base_cp, num_cp, tan_vec, endpoint, x):
 
     # Calculate and transform the controlpoints based on which side of the axial component we are
     cp = approximate_arc(arc_length, r * arc_length, num_cp)
-    cp_rot = cp[:, [1, 0]]  # Rotate 45deg
-    cp_T = cp_rot + np.array([r, 0])  # Align to origin
+    cp_T = cp[:, :2] + np.array([0, r])  # Align to origin
+    cp_T[:, 1] = cp_T[::-1, 1]  # Flip order of translation
 
     # Plot samples
     # fig, ax = plt.subplots()
@@ -36,7 +37,7 @@ def calc_sphere_controlpoints(base_cp, num_cp, tan_vec, endpoint, x):
     #     [cp_rot[-1, 0] - x_shift, 0]
     # )  # Shift to align with end of quadratic
 
-    scale_ratio = cp_T[:, 1]  # Normalize this column by the height of the quadratic
+    scale_ratio = cp_T[:, 0]  # Normalize this column by the height of the quadratic
 
     ### Apply these transformations to base_cp ###
 
@@ -60,7 +61,7 @@ def calc_sphere_controlpoints(base_cp, num_cp, tan_vec, endpoint, x):
     # Translate base_cp
     vec_rotated = tan_vec @ R
     cp_shift = (
-        cp_scale + vec_rotated * (cp_T[:, 0].reshape(-1, 1, 1)) - np.array([x, 0, 0])
+        cp_scale + vec_rotated * (cp_T[:, 1].reshape(-1, 1, 1)) - np.array([x, 0, 0])
     )
     result = (cp_shift) @ R.T + endpoint
     return result
@@ -161,20 +162,90 @@ if __name__ == "__main__":
         np.array([0, 0, 0]),
         x=0,
     )
-    thres = 0.5
 
-    # cp[3:-3, 5:10, 1] = -thres
+    thickness = 0.5
 
-    # # Squash sphere
-    r, c = np.where(cp[:, :, 0] > thres)
-    d = np.ones(len(r), dtype="int")
-    cp[r, c, d] = thres
+    # Squash sphere along z-dimension
+    mid = (cp.shape[0] - 1) // 2
+    offset = 1
+    cp[:mid, :, 0] = -thickness / 2
+    cp[mid + offset :, :, 0] = thickness / 2
 
-    r, c = np.where(cp[:, :, 0] < -thres)
-    d = np.ones(len(r), dtype="int")
-    cp[r, c, d] = -thres
+    # Match radius at center
+    cp[mid - 1, :, 1:] = cp[mid, :, 1:]
+    cp[mid + 1, :, 1:] = cp[mid, :, 1:]
 
-    surf = make_surface(cp)
+    # Expand radius at center to round out the transition
+    center_radius = np.linalg.norm(cp[mid, :, 1:], axis=1).mean()
+    goal_radius = center_radius + thickness / 3
+    cp[mid, :, 1:] = cp[mid, :, 1:] / center_radius * goal_radius
+
+    # Bend according to backbone
+    edge_radius = np.linalg.norm(cp[mid - 1, :, 1:], axis=1).mean()
+    scale = cp[:, :, 2] / edge_radius
+    scale[scale < 0] = 0
+    b_cp = approximate_arc(np.pi / 2, edge_radius, 5)
+    b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+    b_cp[:, 0] *= -1  # Flip direction across yz axis
+    b = Backbone(b_cp, reparameterize=True)
+    b_pts = b.r(np.linspace(0, 1))
+
+    new_cp = cp.copy()
+    num_rows, num_cols = new_cp.shape[:2]
+    for i in range(num_rows):
+        for j in range(num_cols):
+
+            point_xyz = cp[i, j]
+            point_scale = np.round(scale[i, j], 4)  # Avoid divide by zero by rounding
+            pos = point_scale
+            if point_scale <= 0:
+                new_cp[i, j] = point_xyz
+            else:
+                dist_to_yz_plane = point_xyz[0]
+
+                # Handle points with scale > 1
+                if point_scale > 1:
+                    pos = 1.0
+                    dist_from_end = point_scale - 1.0
+                else:
+                    dist_from_end = 0.0
+                new_point = (
+                    b.r(pos) - b.B(pos) * dist_to_yz_plane + b.T(pos) * dist_from_end
+                )
+                if np.any(np.isnan(new_point)):
+                    print("here")
+                new_point[0, 1] = point_xyz[1]  # Keep original y value
+                new_cp[i, j] = new_point
+
+    # Remove artifact from endpoints
+    new_cp[[0, 1, -2, -1], :, :] = cp[[0, 1, -2, -1], :, :]
+
+    # Scale up
+    new_cp = new_cp * 5
+
+    import matplotlib.pyplot as plt
+
+    ax = plt.figure().add_subplot(projection="3d")
+    arr = new_cp
+    for i in range(arr.shape[0]):
+        ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "b-*")
+
+    # Plot points
+    ax.plot(b_pts[:, 0], b_pts[:, 1], b_pts[:, 2], "r*-")
+
+    # Set scale
+    xs = arr[:, :, 0].ravel()
+    ys = arr[:, :, 1].ravel()
+    zs = arr[:, :, 2].ravel()
+    ax.set_box_aspect(
+        (np.ptp(xs), np.ptp(ys), np.ptp(zs))
+    )  # aspect ratio is 1:1:1 in data space
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    plt.show()
+
+    surf = make_surface(new_cp)
     mesh = make_mesh(surf, 100, 100)
     mesh.show(smooth=False)
 
@@ -193,21 +264,6 @@ if __name__ == "__main__":
     # mesh = make_mesh(surf, 100, 100)
     # mesh.show()
 
-    import matplotlib.pyplot as plt
-
-    ax = plt.figure().add_subplot(projection="3d")
-    arr = cp
-    for i in range(arr.shape[0]):
-        ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "b-*")
-
-    # Set scale
-    xs = arr[:, :, 0].ravel()
-    ys = arr[:, :, 1].ravel()
-    zs = arr[:, :, 2].ravel()
-    ax.set_box_aspect(
-        (np.ptp(xs), np.ptp(ys), np.ptp(zs))
-    )  # aspect ratio is 1:1:1 in data space
-    plt.show()
     pass
     # # Calculate an arc that makes a hemisphere
     # angle = np.pi / 2
