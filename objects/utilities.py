@@ -180,7 +180,7 @@ def calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x):
         x_shift = x
 
     # Calculate and transform the controlpoints based on which side of the axial component we are
-    cp = approximate_arc(arc_length, r * arc_length)
+    cp = approximate_arc(arc_length, r * arc_length, 5)
     cp_rot = cp[:, [1, 0]]  # Rotate 45deg
     if x == 0:
         cp_rot[:, 0] *= -1
