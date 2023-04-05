@@ -59,9 +59,7 @@ def calc_sphere_controlpoints(base_cp, num_cp, tan_vec, endpoint, x):
 
     # Translate base_cp
     vec_rotated = tan_vec @ R
-    cp_shift = (
-        cp_scale + vec_rotated * (cp_T[:, 0].reshape(-1, 1, 1)) - np.array([x, 0, 0])
-    )
+    cp_shift = cp_scale + vec_rotated * (cp_T[:, 0].reshape(-1, 1, 1)) - np.array([x, 0, 0])
     result = (cp_shift) @ R.T + endpoint
     return result
 
@@ -95,9 +93,7 @@ def calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x, num_cp):
     cp_rot = cp[:, [1, 0]]  # Rotate 45deg
     if x == 0:
         cp_rot[:, 0] *= -1
-    cp_T = cp_rot - np.array(
-        [cp_rot[-1, 0] - x_shift, 0]
-    )  # Shift to align with end of quadratic
+    cp_T = cp_rot - np.array([cp_rot[-1, 0] - x_shift, 0])  # Shift to align with end of quadratic
 
     scale_ratio = cp_T[:, 1] / y  # Normalize this column by the height of the quadratic
 
@@ -122,14 +118,10 @@ def calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x, num_cp):
 
     # Translate base_cp
     vec_rotated = tan_vec @ R
-    cp_shift = (
-        cp_scale + vec_rotated * (cp_T[:, 0].reshape(-1, 1, 1)) - np.array([x, 0, 0])
-    )
+    cp_shift = cp_scale + vec_rotated * (cp_T[:, 0].reshape(-1, 1, 1)) - np.array([x, 0, 0])
     result = (cp_shift) @ R.T + endpoint
 
-    assert np.all(
-        np.isclose(result[-1], base_cp)
-    ), "base_cp not aligned with result[-1]"
+    assert np.all(np.isclose(result[-1], base_cp)), "base_cp not aligned with result[-1]"
 
     # # Plot everything
     # fig, ax = plt.subplots()
@@ -147,9 +139,9 @@ def calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x, num_cp):
 
 if __name__ == "__main__":
 
-    num_cp = 11
+    num_cp = 9
 
-    t = np.linspace(0, 2 * np.pi, 16, endpoint=False).reshape(-1, 1)
+    t = np.linspace(0, 2 * np.pi, 8, endpoint=False).reshape(-1, 1)
     round_cp = np.hstack([np.cos(t), np.sin(t)])
     base_cp = np.hstack([np.zeros((round_cp.shape[0], 1)), round_cp])
 
@@ -165,48 +157,46 @@ if __name__ == "__main__":
 
     # cp[3:-3, 5:10, 1] = -thres
 
-    # # Squash sphere
-    r, c = np.where(cp[:, :, 0] > thres)
-    d = np.ones(len(r), dtype="int")
-    cp[r, c, d] = thres
+    # # # Squash sphere
+    # r, c = np.where(cp[:, :, 0] > thres)
+    # d = np.ones(len(r), dtype="int")
+    # cp[r, c, d] = thres
 
-    r, c = np.where(cp[:, :, 0] < -thres)
-    d = np.ones(len(r), dtype="int")
-    cp[r, c, d] = -thres
+    # r, c = np.where(cp[:, :, 0] < -thres)
+    # d = np.ones(len(r), dtype="int")
+    # cp[r, c, d] = -thres
 
     surf = make_surface(cp)
     mesh = make_mesh(surf, 100, 100)
     mesh.show(smooth=False)
 
     # # Hemisphere
-    # tan_vec = np.array([1, 0, 0])
-    # endpoint = np.array([0, 0, 0])
-    # xx = np.array([0, 0.5, 1])
-    # yy = np.array([1, 1, 1])
-    # poly = np.polyfit(xx, yy, 2)
-    # x = 0
-    # cp = calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x, num_cp)
+    tan_vec = np.array([1, 0, 0])
+    endpoint = np.array([0, 0, 0])
+    xx = np.array([0, 0.5, 1])
+    yy = np.array([1, 1, 1])
+    poly = np.polyfit(xx, yy, 2)
+    x = 0
+    cp = calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x, num_cp)
 
-    # # Make mesh
-    # hemi = np.vstack([cp, cp[-1:] * 0])
-    # surf = make_surface(hemi)
-    # mesh = make_mesh(surf, 100, 100)
-    # mesh.show()
+    # Make mesh
+    hemi = np.vstack([cp, cp[-1:] * 0])
+    surf = make_surface(hemi)
+    mesh = make_mesh(surf, 100, 100)
+    mesh.show(smooth=False)
 
     import matplotlib.pyplot as plt
 
     ax = plt.figure().add_subplot(projection="3d")
-    arr = cp
-    for i in range(arr.shape[0]):
-        ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "b-*")
+    for c, arr in enumerate([hemi]):
+        for i in range(arr.shape[0]):
+            ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "*")
 
     # Set scale
     xs = arr[:, :, 0].ravel()
     ys = arr[:, :, 1].ravel()
     zs = arr[:, :, 2].ravel()
-    ax.set_box_aspect(
-        (np.ptp(xs), np.ptp(ys), np.ptp(zs))
-    )  # aspect ratio is 1:1:1 in data space
+    ax.set_box_aspect((np.ptp(xs), np.ptp(ys), np.ptp(zs)))  # aspect ratio is 1:1:1 in data space
     plt.show()
     pass
     # # Calculate an arc that makes a hemisphere
