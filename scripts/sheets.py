@@ -1,6 +1,6 @@
 # Construct sheets needed in experiment
 import numpy as np
-from objects.utilities import make_mesh, make_surface, approximate_arc
+from objects.utilities import make_mesh, make_surface, approximate_arc, angle_between
 from objects.backbone import Backbone
 
 
@@ -11,6 +11,8 @@ def plot_arr(cp):
     arr = cp
     for i in range(arr.shape[0]):
         ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "b-*")
+    for i in range(arr.shape[1]):
+        ax.plot(arr[:, i, 0], arr[:, i, 1], arr[:, i, 2], "g-")
     # Set scale
     xs = arr[:, :, 0].ravel()
     ys = arr[:, :, 1].ravel()
@@ -24,20 +26,27 @@ def plot_arr(cp):
     plt.show()
 
 
-def construct_sheet(base_sheet, sheet_thickness, num_cs, edge_prop):
-    """Constructs a b-spline surface in the form of a sheet.
+def construct_sheet(base_sheet, sheet_thickness, num_cs):
+    """Constructs a b-spline surface in the form of a sheet."""
 
-    scale_max is that maximum amount that base_sheet is multiplied by. For example, if base_sheet is a circle with radius 1, and you ultimately want a surface with radius 11, scale_max should be 11."""
-
-    # Edges (adjacent to roundover of sheet) - shrink by factor of sheet thicknes
-    edge = base_sheet * edge_prop
-
-    # plot_arr(np.vstack([edge.reshape(1, -1, 3), base_sheet.reshape(1, -1, 3)]))
-
-    # Tile copies of edge
-    cp = np.tile(edge, (num_cs, 1, 1))
+    # Tile copies of base_sheet
+    cp = np.tile(base_sheet, (num_cs, 1, 1))
     mid_idx = (num_cs - 1) // 2
-    cp[mid_idx] = base_sheet  # replace base_sheet in middle
+
+    # Replace base sheet in middle with offset (rounds according to sheet thickness)
+    arr = base_sheet[:, 1:]
+    vecA = arr - np.roll(arr, -1, axis=0)
+    vecA = vecA / np.linalg.norm(vecA, axis=1, keepdims=True)
+    vecB = arr - np.roll(arr, 1, axis=0)
+    vecB = vecB / np.linalg.norm(vecB, axis=1, keepdims=True)
+    vecBisect = vecA + vecB
+    vecBisect = vecBisect / np.linalg.norm(vecBisect, axis=1, keepdims=True)
+    vecC = arr / np.linalg.norm(arr, axis=1, keepdims=True)
+    dotproduct = np.sum(vecBisect * vecC, axis=1)
+    vecBisect[dotproduct < 0] *= -1  # Flip direction if pointing towards origin
+    offset = arr + vecBisect * sheet_thickness / 3
+    offset = np.hstack([np.zeros((offset.shape[0], 1)), offset])  # Add back in x-axis
+    cp[mid_idx] = offset  # replace base_sheet in middle
 
     # Scale other profiles
     scale = np.linspace(0, 1, mid_idx - 1)
@@ -49,14 +58,25 @@ def construct_sheet(base_sheet, sheet_thickness, num_cs, edge_prop):
     cp[:mid_idx, :, 0] -= sheet_thickness / 2
     cp[mid_idx + 1 :, :, 0] += sheet_thickness / 2
 
-    # # Scale to create progression from endpoint to middle to endpoint
-    # mid_idx = (num_cs - 1) // 2
-    # scale = np.linspace(0.0, scale_max, mid_idx - 1)
-    # scale = np.insert(scale, 1, scale[1] / 5)  # Controls slope at endpoint
-    # scale = np.concatenate(
-    #     [scale, np.array([scale_max + sheet_thickness / 3]), scale[::-1]]
-    # )
-    # cp *= scale.reshape(-1, 1, 1)
+    # plot_arr(cp)
+    # import matplotlib.pyplot as plt
+
+    # ax = plt.figure().add_subplot()
+    # ax.plot(arr[:, 0], arr[:, 1], "-b*")
+    # ax.plot(offset[:, 1], offset[:, 2], "-g*")
+
+    # for i in range(arr.shape[0]):
+    #     point1 = arr[i]
+    #     vec = vecBisect[i]
+    #     point2 = point1 + vec
+    #     pts = np.vstack([point1, point2])
+    #     ax.plot(pts[:, 0], pts[:, 1], "-r*")
+    # # pts = np.vstack(
+    # #     [arr[1] + vecB[1], arr[1], arr[1] + vecA[1], arr[1], arr[1] + vecBisect[1]]
+    # # )
+    # # ax.plot(pts[:, 0], pts[:, 1])
+    # ax.set_aspect("equal")
+    # plt.show()
 
     return cp
 
@@ -79,9 +99,9 @@ def bend_sheet(cp, backbone, max_scale):
     num_rows, num_cols = new_cp.shape[:2]
     for i in range(num_rows):
 
-        # Leave endpoints unbent, avoids tearing artifact
-        if i in [0, 1, num_rows - 2, num_rows - 1]:
-            continue
+        # # Leave endpoints unbent, avoids tearing artifact
+        # if i in [0, 1, num_rows - 2, num_rows - 1]:
+        #     continue
 
         for j in range(num_cols):
 
@@ -135,7 +155,7 @@ def calc_roundover_cp(dydx, x, y, num_cp, side="left"):
     return roundover_cp
 
 
-def make_base_cp(poly, x, num_edge_cp, num_round_cp):
+def make_base_cp(poly, x, num_edge_cp, base_round_cp, top_round_cp):
 
     assert len(x) == 3, "x must have 3 values for quadratic evaluation."
 
@@ -153,14 +173,14 @@ def make_base_cp(poly, x, num_edge_cp, num_round_cp):
     der = np.polyder(poly, 1)
     ry = np.polyval(poly, rx)
     rm = np.polyval(der, rx)
-    right_round_cp = calc_roundover_cp(rm, rx, ry, num_round_cp, "right")
+    right_round_cp = calc_roundover_cp(rm, rx, ry, top_round_cp, "right")
 
     # Left roundover
     rx = x[0]
     der = np.polyder(poly, 1)
     ry = np.polyval(poly, rx)
     rm = np.polyval(der, rx)
-    left_round_cp = calc_roundover_cp(rm, rx, ry, num_round_cp, "left")
+    left_round_cp = calc_roundover_cp(rm, rx, ry, base_round_cp, "left")
 
     # Combine into aray
     base_cp = np.vstack([top_cp, right_round_cp, bot_cp[::-1], left_round_cp])

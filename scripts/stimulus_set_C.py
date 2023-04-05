@@ -9,6 +9,7 @@ from objects.shape import Shape
 from scripts.sheets import construct_sheet, bend_sheet, make_base_cp
 from scripts.hemi import calc_sphere_controlpoints
 import trimesh
+from scripts.sheets import plot_arr
 
 # TODO: Check RADII
 # TODO: Ensure parity between orthogonal and colinear components -- probably best to fuse complete components
@@ -19,17 +20,23 @@ import trimesh
 NUM_CP_PER_BACKBONE = 5
 SEGMENT_LENGTH = 25
 NUM_CS = 11
-X_WIDTH = 3  # base radius off which other features are derived
-VOLUMETRIC_MIDDLE_FACTOR = 4  # Middle cs radius is this times larger than edge cs
+X_WIDTH = 6  # base radius off which other features are derived
+VOLUMETRIC_RADII = np.array(
+    [X_WIDTH, 2 * X_WIDTH, X_WIDTH]
+)  # Middle cs radius is this times larger than edge cs
 SHEET_THICKNESS = 3
 NUM_CP_PER_BASE_SHEET = 16
-NUM_CS_PER_SHEET = 21
-LEAF_RADII = np.array([0.5 * X_WIDTH, 1 * X_WIDTH, 0.25 * X_WIDTH])
-SPHERE_RADIUS = 8
+NUM_CS_PER_SHEET = 11
+
+POINT_RADII = np.array([X_WIDTH, 0.4 * X_WIDTH, 0.1 * X_WIDTH])
+LEAF_RADII = np.array([0.75 * X_WIDTH, 1.5 * X_WIDTH, 0.25 * X_WIDTH])
+APPENDAGE_LENGTH = 15
+
+# SPHERE_RADIUS = 15
 
 # Derived parameters
-cs_radii = np.arange(3) * X_WIDTH
-appendage_length = SEGMENT_LENGTH / 2
+# cs_radii = np.arange(3) * X_WIDTH
+# appendage_length = SEGMENT_LENGTH / 2
 
 ##############################
 ### Cross Section Profiles ###
@@ -96,7 +103,7 @@ pos_seg05 = pos * SEGMENT_LENGTH / 2  # Position from (0, SEGMENT_LENGTH/2)
 
 # Fit quadratic polynomial to determine scaling of cross sections
 x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH * 2
-y = np.array([X_WIDTH, VOLUMETRIC_MIDDLE_FACTOR * X_WIDTH, X_WIDTH])
+y = VOLUMETRIC_RADII
 volumetric_poly = np.polyfit(x, y, 2)
 volumetric_scale = np.polyval(volumetric_poly, pos_seg2)
 volumetric_cs = [
@@ -117,70 +124,80 @@ volumetric = AxialComponent(
 
 
 # Backbone for bending sheets
-b_cp = approximate_arc(np.pi / 2, SPHERE_RADIUS, 5)
+b_cp = approximate_arc(np.pi / 2, APPENDAGE_LENGTH, 5)
 b_cp = b_cp[:, [1, 2, 0]]  # Reorder
 b_cp[:, 0] *= -1  # Flip direction across yz axis
-backbone = Backbone(b_cp, reparameterize=True)
+backbone_appendage = Backbone(b_cp, reparameterize=True)
 
+b_cp = approximate_arc(np.pi / 2, X_WIDTH, 5)
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+backbone_x_width = Backbone(b_cp, reparameterize=True)
 
 # Round sheet
 t = np.linspace(0, 2 * np.pi, NUM_CP_PER_BASE_SHEET, endpoint=False).reshape(-1, 1)
 round_cs_cp = np.hstack([np.zeros(t.shape), np.cos(t), np.sin(t)])
-base_sheet = round_cs_cp * SPHERE_RADIUS
+base_sheet = round_cs_cp * X_WIDTH
 cp = construct_sheet(
-    base_sheet, edge_prop=0.90, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS
+    base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET
 )
 surf = make_surface(cp)
 sheet_round = make_mesh(surf, 100, 100)
 
 # Bend round sheet
-bent_cp = bend_sheet(cp, backbone, appendage_length)
+bent_cp = bend_sheet(cp, backbone_x_width, X_WIDTH)
 surf = make_surface(bent_cp)
 sheet_round_bent = make_mesh(surf, 100, 100)
 
 # Leaf sheet
 num_edge_cp = 7
-num_round_cp = 3
-x = np.linspace(0, 1, 3) * SPHERE_RADIUS
+base_round_cp = 3
+top_round_cp = 1
+x = np.linspace(0, 1, 3) * APPENDAGE_LENGTH
 y = LEAF_RADII
 poly = np.polyfit(x, y, 2)
-leaf_cp = make_base_cp(poly, x, num_edge_cp, num_round_cp)
-leaf_cp = leaf_cp - leaf_cp.mean(axis=0)  # Shift to origin
-cp = construct_sheet(
-    leaf_cp, edge_prop=0.8, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS
-)
+leaf_cp = make_base_cp(poly, x, num_edge_cp, base_round_cp, top_round_cp)
+mean_xyz = leaf_cp.mean(axis=0)
+leaf_cp = leaf_cp - mean_xyz  # Shift to origin for scaling
+cp = construct_sheet(leaf_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
 surf = make_surface(cp)
 sheet_leaf = make_mesh(surf, 100, 100)
 
 # Bent leaf sheet
-bent_cp = bend_sheet(cp, backbone, x[2] - x[1])
+bent_cp = bend_sheet(cp, backbone_appendage, x[2] - x[1])
 surf = make_surface(bent_cp)
 sheet_leaf_bent = make_mesh(
     surf, 100, 100
 )  # TODO: Has artifact, fix after deciding on thickness/size
 
 # Point sheet
+NUM_CS_POINT_SHEET = 101
 num_edge_cp = 7
-num_round_cp = 3
-x = np.linspace(0, 1, 3) * SPHERE_RADIUS
-y = np.array([X_WIDTH, 0.4 * X_WIDTH, 0.1 * X_WIDTH])
+base_round_cp = 3
+top_round_cp = 1
+x = np.linspace(0, 1, 3) * APPENDAGE_LENGTH
+y = POINT_RADII
 poly = np.polyfit(x, y, 2)
-point_cp = make_base_cp(poly, x, num_edge_cp, num_round_cp)
-point_cp = point_cp - point_cp.mean(axis=0)  # Shift to origin
+point_cp = make_base_cp(poly, x, num_edge_cp, base_round_cp, top_round_cp)
+# mean_xyz = point_cp.mean(axis=0)
+# point_cp = point_cp - point_cp.mean(axis=0)  # Shift to origin
 cp = construct_sheet(
-    point_cp, edge_prop=0.8, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS
+    point_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_POINT_SHEET
 )
+# cp += mean_xyz  # Shift back to original position
 surf = make_surface(cp)
 sheet_point = make_mesh(surf, 100, 100)
+plot_arr(cp)
 # sheet_point.show()
 
 # Bent point sheet
-bent_cp = bend_sheet(cp, backbone, x[2] - x[1])
+bent_cp = bend_sheet(cp, backbone_appendage, x[2] - x[1])
 surf = make_surface(bent_cp)
 sheet_point_bent = make_mesh(
     surf, 100, 100
 )  # TODO: Has artifact, fix after deciding on thickness/size
-
+plot_arr(bent_cp)
 
 # Sphere
 
@@ -195,11 +212,12 @@ cp = calc_sphere_controlpoints(
     np.array([0, 0, 0]),
     x=0,
 )
-cp *= SPHERE_RADIUS
+cp *= X_WIDTH
 
 surf = make_surface(cp)
 sphere = make_mesh(surf, 100, 100)
 max_bbox = trimesh.creation.box([100, 45, 45])
+inch_sphere = trimesh.creation.icosphere(3, 25.4 / 2)
 
 mesh_list = [
     sheet_leaf,
@@ -211,6 +229,7 @@ mesh_list = [
     sphere,
     volumetric.mesh,
     max_bbox,
+    inch_sphere,
 ]
 
 scene = trimesh.Scene()
