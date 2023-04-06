@@ -332,6 +332,7 @@ class AxialComponent:
             endpoint,
             self.hemispherical_polynomial,
             x,
+            morph_to_ellipse=False,
         )
 
         # Right side
@@ -346,6 +347,7 @@ class AxialComponent:
             endpoint,
             self.hemispherical_polynomial,
             x,
+            morph_to_ellipse=False,
         )
 
         mid_cp = self.controlpoints[2:-2]

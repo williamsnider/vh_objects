@@ -4,12 +4,20 @@ import numpy as np
 from objects.backbone import Backbone
 from objects.cross_section import CrossSection
 from objects.axial_component import AxialComponent
-from objects.utilities import approximate_arc, make_mesh, make_surface
+from objects.utilities import (
+    approximate_arc,
+    make_mesh,
+    make_surface,
+    calc_hemisphere_controlpoints,
+    angle_between,
+    fuse_meshes,
+)
 from objects.shape import Shape
 from scripts.sheets import construct_sheet, bend_sheet, make_base_cp
 from scripts.hemi import calc_sphere_controlpoints
 import trimesh
 from scripts.sheets import plot_arr
+from scipy.spatial.transform.rotation import Rotation
 
 # TODO: Check RADII
 # TODO: Ensure parity between orthogonal and colinear components -- probably best to fuse complete components
@@ -31,7 +39,7 @@ NUM_CS_PER_SHEET = 11
 POINT_RADII = np.array([X_WIDTH, 0.4 * X_WIDTH, 0.1 * X_WIDTH])
 LEAF_RADII = np.array([0.75 * X_WIDTH, 1.5 * X_WIDTH, 0.25 * X_WIDTH])
 APPENDAGE_LENGTH = 15
-
+POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
 # SPHERE_RADIUS = 15
 
 # Derived parameters
@@ -121,7 +129,10 @@ volumetric = AxialComponent(
 ##############
 ### Sheets ###
 ##############
+T_K2 = np.eye(4)
+T_K2[:3, :3] = Rotation.from_rotvec(np.pi * np.array([0, 0, 1])).as_matrix()
 
+# Sphere
 
 # Backbone for bending sheets
 b_cp = approximate_arc(np.pi / 2, APPENDAGE_LENGTH, 5)
@@ -142,12 +153,15 @@ cp = construct_sheet(
     base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET
 )
 surf = make_surface(cp)
-sheet_round = make_mesh(surf, 100, 100)
+sheet_round_K0 = make_mesh(surf, 100, 100)
 
 # Bend round sheet
 bent_cp = bend_sheet(cp, backbone_x_width, X_WIDTH)
 surf = make_surface(bent_cp)
-sheet_round_bent = make_mesh(surf, 100, 100)
+sheet_round_K1 = make_mesh(surf, 100, 100)
+sheet_round_K2 = sheet_round_K1.copy()
+sheet_round_K2.apply_transform(T_K2)
+
 
 # Leaf sheet
 num_edge_cp = 7
@@ -162,43 +176,84 @@ leaf_cp = leaf_cp - mean_xyz  # Shift to origin for scaling
 cp = construct_sheet(leaf_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
 cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
 surf = make_surface(cp)
-sheet_leaf = make_mesh(surf, 100, 100)
+sheet_leaf_K0 = make_mesh(surf, 100, 100)
 
 # Bent leaf sheet
-bent_cp = bend_sheet(cp, backbone_appendage, x[2] - x[1])
+bent_cp = bend_sheet(cp, backbone_appendage, x[2] - x[0])
 surf = make_surface(bent_cp)
-sheet_leaf_bent = make_mesh(
+sheet_leaf_K1 = make_mesh(
     surf, 100, 100
 )  # TODO: Has artifact, fix after deciding on thickness/size
-
+sheet_leaf_K2 = sheet_leaf_K1.copy()
+sheet_leaf_K2.apply_transform(T_K2)
 # Point sheet
-NUM_CS_POINT_SHEET = 101
-num_edge_cp = 7
-base_round_cp = 3
-top_round_cp = 1
-x = np.linspace(0, 1, 3) * APPENDAGE_LENGTH
-y = POINT_RADII
-poly = np.polyfit(x, y, 2)
-point_cp = make_base_cp(poly, x, num_edge_cp, base_round_cp, top_round_cp)
-# mean_xyz = point_cp.mean(axis=0)
-# point_cp = point_cp - point_cp.mean(axis=0)  # Shift to origin
-cp = construct_sheet(
-    point_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_POINT_SHEET
-)
-# cp += mean_xyz  # Shift back to original position
-surf = make_surface(cp)
-sheet_point = make_mesh(surf, 100, 100)
-plot_arr(cp)
-# sheet_point.show()
 
-# Bent point sheet
-bent_cp = bend_sheet(cp, backbone_appendage, x[2] - x[1])
+# Calculate widths
+px = np.linspace(0, APPENDAGE_LENGTH, 3)
+py = POINT_RADII
+poly = np.polyfit(px, py, 2)
+xvals = np.linspace(0, APPENDAGE_LENGTH, NUM_CS)
+widths = np.polyval(poly, xvals)
+
+# Calculate z_levels
+z_levels = np.linspace(0, APPENDAGE_LENGTH, NUM_CS)
+
+# Assign controlpoints
+cp = np.zeros((NUM_CS, 8, 3))
+for i, width in enumerate(widths):
+
+    if width == 0:
+        inner = np.zeros((8, 2))
+    else:
+        inner = np.array(
+            [
+                [SHEET_THICKNESS / 2, 0],
+                [SHEET_THICKNESS / 2, width / 2],
+                [0, width / 2 + POINT_ROUNDOVER_OFFSET],
+                [-SHEET_THICKNESS / 2, width / 2],
+                [-SHEET_THICKNESS / 2, 0],
+                [-SHEET_THICKNESS / 2, -width / 2],
+                [0, -width / 2 - POINT_ROUNDOVER_OFFSET],
+                [SHEET_THICKNESS / 2, -width / 2],
+            ]
+        )
+
+    xyz = np.hstack([inner, z_levels[i] * np.ones((inner.shape[0], 1))])
+
+    cp[i, :, :] = xyz
+
+# Roundover edges
+
+side_y = POINT_RADII + POINT_ROUNDOVER_OFFSET
+side_poly = np.polyfit(x, side_y, 2)
+bot = calc_hemisphere_controlpoints(
+    cp[0],
+    np.array([0, 0, 1]),
+    cp[0].mean(axis=0),
+    side_poly,
+    x[0],
+    morph_to_ellipse=True,
+)
+top = calc_hemisphere_controlpoints(
+    cp[-1],
+    np.array([0, 0, 1]),
+    cp[-1].mean(axis=0),
+    side_poly,
+    x[-1],
+    morph_to_ellipse=True,
+)
+cp = np.vstack([bot, cp, top[-2::-1]])
+surf = make_surface(cp)
+sheet_point_K0 = make_mesh(surf, 100, 100)
+
+bent_cp = bend_sheet(cp, backbone_appendage, x[2] - x[0])
 surf = make_surface(bent_cp)
-sheet_point_bent = make_mesh(
+sheet_point_K1 = make_mesh(
     surf, 100, 100
 )  # TODO: Has artifact, fix after deciding on thickness/size
-plot_arr(bent_cp)
-
+# sheet_point_bent.show(smooth=False)
+sheet_point_K2 = sheet_point_K1.copy()
+sheet_point_K2.apply_transform(T_K2)
 # Sphere
 
 num_cp = 11
@@ -220,12 +275,15 @@ max_bbox = trimesh.creation.box([100, 45, 45])
 inch_sphere = trimesh.creation.icosphere(3, 25.4 / 2)
 
 mesh_list = [
-    sheet_leaf,
-    sheet_leaf_bent,
-    sheet_point,
-    sheet_point_bent,
-    sheet_round,
-    sheet_round_bent,
+    sheet_round_K0,
+    sheet_round_K1,
+    sheet_round_K2,
+    sheet_leaf_K0,
+    sheet_leaf_K1,
+    sheet_leaf_K2,
+    sheet_point_K0,
+    sheet_point_K1,
+    sheet_point_K2,
     sphere,
     volumetric.mesh,
     max_bbox,
@@ -250,376 +308,140 @@ for m in mesh_list:
     shift += extents * 1.1
 scene.show()
 
-# ### Sheet - Leaf - Zero Curvature ###
-
-# # Fit quadratic polynomial to determine scaling of cross sections
-# x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH
-# y = np.array([1, LEAF_SCALE_FACTOR, 1])  # Width of sheet already factored in sheet_cp
-# sheet_leaf_0K_poly = np.polyfit(x, y, 2)
-# sheet_leaf_0K_scale = np.hstack(
-#     [
-#         np.ones((len(pos_seg1), 1)),
-#         np.polyval(sheet_leaf_0K_poly, pos_seg1).reshape(-1, 1),
-#     ]
-# )
-# sheet_leaf_0K_cs = [
-#     CrossSection(sheet_leaf_0K_scale[i] * sheet_cp, POS_SHEET[i]) for i in range(NUM_CS)
-# ]
-
-# # Construct axial component
-# sheet_leaf_0K = AxialComponent(
-#     b_lin1,
-#     sheet_leaf_0K_cs,
-# )
-
-# ### Sheet - Leaf - With Curvature ###
-
-# # Fit quadratic polynomial to determine scaling of cross sections
-# x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH
-# y = np.array([1, LEAF_SCALE_FACTOR, 1])  # Width of sheet already factored in sheet_cp
-# sheet_leaf_1K_poly = np.polyfit(x, y, 2)
-# sheet_leaf_1K_scale = np.hstack(
-#     [
-#         np.ones((len(pos_seg1), 1)),
-#         np.polyval(sheet_leaf_0K_poly, pos_seg1).reshape(-1, 1),
-#     ]
-# )
-# sheet_leaf_1K_cs = [
-#     CrossSection(sheet_leaf_1K_scale[i] * sheet_cp, POS_SHEET[i]) for i in range(NUM_CS)
-# ]
-
-# # Construct axial component
-# sheet_leaf_1K = AxialComponent(
-#     b_cur1,
-#     sheet_leaf_1K_cs,
-# )
-
-# ### Sheet - Point - Zero Curvature ###
-
-# # Fit quadratic polynomial to determine scaling of cross sections
-# x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH / 2
-# y = np.geomspace(1, 0.2, 3)
-# sheet_point_0K_poly = np.polyfit(x, y, 2)
-# sheet_point_0K_scale = np.hstack(
-#     [
-#         np.ones((len(pos_seg1), 1)),
-#         np.polyval(sheet_point_0K_poly, pos_seg05).reshape(-1, 1),
-#     ]
-# )
-# sheet_point_0K_cs = [
-#     CrossSection(sheet_point_0K_scale[i] * sheet_cp, POS_SHEET[i])
-#     for i in range(NUM_CS)
-# ]
-
-# # Construct axial component
-# sheet_point_0K = AxialComponent(
-#     b_lin05,
-#     sheet_point_0K_cs,
-# )
-
-# ### Sheet - Point - With Curvature ###
-
-# # Fit quadratic polynomial to determine scaling of cross sections
-# x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH / 2
-# y = np.geomspace(1, 0.2, 3)
-# sheet_point_1K_poly = np.polyfit(x, y, 2)
-# sheet_point_1K_scale = np.hstack(
-#     [
-#         np.ones((len(pos_seg1), 1)),
-#         np.polyval(sheet_point_1K_poly, pos_seg05).reshape(-1, 1),
-#     ]
-# )
-# sheet_point_1K_cs = [
-#     CrossSection(sheet_point_1K_scale[i] * sheet_cp, POS_SHEET[i])
-#     for i in range(NUM_CS)
-# ]
-
-# # Construct axial component
-# sheet_point_1K = AxialComponent(
-#     b_cur05,
-#     sheet_point_1K_cs,
-# )
-# sheet_point_1K.mesh.show()
+#######################
+### Transformations ###
+#######################
 
 
-# ### Sheet - Bump - Zero Curvature ###
-# # XXX: This is wrong XXX
+def find_line_mesh_intersection(mesh, vec, origin):
 
-# # Create scale of cross sections
-# th = np.linspace(0, np.pi / 2, NUM_CS, endpoint=False)
-# sheet_bump_0K_scale = np.hstack(
-#     [
-#         np.ones((len(pos_seg1), 1)),
-#         np.cos(th).reshape(-1, 1),
-#     ]
-# )
-# sheet_bump_0K_cs = [
-#     CrossSection(sheet_bump_0K_scale[i] * sheet_cp, pos[i]) for i in range(NUM_CS)
-# ]
+    # Find points that the vector is pointing to (correct side of mesh)
+    angles = angle_between(mesh.vertices - origin, vec)
+    pts = mesh.vertices[angles < np.pi / 2]
 
-# # Construct axial component
-# sheet_bump_0K = AxialComponent(
-#     b_lin05,
-#     sheet_bump_0K_cs,
-# )
-# sheet_bump_0K.mesh.show()
+    # Calc dist from these points to the vector
+    dists = np.linalg.norm(np.cross(pts - origin, vec), axis=1) / np.linalg.norm(vec)
 
-# ### Bump - Zero Curvature ###
-# from objects.utilities import calc_hemisphere_controlpoints
+    # Choose smallest dist as point
+    idx = dists.argmin()
+    xyz = pts[idx]
+
+    return xyz
 
 
-# # Calculate control points for hemisphere
-# hemi_base_cp = np.hstack([np.zeros((round_cp.shape[0], 1)), round_cp])
-# x = np.array([0, 1, 2])
-# y = np.array([1, 1, 1])
-# poly = np.polyfit(x, y, 2)  # Fit a linear polynomial for function
-# cp = calc_hemisphere_controlpoints(
-#     hemi_base_cp, np.array([1, 0, 0]), np.array([0, 0, 0]), poly, 0
-# )
+vec_axial_component = np.array([1, 0, 0])
+vec_to_J1 = volumetric.B(0.5)
+vec_to_J1_orth = np.cross(vec_to_J1, vec_axial_component)
+vec_to_J2 = volumetric.B(1.0)
+vec_to_J2_orth = np.cross(vec_to_J2, vec_axial_component)
 
-# cp = cp[1:]
-# # full = np.vstack([cp, cp[-2::-1] * np.array([-1,1,1])])
-# bump_0K = copy.deepcopy(sheet_bump_0K)
-# bump_0K.controlpoints = cp * np.array([-1, 1, 1])
-# bump_0K.num_rows = cp.shape[0]
-# bump_0K.make_surface()
-# bump_0K.make_mesh()
-# bump_0K.mesh.show()
+J1_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J1, volumetric.r(0.5))
+J1_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, volumetric.r(0.5))
+J2_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J2, volumetric.r(1.0))
+J2_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, volumetric.r(1.0))
+CO_xyz = find_line_mesh_intersection(
+    volumetric.mesh, vec_axial_component, volumetric.r(1.0)
+)
 
+R_F_U = np.eye(3)
+R_L_U = R_F_U @ Rotation.from_rotvec(np.pi / 2 * vec_to_J1).as_matrix()
+R_B_U = R_L_U @ Rotation.from_rotvec(np.pi / 2 * vec_to_J1).as_matrix()
+R_R_U = R_B_U @ Rotation.from_rotvec(np.pi / 2 * vec_to_J1).as_matrix()
 
-# sheet_bump_0K_cp = cp * np.array([-1, 1, 1])  # Copy
-# sheet_bump_0K_cp *= (SHEET_THICKNESS + SHEET_WIDTH) / 2  # Scale
-# # Squash
+R_F_D = R_F_U @ Rotation.from_rotvec(np.pi * vec_axial_component).as_matrix()
+R_L_D = R_F_D @ Rotation.from_rotvec(-np.pi / 2 * vec_to_J1).as_matrix()
+R_B_D = R_L_D @ Rotation.from_rotvec(-np.pi / 2 * vec_to_J1).as_matrix()
+R_R_D = R_B_D @ Rotation.from_rotvec(-np.pi / 2 * vec_to_J1).as_matrix()
 
-# import matplotlib.pyplot as plt
-
-# ax = plt.figure().add_subplot(projection="3d")
-# arr = sheet_bump_0K_cp
-# for i in range(arr.shape[0]):
-#     ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "b-*")
-
-# # Set scale
-# xs = arr[:, :, 0].ravel()
-# ys = arr[:, :, 1].ravel()
-# zs = arr[:, :, 2].ravel()
-# ax.set_box_aspect(
-#     (np.ptp(xs), np.ptp(ys), np.ptp(zs))
-# )  # aspect ratio is 1:1:1 in data space
-# plt.show()
+# Collinear rotations
+R_U = R_F_D @ Rotation.from_rotvec(np.pi / 2 * vec_to_J1_orth).as_matrix()
+R_L = R_U @ Rotation.from_rotvec(-np.pi / 2 * vec_to_J1).as_matrix()
+R_D = R_L @ Rotation.from_rotvec(-np.pi / 2 * vec_to_J1).as_matrix()
+R_R = R_D @ Rotation.from_rotvec(-np.pi / 2 * vec_to_J1).as_matrix()
 
 
-# # volumetric.mesh.show()
+def calc_T(R, xyz):
+    T = np.eye(4)
+    T[:3, :3] = R
+    T[:3, 3] = xyz
+    return T
 
 
-# ######################
-# ### Cross sections ###
-# ######################
+# J1, direction of curvature (forward, left, right, back), up/down
+T_J1_B_U = calc_T(R_B_U, J1_xyz_U)
+T_J1_B_D = calc_T(R_B_D, J1_xyz_D)
+T_J1_L_U = calc_T(R_L_U, J1_xyz_U)
+T_J1_L_D = calc_T(R_L_D, J1_xyz_D)
+T_J1_F_U = calc_T(R_F_U, J1_xyz_U)
+T_J1_F_D = calc_T(R_F_D, J1_xyz_D)
+T_J1_R_U = calc_T(R_R_U, J1_xyz_U)
+T_J1_R_D = calc_T(R_R_D, J1_xyz_D)
 
-# pos = np.linspace(0, 1, NUM_CS)
-# pos_seg = pos * SEGMENT_LENGTH
-# pos_seg2 = pos_seg * 2
-# t = np.linspace(0, 2 * np.pi, 8, endpoint=False).reshape(-1, 1)
-# base_cp = np.hstack([np.cos(t), np.sin(t)])
+# J2
+T_J2_B_U = calc_T(R_B_U, J2_xyz_U)
+T_J2_B_D = calc_T(R_B_D, J2_xyz_D)
+T_J2_L_U = calc_T(R_L_U, J2_xyz_U)
+T_J2_L_D = calc_T(R_L_D, J2_xyz_D)
+T_J2_F_U = calc_T(R_F_U, J2_xyz_U)
+T_J2_F_D = calc_T(R_F_D, J2_xyz_D)
+T_J2_R_U = calc_T(R_R_U, J2_xyz_U)
+T_J2_R_D = calc_T(R_R_D, J2_xyz_D)
 
-# # 1_1_1 cylindrical
-# scale_1_1_1 = np.ones(NUM_CS) * CS_RADII[2]
-# cs_1_1_1 = [CrossSection(scale_1_1_1[i] * base_cp, pos[i]) for i in range(NUM_CS)]
+# Collinear
+T_CO_U = calc_T(R_U, CO_xyz)
+T_CO_L = calc_T(R_L, CO_xyz)
+T_CO_D = calc_T(R_D, CO_xyz)
+T_CO_R = calc_T(R_R, CO_xyz)
 
-# # 1_4_1 football
-# x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH * 2
-# y = np.array([X_WIDTH, 4 * X_WIDTH, X_WIDTH])
-# poly_1_4_1 = np.polyfit(x, y, 2)
-# scale_1_4_1 = np.polyval(poly_1_4_1, pos_seg2)
-# cs_1_4_1 = [CrossSection(scale_1_4_1[i] * base_cp, pos[i]) for i in range(NUM_CS)]
-# # Calculate when polynomial would hit zero
+combs = []
 
-# # 1_2_1 sheet
-# sheet_thickness_to_width = 4
-# sheet_cp = base_cp.copy()
-# sheet_cp[[0, 1, 7], 0] = 1 / sheet_thickness_to_width
-# sheet_cp[[3, 4, 5], 0] = -1 / sheet_thickness_to_width
-# scale_1_1_1 = np.ones(NUM_CS) * CS_RADII[1]
-# cs_sheet_1_1_1 = [
-#     CrossSection(scale_1_1_1[i] * sheet_cp, pos_sheet[i]) for i in range(NUM_CS)
-# ]
-# # endpoint_offset = np.linalg.norm(sheet_cp[-1] - sheet_cp[1]) / 2
+# J1
 
-# # 1_2_1
-# x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH
-# y = np.array([X_WIDTH, 2 * X_WIDTH, X_WIDTH])
-# poly_1_2_1 = np.polyfit(x, y, 2)
-# scale_1_2_1 = np.polyval(poly_1_2_1, pos_seg)
-# cs_1_2_1 = [CrossSection(scale_1_2_1[i] * base_cp, pos[i]) for i in range(NUM_CS)]
+# 3 radius profiles
+# 3 curvature profiles
+# 2 hox heads
+# 2 orientations
+for appendage_type in ["sheet_round", "sheet_leaf", "sheet_point"]:
+    for curvature_profile in ["K0", "K1", "K2"]:
 
-# ########################
-# ### Axial components ###
-# ########################
+        appendage = eval(appendage_type + "_" + curvature_profile).copy()
 
-# volumetric = AxialComponent(
-#     b_lin2,
-#     cs_1_4_1,
-#     hemispherical_ends=True,
-#     hemispherical_polynomial=poly_1_4_1,
-#     hemisphere_x=[0, 2 * SEGMENT_LENGTH],
-# )
-# # volumetric.mesh.show()
+        for T1 in ["T_J1_F_U", "T_J1_L_U"]:
+            for hox in [False, True]:
 
-# sheet = AxialComponent(
-#     b_cur1,
-#     cs_sheet_1_1_1,
-#     # parent_axial_component=volumetric,
-#     # position_along_parent=0.5,
-#     # euler_angles=np.array([0, np.pi / 2, 0]),
-# )
+                mesh_list = [volumetric.mesh]
 
-# sheet2 = AxialComponent(
-#     b_cur1,
-#     cs_sheet_1_1_1,
-#     # parent_axial_component=volumetric,
-#     # position_along_parent=0.5,
-#     # euler_angles=np.array([0, np.pi / 2, 0]),
-# )
+                mesh = appendage.copy()
+                mesh.apply_transform(eval(T1))
+                mesh_list.append(mesh)
 
-# bulb = AxialComponent(
-#     b_lin1,
-#     cs_1_2_1,
-#     hemispherical_ends=True,
-#     hemispherical_polynomial=poly_1_2_1,
-#     hemisphere_x=[0, SEGMENT_LENGTH],
-#     parent_axial_component=volumetric,
-#     position_along_parent=1.0,
-# )
+                if hox == True:
+                    T2 = T1[:-1] + "D"
+                    hox_mesh = appendage.copy()
+                    hox_mesh.apply_transform(eval(T2))
+                    mesh_list.append(hox_mesh)
 
-# # head = AxialComponent(
-# #     b_cur1,
-# #     cs_sheet_1_2_1,
-# #     parent_axial_component=volumetric,
-# #     position_along_parent=0.5,
-# #     euler_angles=np.array([0, np.pi / 2, 0]),
-# # )
+                # Fuse meshes
+                meshA = mesh_list[0]
+                for meshB in mesh_list[1:]:
+                    meshA = fuse_meshes(meshA, meshB, 2, "union")
+                meshA.show(smooth=False)
+                # scene = trimesh.Scene()
+                # scene.add_geometry(mesh_list)
+                # scene.show()
 
 
-# # s = Shape([volumetric, sheet])
-# # s.mesh.show()
+mesh = sheet_point_K0
 
-# # # Affix sheet to volumetric
-# xyz = volumetric.r(0.5) + volumetric.N(0.5) * 2.5 * X_WIDTH
-# curr = np.hstack(
-#     [
-#         sheet.T(0.0).reshape(-1, 1),
-#         sheet.N(0.0).reshape(-1, 1),
-#         sheet.B(0.0).reshape(-1, 1),
-#     ]
-# )
-# import scipy.spatial.transform
-
-# euler = np.array([np.pi / 2, 0, np.pi / 2])
-# goal = scipy.spatial.transform.Rotation.from_euler("xyz", euler).as_matrix()
-# R = (goal.T @ np.linalg.inv(curr.T)).T
-# T1 = np.eye(4)
-# T1[:3, :3] = R
-# T1[:3, 3] = xyz
-# new_sheet = sheet.mesh.copy()
-# new_sheet = new_sheet.apply_transform(T1)
-# sheet.mesh.apply_transform(T1)
-
-# xyz = volumetric.r(0.5) + -volumetric.N(0.5) * 2.5 * X_WIDTH
-# curr = np.hstack(
-#     [
-#         sheet.T(0.0).reshape(-1, 1),
-#         sheet.N(0.0).reshape(-1, 1),
-#         sheet.B(0.0).reshape(-1, 1),
-#     ]
-# )
-# euler = np.array([np.pi / 2, 0, -np.pi / 2])
-# goal = scipy.spatial.transform.Rotation.from_euler("xyz", euler).as_matrix()
-# R = (goal.T @ np.linalg.inv(curr.T)).T
-# T1 = np.eye(4)
-# T1[:3, :3] = R
-# T1[:3, 3] = xyz
-# new_sheet = sheet.mesh.copy()
-# new_sheet = new_sheet.apply_transform(T1)
-# sheet2.mesh.apply_transform(T1)
-
-# # import trimesh
-
-# # scene = trimesh.Scene()
-# # scene.add_geometry(volumetric.mesh)
-# # scene.add_geometry(new_sheet)
-# # scene.show()
-
-# s = Shape([volumetric, sheet, sheet2, bulb])
-# s.mesh.show()
-# # ac_dict = {
-# #     "ac_lin2_1_1_1": AxialComponent(b_lin2, cs_1_1_1, hemisphere_ends=True),
-# #     "ac_cur2_1_1_1": AxialComponent(b_cur2, cs_1_1_1, hemisphere_ends=True),
-# #     "ac_lin2_1_2_1": AxialComponent(b_lin2, cs_1_2_1, hemisphere_ends=True),
-# #     "ac_cur2_1_2_1": AxialComponent(b_cur2, cs_1_2_1, hemisphere_ends=True),
-# #     "None": None,
-# # }
-
-# # ac_dict["ac_lin2_1_2_1"].mesh.show(smooth=False)
-# ##############
-# ### Shapes ###
-# ##############
-
-# # # combs = [[ac_list], [parent_list], [position_along_parent], [euler_angles]]
-# # class ShapeCombinations:
-# #     def __init__(
-# #         self,
-# #         ac_names,
-# #         parent_axial_component_names,
-# #         position_along_parent_list,
-# #         euler_angles_list,
-# #     ):
-# #         self.ac_names = ac_names
-# #         self.parent_axial_component_names = parent_axial_component_names
-# #         self.position_along_parent_list = position_along_parent_list
-# #         self.euler_angles_list = euler_angles_list
-
-# #         self.ac_list = [ac_dict[s] for s in ac_names]
-# #         self.parent_axial_component_list = [
-# #             ac_dict[s] for s in parent_axial_component_names
-# #         ]
-
-# #     def __str__(self):
-# #         print("ac_names: \t\t\t", "\t".join(self.ac_names))
-# #         print(
-# #             "parent_axial_component_names: \t",
-# #             "\t".join(self.parent_axial_component_names),
-# #         )
-# #         print(
-# #             "position_along_parent: \t\t",
-# #             "\t".join(map(str, self.position_along_parent_list)),
-# #         )
-# #         print("euler_angles: \t\t\t", "\t".join(map(str, self.euler_angles_list)))
-# #         return ""
-
-
-# # comb = ShapeCombinations(
-# #     ac_names=["ac_lin2_1_1_1", "ac_cur2_1_1_1"],
-# #     parent_axial_component_names=["None", "ac_lin2_1_1_1"],
-# #     position_along_parent_list=[0.0, 1.0],
-# #     euler_angles_list=[np.zeros(3), np.zeros(3)],
-# # )
-
-
-# ###################
-# ### Single limb ###
-# ###################
-
-# # for ac1 in ac_dict.keys():
-# #     for
-
-# # ac1 = copy.deepcopy(ac_lin2_1_1_1)
-# # ac2 = copy.deepcopy(ac_cur2_1_1_1)
-# # ac2.parent_axial_component = ac1
-# # ac2.position_along_parent = 1.0
-# # ac2.calc_points()
-# # ac3 = copy.deepcopy(ac_cur2_1_1_1)
-# # ac3.parent_axial_component = ac2
-# # ac3.position_along_parent = 1.0
-# # ac3.calc_points()
-
-# # s = Shape([ac1, ac2, ac3])
-# # s.mesh.show(smooth=False)
+mesh_list = [
+    volumetric.mesh,
+    mesh.copy().apply_transform(T_J1_B_U),
+    mesh.copy().apply_transform(T_J1_L_U),
+    mesh.copy().apply_transform(T_CO_U),
+    mesh.copy().apply_transform(T_CO_R),
+    # mesh.copy().apply_transform(T_CO_D),
+    # mesh.copy().apply_transform(T_CO_L),
+]
+for m in mesh_list:
+    scene.add_geometry(m)
+scene.show()

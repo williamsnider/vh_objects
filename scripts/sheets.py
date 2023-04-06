@@ -86,12 +86,15 @@ def bend_sheet(cp, backbone, max_scale):
     assert np.all(np.isclose(backbone.r(0.0), np.array([0.0, 0.0, 0.0])))
     assert np.isclose(backbone.r(0.0)[0, 1], 0)  # Must lie in yz-plane
 
-    # Calc relative distance each point should travel along backbone
-    mid = (cp.shape[0] - 1) // 2
-    edge_radius = np.linalg.norm(
-        cp[mid - 1, :, 1:], axis=1
-    ).max()  # TODO: Only works for spherical
-    scale = cp[:, :, 2] / edge_radius
+    # # Calc relative distance each point should travel along backbone
+    # mid = (cp.shape[0] - 1) // 2
+    # edge_radius = np.linalg.norm(
+    #     cp[mid - 1, :, 1:], axis=1
+    # ).max()  # TODO: Only works for spherical
+    # scale = cp[:, :, 2] / edge_radius
+    # scale[scale < 0] = 0
+
+    scale = cp[:, :, 2] / max_scale
     scale[scale < 0] = 0
 
     # Shift each point along backbone
