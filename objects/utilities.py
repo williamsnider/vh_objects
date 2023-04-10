@@ -168,10 +168,10 @@ def calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x, morph_to_
     r = np.sqrt((x - a) ** 2 + y**2)  # Solve for r
 
     # Calculate the theta and arc length of the arc
-    if x == 0:
+    if x <= 0:
         th = np.arctan2(y, (x - a))
         arc_length = np.pi - th
-        x_shift = 0
+        x_shift = x
     else:
         th = np.arctan2(y, (x - a))
         arc_length = th
@@ -180,11 +180,24 @@ def calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x, morph_to_
     # Calculate and transform the controlpoints based on which side of the axial component we are
     cp = approximate_arc(arc_length, r * arc_length, 5)
     cp_rot = cp[:, [1, 0]]  # Rotate 45deg
-    if x == 0:
+    if x <= 0:
         cp_rot[:, 0] *= -1
     cp_T = cp_rot - np.array([cp_rot[-1, 0] - x_shift, 0])  # Shift to align with end of quadratic
 
     scale_ratio = cp_T[:, 1] / y  # Normalize this column by the height of the quadratic
+
+    # # Plot circle
+    # import matplotlib.pyplot as plt
+
+    # ax = plt.figure().add_subplot()
+    # tt = np.linspace(0, 2 * np.pi)
+    # xx = r * np.cos(tt) + a
+    # yy = r*np.sin(tt)
+    # ax.plot(xx,yy,'-k')
+    # ax.plot(x,y,'r*')
+    # ax.plot(cp_T[:,0], cp_T[:,1], "-g")
+    # ax.set_aspect('equal')
+    # plt.show()
 
     ### Apply these transformations to base_cp ###
 
@@ -253,7 +266,7 @@ def calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x, morph_to_
     # ax.set_aspect("equal")
     # plt.show()
 
-    return result
+    return result, a
 
 
 def find_cp_for_desired_radius(target_radius, num_cp_per_cross_section):

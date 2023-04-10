@@ -55,14 +55,9 @@ def construct_shapes(args):
 
     # Construct cross sections of shape
     cp_radius = find_cp_for_desired_radius(radius, NUM_CP_PER_CROSS_SECTION)
-    cs_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(
-        -1, 1
-    )
+    cs_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
     cs_cp = np.hstack((cp_radius * np.cos(cs_th), cp_radius * np.sin(cs_th)))
-    cs_list = [
-        CrossSection(controlpoints=cs_cp, position=position)
-        for position in np.linspace(0.0, 1, 20)
-    ]
+    cs_list = [CrossSection(controlpoints=cs_cp, position=position) for position in np.linspace(0.0, 1, 20)]
 
     # Axial Component
     ac = AxialComponent(backbone, cs_list, smooth_with_post=False)
@@ -111,12 +106,8 @@ def construct_shapes(args):
     post_backbone = Backbone(post_backbone_cp, reparameterize=True)
     post_radius = 5
     post_cp_radius = find_cp_for_desired_radius(post_radius, NUM_CP_PER_CROSS_SECTION)
-    post_th = np.linspace(
-        0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False
-    ).reshape(-1, 1)
-    post_cp = np.hstack(
-        (post_cp_radius * np.cos(post_th), post_cp_radius * np.sin(post_th))
-    )
+    post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
+    post_cp = np.hstack((post_cp_radius * np.cos(post_th), post_cp_radius * np.sin(post_th)))
     post_cs_list = [
         CrossSection(controlpoints=post_cp, position=0.0),
         CrossSection(controlpoints=post_cp, position=1.0),
@@ -125,18 +116,14 @@ def construct_shapes(args):
 
     # Interface
     scene = trimesh.Scene()
-    interface = trimesh.load_mesh(
-        "/home/oconnorlab/code/objects/assets/Interface_0024 v2.stl"
-    )
+    interface = trimesh.load_mesh("/home/oconnorlab/code/objects/assets/Interface_0024 v2.stl")
     R = trimesh.transformations.rotation_matrix(-np.pi / 2, np.array([0, 0, 1]))
     R[0, 3] = s.mesh.vertices[:, 0].min() - OVERLAP_OFFSET
     R[1, 3] = INTERFACE_Y_SHIFT  # Radius of post if 5mm
     interface = interface.apply_transform(R)
 
     # Fuse post and interface
-    post_shape = fuse_meshes(
-        post_ac.mesh, s.mesh, fairing_distance=3, operation="union"
-    )
+    post_shape = fuse_meshes(post_ac.mesh, s.mesh, fairing_distance=3, operation="union")
     interface_post_shape = fuse_meshes(post_shape, interface, 0, "union")
     s.mesh_with_interface = interface_post_shape
 
@@ -144,9 +131,7 @@ def construct_shapes(args):
     # Rotate shape for easier viewing
     shape_euler = np.array([7 * np.pi / 8, 0, np.pi])
     R = np.eye(4)
-    R[:3, :3] = scipy.spatial.transform.Rotation.from_euler(
-        "xyz", shape_euler
-    ).as_matrix()
+    R[:3, :3] = scipy.spatial.transform.Rotation.from_euler("xyz", shape_euler).as_matrix()
     COM_rot = R[:3, :3] @ COM  # Rotate center of mass as well
     R[:3, 3] = -COM_rot  # Add COM to transformation matrix
 

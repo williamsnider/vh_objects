@@ -49,9 +49,7 @@ class AxialComponent:
 
     def check_inputs(self):
 
-        assert (
-            type(self.cross_sections) is list
-        ), "cross_sections must be input as a list."
+        assert type(self.cross_sections) is list, "cross_sections must be input as a list."
 
         current_position = -1
         for cs in self.cross_sections:
@@ -60,9 +58,7 @@ class AxialComponent:
                 position > current_position
             ), "cross_sections must be ordered by increasing position, and these positions cannot repeat"
 
-        assert (
-            type(self.euler_angles) is np.ndarry
-        ), "Euler angles must be input as a numpy array"
+        assert type(self.euler_angles) is np.ndarry, "Euler angles must be input as a numpy array"
 
         assert self.euler_angles.shape == (
             1,
@@ -101,9 +97,7 @@ class AxialComponent:
 
         else:
             # Translation matrix
-            parent_join_point = self.parent_axial_component.r(
-                self.position_along_parent
-            )
+            parent_join_point = self.parent_axial_component.r(self.position_along_parent)
             child_join_point = self.r(self.position_along_self, local=True)
             self.child_join_point = child_join_point
             self.parent_join_point = parent_join_point
@@ -285,9 +279,7 @@ class AxialComponent:
         R = self.calc_R_cs_to_pos(pos)
         cs_rot = self.cross_sections[cs_idx].controlpoints @ R
         controlpoints[0] = cs_rot * 0 + self.r(pos)  # Endpoint
-        controlpoints[1] = cs_rot * SHRINK_FACTOR + self.r(
-            pos
-        )  # Determines slope at endpoint
+        controlpoints[1] = cs_rot * SHRINK_FACTOR + self.r(pos)  # Determines slope at endpoint
 
         # Assign right side controlpoints
         pos = 1.0
@@ -295,9 +287,7 @@ class AxialComponent:
         R = self.calc_R_cs_to_pos(pos)
         cs_rot = self.cross_sections[cs_idx].controlpoints @ R
         controlpoints[-1] = cs_rot * 0 + self.r(pos)  # Endpoint
-        controlpoints[-2] = cs_rot * SHRINK_FACTOR + self.r(
-            pos
-        )  # Determines slope at endpoint
+        controlpoints[-2] = cs_rot * SHRINK_FACTOR + self.r(pos)  # Determines slope at endpoint
 
         # Assign interior controlpoints
         idx = 2
@@ -326,7 +316,7 @@ class AxialComponent:
         base_cp = self.controlpoints[2]
         tan_vec = self.T(t)
         endpoint = self.r(t)
-        result_left = calc_hemisphere_controlpoints(
+        result_left, a = calc_hemisphere_controlpoints(
             base_cp,
             tan_vec,
             endpoint,
@@ -341,7 +331,7 @@ class AxialComponent:
         base_cp = self.controlpoints[-3]
         tan_vec = self.T(t)
         endpoint = self.r(t)
-        result_right = calc_hemisphere_controlpoints(
+        result_right, a = calc_hemisphere_controlpoints(
             base_cp,
             tan_vec,
             endpoint,
@@ -358,6 +348,7 @@ class AxialComponent:
 
         self.controlpoints = new_cp
         self.num_rows = self.controlpoints.shape[0]
+        self.a = a
 
     def calc_R_cs_to_pos(self, pos):
 
