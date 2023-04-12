@@ -27,7 +27,9 @@ from objects.parameters import (
 def get_character_outline(char, shift=(0, 0)):
     assert len(char) == 1
     face = Face(str(FONT_PATH))
-    face.set_char_size(24 * 64)  # If changing, must also change HEIGHT and WIDTH in calc_offsets
+    face.set_char_size(
+        24 * 64
+    )  # If changing, must also change HEIGHT and WIDTH in calc_offsets
     face.load_char(char)
     slot = face.glyph
     outline = slot.outline
@@ -41,12 +43,16 @@ def get_character_outline(char, shift=(0, 0)):
     for c in contours:
         end = c + 1
         contour_points = outline_points[start:end]
-        contour_points = np.vstack([contour_points, contour_points[0]])  # Add first element to end to complete loop
+        contour_points = np.vstack(
+            [contour_points, contour_points[0]]
+        )  # Add first element to end to complete loop
         contour_points = contour_points.astype("float")
 
         # Scale points to fit onto interface. Interface is 25.4mm in width. We partition that as if we have 6 characters per line (max is 5 in reality).
         NUM_CHARS_PER_LINE_WITH_ADDITIONAL = 5
-        scale = INTERFACE_WIDTH / (FONT_OFFSET_WIDTH * NUM_CHARS_PER_LINE_WITH_ADDITIONAL)
+        scale = INTERFACE_WIDTH / (
+            FONT_OFFSET_WIDTH * NUM_CHARS_PER_LINE_WITH_ADDITIONAL
+        )
         contour_points *= scale
 
         start = end
@@ -137,35 +143,98 @@ def load_interface(stl_path, label=None):
     """Label uses underscores to split into different lines"""
     interface = trimesh.load_mesh(stl_path)
 
+    Z_shift = -17.5
+
     if label != None:
         # Generate mesh of label
         label_meshes = text_to_mesh(label, LABEL_DEPTH)
 
-        # Top label
+        # # Top label
         T = np.eye(4)
-        T[:3, 3] = np.array([0, -INTERFACE_DEPTH_FROM_ORIGIN, INTERFACE_HEIGHT_ABOVE_ORIGIN - LABEL_DEPTH])
+        T[:3, 3] = np.array(
+            [
+                0,
+                -1.5 * INTERFACE_DEPTH_FROM_ORIGIN,
+                22.5 + 25.4 / 2 - LABEL_DEPTH,
+            ]
+        )
         top_label = [mesh.copy().apply_transform(T) for mesh in label_meshes]
 
-        # Left Label
+        # Left Label down
         T = np.eye(4)
-        R = Rotation.from_euler("zyx", np.array([-np.pi / 2, -np.pi / 2, 0])).as_matrix()
+        R = Rotation.from_euler(
+            "zyx", np.array([-np.pi / 2, -np.pi / 2, 0])
+        ).as_matrix()
         T[:3, :3] = R
-        T[:3, 3] = np.array([-INTERFACE_WIDTH / 2 + LABEL_DEPTH, -INTERFACE_DEPTH_FROM_ORIGIN * 3 / 2, -26 / 2])
-        left_label = [mesh.copy().apply_transform(T) for mesh in label_meshes]
+        T[:3, 3] = np.array(
+            [
+                -INTERFACE_WIDTH / 2 + LABEL_DEPTH,
+                -INTERFACE_DEPTH_FROM_ORIGIN,
+                Z_shift,
+            ]
+        )
+        left_label_down = [mesh.copy().apply_transform(T) for mesh in label_meshes]
 
-        # Right Label
+        # Left Label up
+        T = np.eye(4)
+        R = Rotation.from_euler(
+            "zyx", np.array([-np.pi / 2, -np.pi / 2, 0])
+        ).as_matrix()
+        T[:3, :3] = R
+        T[:3, 3] = np.array(
+            [
+                -INTERFACE_WIDTH / 2 + LABEL_DEPTH,
+                -INTERFACE_DEPTH_FROM_ORIGIN,
+                -Z_shift + 12.5,
+            ]
+        )
+        left_label_up = [mesh.copy().apply_transform(T) for mesh in label_meshes]
+
+        # Right Label down
         T = np.eye(4)
         R = Rotation.from_euler("zyx", np.array([np.pi / 2, np.pi / 2, 0])).as_matrix()
         T[:3, :3] = R
-        T[:3, 3] = np.array([INTERFACE_WIDTH / 2 - LABEL_DEPTH, -INTERFACE_DEPTH_FROM_ORIGIN * 3 / 2, -26 / 2])
-        right_label = [mesh.copy().apply_transform(T) for mesh in label_meshes]
+        T[:3, 3] = np.array(
+            [
+                INTERFACE_WIDTH / 2 - LABEL_DEPTH,
+                -INTERFACE_DEPTH_FROM_ORIGIN,
+                Z_shift,
+            ]
+        )
+        right_label_down = [mesh.copy().apply_transform(T) for mesh in label_meshes]
+
+        # Right Label up
+        T = np.eye(4)
+        R = Rotation.from_euler("zyx", np.array([np.pi / 2, np.pi / 2, 0])).as_matrix()
+        T[:3, :3] = R
+        T[:3, 3] = np.array(
+            [
+                INTERFACE_WIDTH / 2 - LABEL_DEPTH,
+                -INTERFACE_DEPTH_FROM_ORIGIN,
+                -Z_shift + 12.5,
+            ]
+        )
+        right_label_up = [mesh.copy().apply_transform(T) for mesh in label_meshes]
 
         # All labels
-        all_labels = [*top_label, *left_label, *right_label]
+        all_labels = [
+            *left_label_down,
+            *left_label_up,
+            *right_label_down,
+            *right_label_up,
+            *top_label,
+        ]
+
+        # scene = trimesh.Scene()
+        # scene.add_geometry(all_labels)
+        # scene.add_geometry(interface)
+        # scene.show()
 
         interface_with_label = interface.copy()
         for mesh2 in all_labels:
-            interface_with_label = fuse_meshes(interface_with_label, mesh2, fairing_distance=0, operation="difference")
+            interface_with_label = fuse_meshes(
+                interface_with_label, mesh2, fairing_distance=0, operation="difference"
+            )
         interface = interface_with_label
 
     # Align with shape
@@ -179,6 +248,6 @@ def load_interface(stl_path, label=None):
 
 
 if __name__ == "__main__":
-    label = "0_0_0_1"  # Splits lines based on underscores
+    label = "0001"  # Splits lines based on underscores
     interface = load_interface(INTERFACE_PATH, label)
     interface.show()
