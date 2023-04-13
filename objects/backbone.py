@@ -1,12 +1,19 @@
 from splipy import Curve, BSplineBasis
-from objects.parameters import NUM_SAMPLES_FOR_REPARAMETERIZATION, ORDER, NUM_INTERPOLATION_POINTS, EPSILON
+from objects.parameters import (
+    NUM_SAMPLES_FOR_REPARAMETERIZATION,
+    ORDER,
+    NUM_INTERPOLATION_POINTS,
+    EPSILON,
+)
 from objects.utilities import open_uniform_knot_vector
 import numpy as np
 from copy import deepcopy
 
 
 class Backbone:
-    def __init__(self, controlpoints, reparameterize=True, align_center=True, name=None):
+    def __init__(
+        self, controlpoints, reparameterize=True, align_center=True, name=None
+    ):
 
         self.controlpoints = controlpoints
         self.num_controlpoints = self.controlpoints.shape[0]
@@ -29,7 +36,9 @@ class Backbone:
         """Construct the initial B-spline. This is formed by the relatively small number of control points that will give the curve its shape. An open uniform knot vector is used so that the endpoints are the first and last controlpoints. The resulting curved must be reparameterized to be arc length parameterized."""
         knot = open_uniform_knot_vector(self.num_controlpoints, ORDER)
         basis = BSplineBasis(order=ORDER, knots=knot, periodic=-1)
-        self.backbone = Curve(basis=basis, controlpoints=self.controlpoints, rational=False)
+        self.backbone = Curve(
+            basis=basis, controlpoints=self.controlpoints, rational=False
+        )
 
     def reparameterize(self):
         """Create arc length parameterization of the backbone. This is works by sampling many evenly-spaced points along the original backbone and using these as the controlpoints of a new B-spline curve with a uniform knot-vector. This reparameterization is approximate. However, by choosing a large number of sample points, the curves become very close.
@@ -39,7 +48,9 @@ class Backbone:
         #### Choose controlpoints that are evenly spaced
 
         # The arc length (that we want) to each control point
-        target_arc_lengths = np.linspace(0, self.backbone.length(), NUM_INTERPOLATION_POINTS)
+        target_arc_lengths = np.linspace(
+            0, self.backbone.length(), NUM_INTERPOLATION_POINTS
+        )
 
         # Sample many points along the backbone and choose the one that results in the arc length that is closest to our target arc length
         # This method seems coarse but is way faster than using a function optimizer (e.g. scipy.optimize.minimize), which is also an approximation.
@@ -57,12 +68,18 @@ class Backbone:
         NUM_EXTRA_CP = 2
         controlpoints_wrapped = np.zeros((NUM_INTERPOLATION_POINTS + NUM_EXTRA_CP, 3))
         controlpoints_wrapped[1:-1] = controlpoints
-        controlpoints_wrapped[[0, -1]] = controlpoints[[0, -1]]  # Duplicate first and last cp
+        controlpoints_wrapped[[0, -1]] = controlpoints[
+            [0, -1]
+        ]  # Duplicate first and last cp
 
         # Construct new backbone
-        knot = np.linspace(0, 1, NUM_INTERPOLATION_POINTS + ORDER + NUM_EXTRA_CP)  # uniform (not open uniform!)
+        knot = np.linspace(
+            0, 1, NUM_INTERPOLATION_POINTS + ORDER + NUM_EXTRA_CP
+        )  # uniform (not open uniform!)
         basis = BSplineBasis(order=ORDER, knots=knot, periodic=-1)
-        backbone = Curve(basis=basis, controlpoints=controlpoints_wrapped, rational=False)
+        backbone = Curve(
+            basis=basis, controlpoints=controlpoints_wrapped, rational=False
+        )
         backbone.reparam()  # Reparameterize between 0 and 1
 
         return backbone
@@ -102,7 +119,12 @@ class Backbone:
             t = np.array(t, dtype="float64")
 
         dx = self.dx(t)
-        T = dx / np.linalg.norm(dx, axis=1, keepdims=True)
+        dx_norm = np.linalg.norm(dx, axis=1, keepdims=True)
+
+        if dx_norm == 0:
+            T = np.array([[1, 0, 0]])
+        else:
+            T = dx / dx_norm
         return T
 
     def N(self, t):
@@ -125,7 +147,10 @@ class Backbone:
         N = cross / magnitude
 
         # Check that the two are perpendicular
-        assert np.all(np.isclose(np.dot(T, N.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
+        self.T(t)
+        assert np.all(
+            np.isclose(np.dot(T, N.T).diagonal(), 0)
+        ), "Tangent and Normal vectors are not perpendicular."
         return N
 
     def B(self, t):
@@ -140,9 +165,15 @@ class Backbone:
         B = cross / np.linalg.norm(cross, axis=1, keepdims=True)
 
         # Check that the two are perpendicular
-        assert np.all(np.isclose(np.dot(T, N.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
-        assert np.all(np.isclose(np.dot(T, B.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
-        assert np.all(np.isclose(np.dot(B, N.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
+        assert np.all(
+            np.isclose(np.dot(T, N.T).diagonal(), 0)
+        ), "Tangent and Normal vectors are not perpendicular."
+        assert np.all(
+            np.isclose(np.dot(T, B.T).diagonal(), 0)
+        ), "Tangent and Normal vectors are not perpendicular."
+        assert np.all(
+            np.isclose(np.dot(B, N.T).diagonal(), 0)
+        ), "Tangent and Normal vectors are not perpendicular."
 
         return B
 

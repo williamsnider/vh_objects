@@ -11,8 +11,8 @@ def plot_arr(cp):
     arr = cp
     for i in range(arr.shape[0]):
         ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "b-*")
-    for i in range(arr.shape[1]):
-        ax.plot(arr[:, i, 0], arr[:, i, 1], arr[:, i, 2], "g-")
+    # for i in range(arr.shape[1]):
+    #     ax.plot(arr[:, i, 0], arr[:, i, 1], arr[:, i, 2], "g-")
     # Set scale
     xs = arr[:, :, 0].ravel()
     ys = arr[:, :, 1].ravel()

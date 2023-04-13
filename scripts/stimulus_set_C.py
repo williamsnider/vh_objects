@@ -24,6 +24,8 @@ from pathlib import Path
 
 # TODO: Check RADII
 # TODO: Think about slanting everything away for ease of 3D printing (without supports)
+# TODO: Optimize based on only far side hemisphere
+
 
 ### Parameters ###
 NUM_CP_PER_BACKBONE = 5
@@ -32,17 +34,27 @@ NUM_CS = 11
 X_WIDTH = 6  # base radius off which other features are derived
 VOLUMETRIC_RADII = np.array([X_WIDTH, 3 * X_WIDTH, X_WIDTH])
 SHEET_THICKNESS = 3
-NUM_CP_PER_BASE_SHEET = 16
+NUM_CP_PER_BASE_SHEET = 50
 NUM_CS_PER_SHEET = 11
+NUM_CP_PER_CROSS_SECTION = 50
 
-POINT_RADII = np.array([1 * X_WIDTH, 0.4 * X_WIDTH, 0.1 * X_WIDTH])
+
+POINT_RADII = np.array([1 * X_WIDTH, 0.5 * X_WIDTH, 0.2 * X_WIDTH])
+POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
+assert POINT_ROUNDOVER_OFFSET < POINT_RADII[-1]
+
 LEAF_RADII = np.array([1 * X_WIDTH, 1.5 * X_WIDTH, 0.25 * X_WIDTH])
 APPENDAGE_LENGTH = 15
-POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
 
 POST_OFFSET = 2
-fairing_distance = 1
+fairing_distance = 3
 SAVE_DIR = Path("./sample_shapes/stimulus_set_C/stl/")
+
+POST_RADIUS = VOLUMETRIC_RADII[0]
+OVERLAP_OFFSET = 1
+
+SLICER_DEPTH = -1.9 * X_WIDTH
+XYZ_OFFSET = 0.25
 
 # SPHERE_RADIUS = 15
 
@@ -55,7 +67,7 @@ SAVE_DIR = Path("./sample_shapes/stimulus_set_C/stl/")
 ##############################
 
 # Circular cross sections
-t = np.linspace(0, 2 * np.pi, 8, endpoint=False).reshape(-1, 1)
+t = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
 round_cp = np.hstack([np.cos(t), np.sin(t)])
 
 #################
@@ -114,11 +126,13 @@ pos_seg05 = pos * SEGMENT_LENGTH / 2  # Position from (0, SEGMENT_LENGTH/2)
 ### Volumetric ("football") ###
 
 # Fit quadratic polynomial to determine scaling of cross sections
-x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH * 2
-y = VOLUMETRIC_RADII
-volumetric_poly = np.polyfit(x, y, 2)
+volumetric_x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH * 2
+volumetric_y = VOLUMETRIC_RADII
+volumetric_poly = np.polyfit(volumetric_x, volumetric_y, 2)
 volumetric_scale = np.polyval(volumetric_poly, pos_seg2)
-volumetric_cs = [CrossSection(volumetric_scale[i] * round_cp, pos[i]) for i in range(NUM_CS)]
+volumetric_cs = [
+    CrossSection(volumetric_scale[i] * round_cp, pos[i]) for i in range(NUM_CS)
+]
 
 # Construct axial component
 volumetric = AxialComponent(
@@ -136,11 +150,21 @@ T_K2[:3, :3] = Rotation.from_rotvec(np.pi * np.array([0, 0, 1])).as_matrix()
 
 # Sphere
 
+# Straight backbone for appendages
+b_cp = np.hstack(
+    [
+        np.linspace(0, APPENDAGE_LENGTH, NUM_CP_PER_BACKBONE).reshape(-1, 1),
+        np.zeros((NUM_CP_PER_BACKBONE, 1)),
+        np.zeros((NUM_CP_PER_BACKBONE, 1)),
+    ]
+)
+b_appendage_K0 = Backbone(b_cp, reparameterize=True)
+
 # Backbone for bending sheets
 b_cp = approximate_arc(np.pi / 2, APPENDAGE_LENGTH, 5)
 b_cp = b_cp[:, [1, 2, 0]]  # Reorder
 b_cp[:, 0] *= -1  # Flip direction across yz axis
-backbone_appendage = Backbone(b_cp, reparameterize=True)
+b_appendage_K1 = Backbone(b_cp, reparameterize=True)
 
 b_cp = approximate_arc(np.pi / 2, X_WIDTH, 5)
 b_cp = b_cp[:, [1, 2, 0]]  # Reorder
@@ -151,7 +175,9 @@ backbone_x_width = Backbone(b_cp, reparameterize=True)
 t = np.linspace(0, 2 * np.pi, NUM_CP_PER_BASE_SHEET, endpoint=False).reshape(-1, 1)
 round_cs_cp = np.hstack([np.zeros(t.shape), np.cos(t), np.sin(t)])
 base_sheet = round_cs_cp * X_WIDTH
-cp = construct_sheet(base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp = construct_sheet(
+    base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET
+)
 surf = make_surface(cp)
 sheet_round_K0 = make_mesh(surf, 100, 100)
 
@@ -167,10 +193,10 @@ sheet_round_K2.apply_transform(T_K2)
 num_edge_cp = 7
 base_round_cp = 3
 top_round_cp = 1
-x = np.linspace(0, 1, 3) * APPENDAGE_LENGTH
-y = LEAF_RADII
-poly = np.polyfit(x, y, 2)
-leaf_cp = make_base_cp(poly, x, num_edge_cp, base_round_cp, top_round_cp)
+leaf_x = np.linspace(0, 1, 3) * APPENDAGE_LENGTH
+leaf_y = LEAF_RADII
+leaf_poly = np.polyfit(leaf_x, leaf_y, 2)
+leaf_cp = make_base_cp(leaf_poly, leaf_x, num_edge_cp, base_round_cp, top_round_cp)
 mean_xyz = leaf_cp.mean(axis=0)
 leaf_cp = leaf_cp - mean_xyz  # Shift to origin for scaling
 cp = construct_sheet(leaf_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
@@ -179,9 +205,9 @@ surf = make_surface(cp)
 sheet_leaf_K0 = make_mesh(surf, 100, 100)
 
 # Bent leaf sheet
-bent_cp = bend_sheet(cp, backbone_appendage, x[2] - x[0])
+bent_cp = bend_sheet(cp, b_appendage_K1, leaf_x[2] - leaf_x[0])
 surf = make_surface(bent_cp)
-sheet_leaf_K1 = make_mesh(surf, 100, 100)  # TODO: Has artifact, fix after deciding on thickness/size
+sheet_leaf_K1 = make_mesh(surf, 100, 100)
 sheet_leaf_K2 = sheet_leaf_K1.copy()
 sheet_leaf_K2.apply_transform(T_K2)
 
@@ -189,13 +215,13 @@ sheet_leaf_K2.apply_transform(T_K2)
 # Point sheet
 
 # Calculate widths
-px = np.linspace(0, APPENDAGE_LENGTH, 3)
-py = POINT_RADII  # 3 radii determine polynomial form
-poly = np.polyfit(px, py, 2)
+point_x = np.linspace(0, APPENDAGE_LENGTH, 3)
+point_y = POINT_RADII  # 3 radii determine polynomial form
+point_poly = np.polyfit(point_x, point_y, 2)
 
 # But sample along 4th position to ensure smooth transition into shape
 xvals = np.linspace(-APPENDAGE_LENGTH * 2 / 3, APPENDAGE_LENGTH, NUM_CS)
-widths = np.polyval(poly, xvals)
+widths = np.polyval(point_poly, xvals)
 
 # Calculate z_levels
 z_levels = np.linspace(-APPENDAGE_LENGTH * 2 / 3, APPENDAGE_LENGTH, NUM_CS)
@@ -210,13 +236,13 @@ for i, width in enumerate(widths):
         inner = np.array(
             [
                 [SHEET_THICKNESS / 2, 0],
-                [SHEET_THICKNESS / 2, width / 2],
-                [0, width / 2 + POINT_ROUNDOVER_OFFSET],
-                [-SHEET_THICKNESS / 2, width / 2],
+                [SHEET_THICKNESS / 2, width - POINT_ROUNDOVER_OFFSET],
+                [0, width],
+                [-SHEET_THICKNESS / 2, width - POINT_ROUNDOVER_OFFSET],
                 [-SHEET_THICKNESS / 2, 0],
-                [-SHEET_THICKNESS / 2, -width / 2],
-                [0, -width / 2 - POINT_ROUNDOVER_OFFSET],
-                [SHEET_THICKNESS / 2, -width / 2],
+                [-SHEET_THICKNESS / 2, -width + POINT_ROUNDOVER_OFFSET],
+                [0, -width],
+                [SHEET_THICKNESS / 2, -width + POINT_ROUNDOVER_OFFSET],
             ]
         )
 
@@ -226,8 +252,8 @@ for i, width in enumerate(widths):
 
 # Roundover edges
 
-side_y = POINT_RADII + POINT_ROUNDOVER_OFFSET
-side_poly = np.polyfit(x, side_y, 2)
+# side_y = POINT_RADII + POINT_ROUNDOVER_OFFSET
+side_poly = point_poly  # np.polyfit(x, side_y, 2)
 bot, _ = calc_hemisphere_controlpoints(
     cp[0],
     np.array([0, 0, 1]),
@@ -241,23 +267,25 @@ top, _ = calc_hemisphere_controlpoints(
     np.array([0, 0, 1]),
     cp[-1].mean(axis=0),
     side_poly,
-    x[-1],
+    point_x[-1],
     morph_to_ellipse=True,
 )
-cp = np.vstack([bot, cp, top[-2::-1]])
-surf = make_surface(cp)
+sheet_point_cp = np.vstack([bot, cp, top[-2::-1]])
+surf = make_surface(sheet_point_cp)
 sheet_point_K0 = make_mesh(surf, 100, 100)
 
-bent_cp = bend_sheet(cp, backbone_appendage, x[2] - x[0])
+bent_cp = bend_sheet(sheet_point_cp, b_appendage_K1, point_x[2] - point_x[0])
 surf = make_surface(bent_cp)
-sheet_point_K1 = make_mesh(surf, 100, 100)  # TODO: Has artifact, fix after deciding on thickness/size
+sheet_point_K1 = make_mesh(
+    surf, 100, 100
+)  # TODO: Has artifact, fix after deciding on thickness/size
 # sheet_point_bent.show(smooth=False)
 sheet_point_K2 = sheet_point_K1.copy()
 sheet_point_K2.apply_transform(T_K2)
 # Sphere
 
 num_cp = 11
-t = np.linspace(0, 2 * np.pi, 16, endpoint=False).reshape(-1, 1)
+t = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
 round_cp = np.hstack([np.cos(t), np.sin(t)])
 base_cp = np.hstack([np.zeros((round_cp.shape[0], 1)), round_cp])
 cp = calc_sphere_controlpoints(
@@ -269,15 +297,147 @@ cp = calc_sphere_controlpoints(
 )
 cp *= X_WIDTH
 
-surf = make_surface(cp)
-sphere = make_mesh(surf, 100, 100)
-max_bbox = trimesh.creation.box([100, 45, 45])
-inch_sphere = trimesh.creation.icosphere(3, 25.4 / 2)
+# surf = make_surface(cp)
+# sphere = make_mesh(surf, 100, 100)
+# max_bbox = trimesh.creation.box([100, 45, 45])
+# inch_sphere = trimesh.creation.icosphere(3, 25.4 / 2)
+
+##################
+### Non-Sheets ###
+##################
+def transform_ac(ac, T, offset):
+
+    # Align backbone to origin at position t
+    if offset != 0.0:
+        T_shift_to_origin = np.eye(4)
+        T_shift_to_origin[0, 3] = -ac.mesh.bounds[0, 0] - offset
+        ac.mesh = ac.mesh.apply_transform(T_shift_to_origin)
+        ac.controlpoints = (
+            np.dstack([ac.controlpoints, np.ones([*ac.controlpoints.shape[:-1], 1])])
+            @ T_shift_to_origin.T
+        )[:, :, :3]
+
+    # Rotate about y-axis
+    ac.mesh = ac.mesh.apply_transform(T)
+    ac.controlpoints = (
+        np.dstack([ac.controlpoints, np.ones([*ac.controlpoints.shape[:-1], 1])]) @ T.T
+    )[:, :, :3]
+    return ac
+
+
+T_ac = np.eye(4)
+T_ac[:3, :3] = Rotation.from_euler("zyx", np.array([0, -np.pi / 2, 0])).as_matrix()
+
+pos_app = np.linspace(0, APPENDAGE_LENGTH, NUM_CS)
+
+# Point
+scale = np.polyval(point_poly, pos_app)
+cs_list = [
+    CrossSection(controlpoints=round_cp * scale[i], position=pos[i])
+    for i in range(NUM_CS)
+]
+ac_point = AxialComponent(
+    b_appendage_K0,
+    cs_list,
+    smooth_with_post=False,
+    hemispherical_ends=True,
+    hemispherical_polynomial=point_poly,
+    hemisphere_x=[pos_app[0], pos_app[-1]],
+)
+
+ac_point = transform_ac(ac_point, T_ac, 0.0)
+
+
+# Leaf
+scale = np.polyval(leaf_poly, pos_app)
+cs_list = [
+    CrossSection(controlpoints=round_cp * scale[i], position=pos[i])
+    for i in range(NUM_CS)
+]
+ac_leaf = AxialComponent(
+    b_appendage_K0,
+    cs_list,
+    smooth_with_post=False,
+    hemispherical_ends=True,
+    hemispherical_polynomial=leaf_poly,
+    hemisphere_x=[pos_app[0], pos_app[-1]],
+)
+ac_leaf = transform_ac(ac_leaf, T_ac, 0.0)
+
+
+# ac_leaf.mesh = ac_leaf.mesh.apply_transform(T_ac)
+# ac_leaf.controlpoints = (
+#     np.dstack([ac_leaf.controlpoints, np.ones([*ac_leaf.controlpoints.shape[:-1], 1])])
+#     @ T_ac.T
+# )[:, :, :3]
+
+from scripts.optimize_shaft import optimize_backbone_length, make_ac
+
+
+appendage_extra_factor = 1.5
+appendage_extra = APPENDAGE_LENGTH * 1.5
+offset = appendage_extra * (1 - 1 / appendage_extra_factor)
+# ac1
+y = np.array([0.5 * X_WIDTH, 0.5 * X_WIDTH, 0.75 * X_WIDTH])
+optimal_backbone_length = optimize_backbone_length(appendage_extra, *y)
+ac1 = make_ac(optimal_backbone_length, *y)
+ac1 = transform_ac(ac1, T_ac, offset)
+
+# ac2
+y = np.array([0.5 * X_WIDTH, 1 * X_WIDTH, 0.1 * X_WIDTH])
+optimal_backbone_length = optimize_backbone_length(appendage_extra, *y)
+ac2 = make_ac(optimal_backbone_length, *y)
+ac2 = transform_ac(ac2, T_ac, offset)
+
+# ac3
+y = np.array([0.5 * X_WIDTH, 1 * X_WIDTH, 0.5 * X_WIDTH])
+optimal_backbone_length = optimize_backbone_length(appendage_extra, *y)
+ac3 = make_ac(optimal_backbone_length, *y)
+ac3 = transform_ac(ac3, T_ac, offset)
+
+# ac4
+y = np.array([0.5 * X_WIDTH, 0.5 * X_WIDTH, 0.1 * X_WIDTH])
+optimal_backbone_length = optimize_backbone_length(appendage_extra, *y)
+ac4 = make_ac(optimal_backbone_length, *y)
+ac4 = transform_ac(ac4, T_ac, offset)
+
+
+# # Compare ac_point and sheet_point controlpoints
+# import matplotlib.pyplot as plt
+
+# ax = plt.figure().add_subplot(projection="3d")
+
+# arr = sheet_point_cp
+# xs = np.array([])
+# ys = np.array([])
+# zs = np.array([])
+# for i in range(arr.shape[0]):
+#     ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "g-*")
+#     xs = np.concatenate([xs, arr[:, :, 0].ravel()])
+#     ys = np.concatenate([ys, arr[:, :, 1].ravel()])
+#     zs = np.concatenate([zs, arr[:, :, 2].ravel()])
+# arr = ac_point.controlpoints[5:]
+# for i in range(arr.shape[0]):
+#     ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "b-*")
+#     xs = np.concatenate([xs, arr[:, :, 0].ravel()])
+#     ys = np.concatenate([ys, arr[:, :, 1].ravel()])
+#     zs = np.concatenate([zs, arr[:, :, 2].ravel()])
+# # for i in range(arr.shape[1]):
+# #     ax.plot(arr[:, i, 0], arr[:, i, 1], arr[:, i, 2], "g-")
+# # Set scale
+
+# ax.set_box_aspect(
+#     (np.ptp(xs), np.ptp(ys), np.ptp(zs))
+# )  # aspect ratio is 1:1:1 in data space
+# ax.set_xlabel("x")
+# ax.set_ylabel("y")
+# ax.set_zlabel("z")
+# plt.show()
 
 
 T = np.eye(4)
 extent = 100
-T[2, 3] = -extent / 2 - 2 * X_WIDTH
+T[2, 3] = -extent / 2 + SLICER_DEPTH
 slicer = trimesh.primitives.Box(extents=np.array([extent, extent, extent]), transform=T)
 sheet_round_K0, _ = calc_mesh_boolean_and_edges(sheet_round_K0, slicer, "difference")
 sheet_round_K1, _ = calc_mesh_boolean_and_edges(sheet_round_K1, slicer, "difference")
@@ -288,21 +448,30 @@ sheet_leaf_K2, _ = calc_mesh_boolean_and_edges(sheet_leaf_K2, slicer, "differenc
 sheet_point_K0, _ = calc_mesh_boolean_and_edges(sheet_point_K0, slicer, "difference")
 sheet_point_K1, _ = calc_mesh_boolean_and_edges(sheet_point_K1, slicer, "difference")
 sheet_point_K2, _ = calc_mesh_boolean_and_edges(sheet_point_K2, slicer, "difference")
+point, _ = calc_mesh_boolean_and_edges(ac_point.mesh, slicer, "difference")
+leaf, _ = calc_mesh_boolean_and_edges(ac_leaf.mesh, slicer, "difference")
+ac1, _ = calc_mesh_boolean_and_edges(ac1.mesh, slicer, "difference")
+ac2, _ = calc_mesh_boolean_and_edges(ac2.mesh, slicer, "difference")
+ac3, _ = calc_mesh_boolean_and_edges(ac3.mesh, slicer, "difference")
+ac4, _ = calc_mesh_boolean_and_edges(ac4.mesh, slicer, "difference")
 
 mesh_list = [
     sheet_round_K0,
     sheet_round_K1,
     sheet_round_K2,
+    leaf,
     sheet_leaf_K0,
     sheet_leaf_K1,
     sheet_leaf_K2,
+    point,
     sheet_point_K0,
     sheet_point_K1,
     sheet_point_K2,
-    sphere,
+    ac1,
+    ac2,
+    ac3,
+    ac4,
     volumetric.mesh,
-    max_bbox,
-    inch_sphere,
 ]
 
 mesh_dict = {
@@ -315,6 +484,11 @@ mesh_dict = {
     "sheet_point_K0": sheet_point_K0,
     "sheet_point_K1": sheet_point_K1,
     "sheet_point_K2": sheet_point_K2,
+    "point": point,
+    "ac1": ac1,
+    "ac2": ac2,
+    "ac3": ac3,
+    "ac4": ac4,
     "volumetric": volumetric.mesh,
 }
 
@@ -334,7 +508,7 @@ for m in mesh_list:
     extents[0] = 0
     extents[2] = 0
     shift += extents * 1.1
-# scene.show()
+scene.show()
 
 #######################
 ### Transformations ###
@@ -368,38 +542,66 @@ def find_line_mesh_intersection(mesh, vec, origin):
 
 vec_axial_component = np.array([1, 0, 0])
 x_th = 0  # -np.pi / 4
-y_th = np.pi / 9
+y_th = 0  # np.pi / 4  # np.pi / 9
 vec_to_J1 = np.array([0, np.sin(x_th), np.cos(x_th)])
 vec_to_J1_orth = np.cross(vec_to_J1, vec_axial_component)
 vec_to_J2 = np.array([0, np.sin(x_th), np.cos(x_th)])
 vec_to_J2_orth = np.cross(vec_to_J2, vec_axial_component)
 
 J2_pos = 0.875
-xyz_offset = 0.25
-J1_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J1, volumetric.r(0.5)) + xyz_offset * vec_to_J1
-J1_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, volumetric.r(0.5)) + -xyz_offset * vec_to_J1
-J2_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J2, volumetric.r(J2_pos)) + xyz_offset * vec_to_J2
-J2_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, volumetric.r(J2_pos)) + -xyz_offset * vec_to_J2
-CO_xyz = (
-    find_line_mesh_intersection(volumetric.mesh, vec_axial_component, volumetric.r(1.0))
-    + xyz_offset * vec_axial_component
+J1_xyz_U = (
+    find_line_mesh_intersection(volumetric.mesh, vec_to_J1, volumetric.r(0.5))
+    + XYZ_OFFSET * vec_to_J1
 )
+J1_xyz_D = (
+    find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, volumetric.r(0.5))
+    + -XYZ_OFFSET * vec_to_J1
+)
+J2_xyz_U = (
+    find_line_mesh_intersection(volumetric.mesh, vec_to_J2, volumetric.r(J2_pos))
+    + XYZ_OFFSET * vec_to_J2
+)
+J2_xyz_D = (
+    find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, volumetric.r(J2_pos))
+    + -XYZ_OFFSET * vec_to_J2
+)
+CO_xyz = volumetric.r(1.0)
+# CO_xyz = (
+#     find_line_mesh_intersection(volumetric.mesh, vec_axial_component, volumetric.r(1.0))
+#     + XYZ_OFFSET * vec_axial_component
+# )
 
 R_F_U = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, y_th, -x_th])).as_matrix()
 R_L_U = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, y_th, -x_th])).as_matrix()
 R_B_U = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, y_th, -x_th])).as_matrix()
 R_R_U = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, y_th, -x_th])).as_matrix()
 
-R_F_D = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
-R_L_D = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
-R_B_D = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
-R_R_D = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_F_D = Rotation.from_euler(
+    "zyx", np.array([0 * np.pi / 2, y_th, -x_th + np.pi])
+).as_matrix()
+R_L_D = Rotation.from_euler(
+    "zyx", np.array([3 * np.pi / 2, y_th, -x_th + np.pi])
+).as_matrix()
+R_B_D = Rotation.from_euler(
+    "zyx", np.array([2 * np.pi / 2, y_th, -x_th + np.pi])
+).as_matrix()
+R_R_D = Rotation.from_euler(
+    "zyx", np.array([1 * np.pi / 2, y_th, -x_th + np.pi])
+).as_matrix()
 
 # Collinear rotations
-R_U = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 0 * np.pi / 2])).as_matrix()
-R_L = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 3 * np.pi / 2])).as_matrix()
-R_D = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 2 * np.pi / 2])).as_matrix()
-R_R = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])).as_matrix()
+R_U = Rotation.from_euler(
+    "zyx", np.array([np.pi, np.pi / 2, -x_th + 0 * np.pi / 2])
+).as_matrix()
+R_L = Rotation.from_euler(
+    "zyx", np.array([np.pi, np.pi / 2, -x_th + 3 * np.pi / 2])
+).as_matrix()
+R_D = Rotation.from_euler(
+    "zyx", np.array([np.pi, np.pi / 2, -x_th + 2 * np.pi / 2])
+).as_matrix()
+R_R = Rotation.from_euler(
+    "zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])
+).as_matrix()
 
 
 def calc_T(R, xyz):
@@ -715,19 +917,21 @@ T_dict = {
 
 
 # Post
-POST_RADIUS = VOLUMETRIC_RADII[0]
-OVERLAP_OFFSET = 1
-NUM_CP_PER_CROSS_SECTION = 16
+
 post_backbone_cp = np.hstack(
     [
-        np.linspace(POST_OFFSET, INTERFACE_SHIFT - POST_OFFSET, NUM_CP_PER_BACKBONE).reshape(-1, 1),
+        np.linspace(
+            POST_OFFSET, INTERFACE_SHIFT - POST_OFFSET, NUM_CP_PER_BACKBONE
+        ).reshape(-1, 1),
         np.zeros((NUM_CP_PER_BACKBONE, 1)),
         np.zeros((NUM_CP_PER_BACKBONE, 1)),
     ]
 )
 post_backbone = Backbone(post_backbone_cp, reparameterize=True)
 post_radius = 5
-post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
+post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(
+    -1, 1
+)
 post_cp = np.hstack((POST_RADIUS * np.cos(post_th), POST_RADIUS * np.sin(post_th)))
 post_cs_list = [
     CrossSection(controlpoints=post_cp, position=0.0),
@@ -768,9 +972,9 @@ def build_shape(inputs):
 
     # Attach interface
     label = str(shape_number).zfill(4)
-    label_split = [label[i] for i in range(len(label))]
-    label_formatted = "_".join(label_split)  # Underscores denote new lines
-    interface = load_interface(INTERFACE_PATH, label_formatted)
+    # label_split = [label[i] for i in range(len(label))]
+    # label_formatted = "_".join(label_split)  # Underscores denote new lines
+    interface = load_interface(INTERFACE_PATH, label)
     mesh_with_interface = fuse_meshes(meshA, interface, 0, "union")
 
     # Construct save_dir
@@ -785,7 +989,7 @@ def build_shape(inputs):
     return mesh_with_interface
 
 
-count = 3
+count = 11
 
 # Samples to print
 
@@ -794,41 +998,97 @@ inputs = (
     count,
     [
         "volumetric",
-        "sheet_point_K1",
-        "sheet_point_K1",
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4",
+        "ac1",
     ],
-    ["T_eye", "T_J1_L_U", "T_J1_L_D"],
+    [
+        "T_eye",
+        "T_J1_F_U",
+        "T_J2_F_U",
+        "T_J1_F_D",
+        "T_J2_F_D",
+        "T_CO_U",
+    ],
 )
 s = build_shape(inputs)
 count += 1
 
-# Sheet leaf
 inputs = (
     count,
     [
         "volumetric",
-        "sheet_leaf_K0",
-        "sheet_leaf_K0",
-        "sheet_leaf_K0",
-        "sheet_leaf_K0",
-    ],
-    ["T_eye", "T_J1_F_U", "T_J1_F_D", "T_J2_F_U", "T_J2_F_D"],
-)
-s = build_shape(inputs)
-count += 1
-
-# Sheet round
-inputs = (
-    count,
-    [
-        "volumetric",
-        "sheet_round_K0",
-        "sheet_round_K0",
+        "sheet_point_K1",
+        "sheet_point_K1",
         "sheet_point_K0",
     ],
-    ["T_eye", "T_J1_L_U", "T_J1_L_D", "T_CO_L"],
+    [
+        "T_eye",
+        "T_J1_F_U",
+        "T_J2_F_U",
+        "T_CO_L",
+    ],
 )
 s = build_shape(inputs)
 count += 1
 
+inputs = (
+    count,
+    [
+        "volumetric",
+        "sheet_leaf_K0",
+        "sheet_leaf_K0",
+        "sheet_point_K0",
+    ],
+    [
+        "T_eye",
+        "T_J1_F_U",
+        "T_J1_F_D",
+        "T_CO_L",
+    ],
+)
+s = build_shape(inputs)
+count += 1
+
+inputs = (
+    count,
+    [
+        "volumetric",
+        "sheet_leaf_K0",
+        "sheet_leaf_K0",
+        "sheet_leaf_K0",
+    ],
+    [
+        "T_eye",
+        "T_J1_L_U",
+        "T_J1_L_D",
+        "T_CO_L",
+    ],
+)
+s = build_shape(inputs)
+count += 1
+
+inputs = (
+    count,
+    [
+        "volumetric",
+        "sheet_round_K1",
+        "sheet_round_K1",
+        "sheet_round_K1",
+        "sheet_round_K1",
+        "sheet_round_K0",
+    ],
+    [
+        "T_eye",
+        "T_J1_L_U",
+        "T_J1_L_D",
+        "T_J2_L_U",
+        "T_J2_L_D",
+        "T_CO_L",
+    ],
+)
+s = build_shape(inputs)
+count += 1
 # Those three tilted as well
