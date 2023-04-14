@@ -747,7 +747,7 @@ def fuse_meshes(meshA, meshB, fairing_distance, operation):
                 )
             )
 
-        union_mesh.show()
+        # union_mesh.show()
         if fairing_distance > 0:
             neighbors = find_neighbors(
                 union_mesh, edge_verts_indices, distance=fairing_distance

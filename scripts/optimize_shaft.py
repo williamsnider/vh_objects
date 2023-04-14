@@ -73,7 +73,7 @@ def make_ac(backbone_length, r1, r2, r3):
     return ac
 
 
-def objective_function(*inputs):
+def obj_func_both_ends(*inputs):
     backbone_length, DESIRED_LENGTH, r1, r2, r3 = inputs
 
     ac = make_ac(backbone_length[0], r1, r2, r3)
@@ -83,9 +83,26 @@ def objective_function(*inputs):
     return (length - DESIRED_LENGTH) ** 2
 
 
-def optimize_backbone_length(DESIRED_LENGTH, r1, r2, r3):
+def obj_func_far_end(*inputs):
+    backbone_length, DESIRED_LENGTH, r1, r2, r3 = inputs
+
+    ac = make_ac(backbone_length[0], r1, r2, r3)
+    length = ac.mesh.bounds[1, 0]
+    print(length)
+    return (length - DESIRED_LENGTH) ** 2
+
+
+def optimize_backbone_length(DESIRED_LENGTH, r1, r2, r3, obj_func_name):
 
     print("Optimizing backbone length...")
+
+    # Choose correct type of optimization (both rounded edges or just far end)
+    if obj_func_name == "far":
+        objective_function = obj_func_far_end
+    elif obj_func_name == "both":
+        objective_function = obj_func_both_ends
+    else:
+        raise NotImplementedError
 
     # Find close best guess
     NUM_GUESSES = 20
@@ -115,11 +132,17 @@ def optimize_backbone_length(DESIRED_LENGTH, r1, r2, r3):
 
 
 if __name__ == "__main__":
-    DESIRED_LENGTH = 22.5
-    X_WIDTH = 6
-    r1, r2, r3 = np.array([0.5 * X_WIDTH, 0.5 * X_WIDTH, 0.5 * X_WIDTH])
-    optimize_backbone_length(DESIRED_LENGTH, r1, r2, r3)
+    DESIRED_LENGTH = 20
+    X_WIDTH = 5
+    # r1, r2, r3 = np.array([1.0 * X_WIDTH, 1.0 * X_WIDTH, 1.35 * X_WIDTH])
+    # r1, r2, r3 = np.array([1.0 * X_WIDTH, 1.0 * X_WIDTH, 0.1 * X_WIDTH])
+    # r1, r2, r3 = np.array([1.0 * X_WIDTH, 1.5 * X_WIDTH, 1.0 * X_WIDTH])
+    r1, r2, r3 = np.array([1.0 * X_WIDTH, 1.5 * X_WIDTH, 0.1 * X_WIDTH])
 
+    l = optimize_backbone_length(DESIRED_LENGTH, r1, r2, r3, "far")
+
+    ac = make_ac(l, r1, r2, r3)
+    ac.mesh.show()
 
 # if res.success == True:
 #     return res.x

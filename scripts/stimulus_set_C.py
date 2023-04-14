@@ -31,26 +31,26 @@ from pathlib import Path
 NUM_CP_PER_BACKBONE = 5
 SEGMENT_LENGTH = 20
 NUM_CS = 11
-X_WIDTH = 6  # base radius off which other features are derived
-VOLUMETRIC_RADII = np.array([X_WIDTH, 3 * X_WIDTH, X_WIDTH])
+X_WIDTH = 5  # base radius off which other features are derived
+VOLUMETRIC_RADII = np.array([1.01 * X_WIDTH, 1.01 * X_WIDTH, 1.01 * X_WIDTH])
 SHEET_THICKNESS = 3
 NUM_CP_PER_BASE_SHEET = 50
 NUM_CS_PER_SHEET = 11
 NUM_CP_PER_CROSS_SECTION = 50
 
 
-POINT_RADII = np.array([1 * X_WIDTH, 0.5 * X_WIDTH, 0.2 * X_WIDTH])
+POINT_RADII = np.array([1 * X_WIDTH, 0.5 * X_WIDTH, 0.3 * X_WIDTH])
 POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
 assert POINT_ROUNDOVER_OFFSET < POINT_RADII[-1]
 
 LEAF_RADII = np.array([1 * X_WIDTH, 1.5 * X_WIDTH, 0.25 * X_WIDTH])
-APPENDAGE_LENGTH = 15
+APPENDAGE_LENGTH = 20
 
 POST_OFFSET = 2
 fairing_distance = 3
 SAVE_DIR = Path("./sample_shapes/stimulus_set_C/stl/")
 
-POST_RADIUS = VOLUMETRIC_RADII[0]
+POST_RADIUS = X_WIDTH * 0.99
 OVERLAP_OFFSET = 1
 
 SLICER_DEPTH = -1.9 * X_WIDTH
@@ -374,30 +374,39 @@ ac_leaf = transform_ac(ac_leaf, T_ac, 0.0)
 from scripts.optimize_shaft import optimize_backbone_length, make_ac
 
 
-appendage_extra_factor = 1.5
-appendage_extra = APPENDAGE_LENGTH * 1.5
-offset = appendage_extra * (1 - 1 / appendage_extra_factor)
+# appendage_extra_factor = 1
+# appendage_extra = APPENDAGE_LENGTH * appendage_extra_factor
+# offset = appendage_extra * (1 - 1 / appendage_extra_factor)
+offset = 0.0
+
 # ac1
-y = np.array([0.5 * X_WIDTH, 0.5 * X_WIDTH, 0.75 * X_WIDTH])
-optimal_backbone_length = optimize_backbone_length(appendage_extra, *y)
+y = np.array([1.0 * X_WIDTH, 1.0 * X_WIDTH, 1.25 * X_WIDTH])
+optimal_backbone_length = optimize_backbone_length(APPENDAGE_LENGTH, *y, "far")
 ac1 = make_ac(optimal_backbone_length, *y)
 ac1 = transform_ac(ac1, T_ac, offset)
 
+# Expand bottom
+ac1.controlpoints[:10, :, 2] *= 3
+ac1.controlpoints[1:10, :, :2] = ac1.controlpoints[10, :, :2]
+ac1.surface = make_surface(ac1.controlpoints)
+ac1.mesh = make_mesh(ac1.surface, 250, 250)
+# ac1.mesh.show()
+
 # ac2
-y = np.array([0.5 * X_WIDTH, 1 * X_WIDTH, 0.1 * X_WIDTH])
-optimal_backbone_length = optimize_backbone_length(appendage_extra, *y)
+y = np.array([1.0 * X_WIDTH, 1.5 * X_WIDTH, 0.1 * X_WIDTH])
+optimal_backbone_length = optimize_backbone_length(APPENDAGE_LENGTH, *y, "far")
 ac2 = make_ac(optimal_backbone_length, *y)
 ac2 = transform_ac(ac2, T_ac, offset)
 
 # ac3
-y = np.array([0.5 * X_WIDTH, 1 * X_WIDTH, 0.5 * X_WIDTH])
-optimal_backbone_length = optimize_backbone_length(appendage_extra, *y)
+y = np.array([1.0 * X_WIDTH, 1.5 * X_WIDTH, 1.0 * X_WIDTH])
+optimal_backbone_length = optimize_backbone_length(APPENDAGE_LENGTH, *y, "far")
 ac3 = make_ac(optimal_backbone_length, *y)
 ac3 = transform_ac(ac3, T_ac, offset)
 
 # ac4
-y = np.array([0.5 * X_WIDTH, 0.5 * X_WIDTH, 0.1 * X_WIDTH])
-optimal_backbone_length = optimize_backbone_length(appendage_extra, *y)
+y = np.array([1.0 * X_WIDTH, 1.0 * X_WIDTH, 0.1 * X_WIDTH])
+optimal_backbone_length = optimize_backbone_length(APPENDAGE_LENGTH, *y, "far")
 ac4 = make_ac(optimal_backbone_length, *y)
 ac4 = transform_ac(ac4, T_ac, offset)
 
@@ -450,10 +459,14 @@ sheet_point_K1, _ = calc_mesh_boolean_and_edges(sheet_point_K1, slicer, "differe
 sheet_point_K2, _ = calc_mesh_boolean_and_edges(sheet_point_K2, slicer, "difference")
 point, _ = calc_mesh_boolean_and_edges(ac_point.mesh, slicer, "difference")
 leaf, _ = calc_mesh_boolean_and_edges(ac_leaf.mesh, slicer, "difference")
-ac1, _ = calc_mesh_boolean_and_edges(ac1.mesh, slicer, "difference")
-ac2, _ = calc_mesh_boolean_and_edges(ac2.mesh, slicer, "difference")
-ac3, _ = calc_mesh_boolean_and_edges(ac3.mesh, slicer, "difference")
-ac4, _ = calc_mesh_boolean_and_edges(ac4.mesh, slicer, "difference")
+# ac1, _ = calc_mesh_boolean_and_edges(ac1.mesh, slicer, "difference")
+# ac2, _ = calc_mesh_boolean_and_edges(ac2.mesh, slicer, "difference")
+# ac3, _ = calc_mesh_boolean_and_edges(ac3.mesh, slicer, "difference")
+# ac4, _ = calc_mesh_boolean_and_edges(ac4.mesh, slicer, "difference")
+ac1 = ac1.mesh
+ac2 = ac2.mesh
+ac3 = ac3.mesh
+ac4 = ac4.mesh
 
 mesh_list = [
     sheet_round_K0,
@@ -542,19 +555,20 @@ def find_line_mesh_intersection(mesh, vec, origin):
 
 vec_axial_component = np.array([1, 0, 0])
 x_th = 0  # -np.pi / 4
-y_th = 0  # np.pi / 4  # np.pi / 9
+y_th = np.pi / 4  # np.pi / 9
 vec_to_J1 = np.array([0, np.sin(x_th), np.cos(x_th)])
 vec_to_J1_orth = np.cross(vec_to_J1, vec_axial_component)
 vec_to_J2 = np.array([0, np.sin(x_th), np.cos(x_th)])
 vec_to_J2_orth = np.cross(vec_to_J2, vec_axial_component)
 
-J2_pos = 0.875
+J1_pos = 0.35
+J2_pos = 0.85
 J1_xyz_U = (
-    find_line_mesh_intersection(volumetric.mesh, vec_to_J1, volumetric.r(0.5))
+    find_line_mesh_intersection(volumetric.mesh, vec_to_J1, volumetric.r(J1_pos))
     + XYZ_OFFSET * vec_to_J1
 )
 J1_xyz_D = (
-    find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, volumetric.r(0.5))
+    find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, volumetric.r(J1_pos))
     + -XYZ_OFFSET * vec_to_J1
 )
 J2_xyz_U = (
@@ -945,6 +959,16 @@ post_ac = AxialComponent(post_backbone, post_cs_list, smooth_with_post=False)
 # Add interface
 
 
+def slice_mesh(mesh, extent, T):
+    mesh = mesh.copy()
+    slicer = trimesh.primitives.Box(
+        extents=np.array([extent, extent, extent]), transform=T
+    )
+    split_mesh, _ = calc_mesh_boolean_and_edges(mesh, slicer, "difference")
+
+    return split_mesh
+
+
 def build_shape(inputs):
 
     shape_number, mesh_names, T_names = inputs
@@ -962,9 +986,65 @@ def build_shape(inputs):
         mesh = mesh.copy()
         new_mesh_list.append(mesh.apply_transform(T_list[i]))
 
+    # Split mesh by yz-plane to prevent going through shape
+    split_mesh_list = []
+    for i, mesh in enumerate(new_mesh_list):
+
+        mesh = mesh.copy()
+        T_name = T_names[i]
+
+        # Make slicer mesh
+        T = np.eye(4)
+        extent = 100
+        if T_name in [
+            "T_J1_B_U",
+            "T_J1_L_U",
+            "T_J1_F_U",
+            "T_J1_R_U",
+            "T_J2_B_U",
+            "T_J2_L_U",
+            "T_J2_F_U",
+            "T_J2_R_U",
+        ]:
+            T[2, 3] = -extent / 2
+            split_mesh = slice_mesh(mesh, extent, T)
+
+        elif T_name in [
+            "T_J1_B_D",
+            "T_J1_L_D",
+            "T_J1_F_D",
+            "T_J1_R_D",
+            "T_J2_B_D",
+            "T_J2_L_D",
+            "T_J2_F_D",
+            "T_J2_R_D",
+        ]:
+            T[2, 3] = extent / 2
+            split_mesh = slice_mesh(mesh, extent, T)
+
+        elif T_name in [
+            "T_eye",
+            "T_CO_U",
+            "T_CO_L",
+            "T_CO_D",
+            "T_CO_R",
+        ]:
+            split_mesh = mesh
+        else:
+            raise NotImplementedError
+
+        split_mesh_list.append(split_mesh)
+
+    # slicer = trimesh.primitives.Box(
+    #     extents=np.array([extent, extent, extent]), transform=T
+    # )
+    # scene = trimesh.Scene()
+    # scene.add_geometry([mesh, slicer])
+    # scene.show()
+
     # Fuse meshes
-    meshA = new_mesh_list[0]
-    for meshB in new_mesh_list[1:]:
+    meshA = split_mesh_list[0]
+    for meshB in split_mesh_list[1:]:
         meshA = fuse_meshes(meshA, meshB, fairing_distance, "union")
 
     # Attach post
@@ -991,6 +1071,29 @@ def build_shape(inputs):
 
 count = 11
 
+
+def show_scene(inputs):
+    scene = trimesh.Scene()
+
+    shape_number, mesh_names, T_names = inputs
+
+    # Get mesh and T values
+    mesh_list = []
+    T_list = []
+    for i in range(len(mesh_names)):
+        mesh_list.append(mesh_dict[mesh_names[i]])
+        T_list.append(T_dict[T_names[i]])
+
+    # Transform meshes
+    new_mesh_list = []
+    for i, mesh in enumerate(mesh_list):
+        mesh = mesh.copy()
+        new_mesh_list.append(mesh.apply_transform(T_list[i]))
+
+    scene.add_geometry(new_mesh_list)
+    scene.show()
+
+
 # Samples to print
 
 # Sheet point
@@ -999,9 +1102,9 @@ inputs = (
     [
         "volumetric",
         "ac1",
-        "ac2",
-        "ac3",
-        "ac4",
+        "ac1",
+        "ac1",
+        "ac1",
         "ac1",
     ],
     [
@@ -1013,6 +1116,7 @@ inputs = (
         "T_CO_U",
     ],
 )
+# show_scene(inputs)
 s = build_shape(inputs)
 count += 1
 

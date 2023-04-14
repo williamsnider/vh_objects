@@ -1,178 +1,131 @@
-# Distribute controlpoints so that the ending is hemispherical
+# Make shaft given length, r1, r2, r3
 
-from scripts import approximate_arc
-from scipy.optimize import minimize
 import numpy as np
-from objects.backbone import Backbone
-from objects.cross_section import CrossSection
-from objects.axial_component import AxialComponent
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
 
 
-def plot_array(arr):
-    import matplotlib.pyplot as plt
-
-    ax = plt.figure().add_subplot(projection="3d")
-    for i in range(arr.shape[0]):
-        pts = arr[i]
-
-        ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], "-b*")
-    ax.set_aspect("auto")
+def plot_profile(xx, yy, x, y, lxx, lyy, rxx, ryy):
+    ax = plt.figure().add_subplot()
+    ax.plot(xx, yy, "-b")
+    ax.plot(x, y, "r*")
+    ax.plot(lxx, lyy, "-g")
+    ax.plot(rxx, ryy, "-g")
+    ax.set_aspect("equal")
     plt.show()
 
 
-def make_arc(radius):
-    def make_arc_array(a, b, c):
+def piecewise_func(x, lr, la, quad, spacing, rr, ra):
 
-        # We can think of the second to last arc controlpoint as lying along a vector from the last controlpoint. The vector's slope can be determined from the tangent line of the circle (which is negated). We then can use a single parameter (d) as a measure of how far along this vector we are travelling. This reduces the number of parameters we need, and also ensures that the tangent of the resulting arc at the end will match that of the circle
+    if x < 0:
+        th = np.arccos((x - la) / lr)
+        assert np.isclose(x, lr * np.cos(th) + la)
+        return np.sin(th) * lr
+    elif 0 <= x <= 2 * spacing:
+        return np.polyval(quad, x)
+    else:
+        th = np.arccos((x - ra) / rr)
+        assert np.isclose(x, rr * np.cos(th) + ra)
+        return np.sin(th) * rr
 
-        def tan_vec(MAX_ANGLE):
-            tangent_vec = np.array(
-                [
-                    -radius * np.sin(MAX_ANGLE),
-                    radius * np.cos(MAX_ANGLE),
-                ]
-            )
-            return tangent_vec
 
-        start_tan_vec = tan_vec(0)
-        end_tan_vec = -tan_vec(np.pi / 2)  # Negate so this points toward start
+def calc_profile_hemi_hemi(spacing, r1, r2, r3, plot=False):
+    # Fit quadratic
+    x = np.arange(3) * spacing
+    y = np.array([r1, r2, r3])
+    quad = np.polyfit(x, y, 2)
 
-        arc_array = np.array(
-            [
-                [radius, 0, 0],
-                [
-                    radius * np.cos(0) + a * start_tan_vec[0],
-                    radius * np.sin(0) + a * start_tan_vec[1],
-                    0,
-                ],  # Tangent line from start
-                [b, c, 0],
-                [
-                    radius * np.cos(np.pi / 2) + a * end_tan_vec[0],
-                    radius * np.sin(np.pi / 2) + a * end_tan_vec[1],
-                    0,
-                ],  # Tangent line from end
-                [radius * np.cos(np.pi / 2), radius * np.sin(np.pi / 2), 0],
-            ]
+    # Fit circular arc - leftside
+    lx = 0
+    ly = np.polyval(quad, lx)
+    lder = np.polyder(quad, 1)
+    lm = np.polyval(lder, lx)
+    la = lx + ly * lm  # Solve for a
+    lr = np.sqrt((lx - la) ** 2 + ly**2)  # Solve for r
+    lth = np.arctan2(ly, (lx - la))
+
+    # Fit circular arc - rightside
+    rx = 2 * spacing
+    ry = np.polyval(quad, rx)
+    rder = np.polyder(quad, 1)
+    rm = np.polyval(rder, rx)
+    ra = rx + ry * rm  # Solve for a
+    rr = np.sqrt((rx - ra) ** 2 + ry**2)  # Solve for r
+    rth = np.arctan2(ry, (rx - ra))
+
+    # Calculate length
+    length = (
+        lr * (np.cos(0) - np.cos(np.pi - lth))
+        + 2 * spacing
+        + rr * (np.cos(0) - np.cos(rth))
+    )
+
+    # Sample and graph
+    xx = np.linspace(0, 2 * spacing)
+    yy = np.polyval(quad, xx)
+
+    ltt = np.linspace(np.pi, lth)
+    lxx = lr * np.cos(ltt) + la
+    lyy = lr * np.sin(ltt)
+
+    rtt = np.linspace(rth, 0)
+    rxx = rr * np.cos(rtt) + ra
+    ryy = rr * np.sin(rtt)
+
+    if plot == True:
+        plot_profile(
+            xx - lxx[0], yy, x - lxx[0], y, lxx - lxx[0], lyy, rxx - lxx[0], ryy
         )
-        return arc_array
+    assert np.isclose(length, rxx[-1] - lxx[0])
 
-    def radius_error(vars):
-
-        # Make the arc array
-        [a, b, c] = vars
-        arc_array = make_arc_array(a, b, c)
-
-        # Make backbone
-        backbone = Backbone(arc_array, reparameterize=False)
-
-        # Sample points along the backbone
-        t = np.linspace(0, 1, 10)
-        r = backbone.r(t)
-
-        # distance from origin should be close to radius if points are well_aligned
-        dist = np.linalg.norm(r, axis=1)
-        return ((dist - radius) ** 2).sum()
-
-    fun = radius_error
-    x0 = [0.1, radius, radius]
-    bounds = [
-        [0.0, 100 * radius],
-        [radius * np.cos(np.pi / 2 / 2), 100 * radius],  # Convex hull property of B-Splines
-        [radius * np.sin(np.pi / 2 / 2), 100 * radius],  # Convex hull property of B-Splines
-    ]
-    result = minimize(fun=fun, x0=x0, bounds=bounds)
-    [a, b, c] = result.x
-
-    arc_array = make_arc_array(a, b, c)
-
-    # Shift so that the curve begins at the origin
-    arc_array[:, 0] -= radius
-    arc_array[:, [0, 1]] = arc_array[:, [1, 0]]  # Flip x and y-axis so long portion points in +X direction
-    arc_array[:, 1] = -arc_array[:, 1]  # Negate y axis so curves upward (towards +Y)
-
-    return arc_array
+    # Shift everything so that shapes starts at x=0
+    breakpoints = np.cumsum([0, lxx[-1], spacing[0], spacing[0], rxx[-1] - rxx[0]])
+    print(breakpoints)
+    return length, lr, la, quad, spacing, rr, ra
 
 
-# Calculate arc
-out1 = make_arc(1)
-vec_frac = out1[:, 0].reshape(-1, 1, 1)
+def optimize_spacing(*inputs):
+    spacing, r1, r2, r3, GOAL_LENGTH = inputs
 
-
-def calc_cp_hemisphere(base_cp, endpoint, tan_vec, radius):
-
-    # Rotate base_cp to line in yz plane
-    vecA = base_cp[0] - base_cp[1]
-    vecB = base_cp[0] - base_cp[2]
-    N = np.cross(vecA, vecB) / np.linalg.norm(np.cross(vecA, vecB))
-    assert np.all(np.isclose(N, tan_vec)) or np.all(np.isclose(N, -tan_vec))
-    T = np.cross(vecA, N) / np.linalg.norm(np.cross(vecA, N))
-    B = np.cross(T, N)
-    curr = np.vstack([N.reshape(1, -1), T.reshape(1, -1), B.reshape(1, -1)])
-    goal = np.eye(3)
-    R = (goal @ np.linalg.inv(curr.T)).T
-
-    yz_cp = (base_cp - endpoint) @ R
-
-    cp = np.tile(yz_cp, (5, 1, 1))
-    cp_scale = cp * out1[::-1, 0].reshape(-1, 1, 1)
-    cp_scale[:, :, 0] = yz_cp[:, 0]
-
-    vec_rotated = tan_vec @ R
-    cp_shift = cp_scale + vec_rotated * vec_frac * radius
-
-    # Transform back to original plane
-    result = (cp_shift) @ R.T + endpoint
-
-    return result
+    length, _, _, _, _, _, _ = calc_profile_hemi_hemi(spacing, r1, r2, r3, plot=False)
+    return (length - GOAL_LENGTH) ** 2
 
 
 if __name__ == "__main__":
 
-    # Calculate controlpoints
-    c = np.cos
-    s = np.sin
+    # Inputs
+    r1, r2, r3 = np.array([5, 5, 5])
+    GOAL_LENGTH = 20
+    x0 = GOAL_LENGTH / 2
 
-    t = np.linspace(0, 2 * np.pi, 8, endpoint=False).reshape(-1, 1)
-    base_cp = np.hstack([c(t), s(t), np.zeros(t.shape)])
+    res = minimize(
+        optimize_spacing,
+        x0=x0,
+        args=(r1, r2, r3, GOAL_LENGTH),
+        bounds=[(0.0001, GOAL_LENGTH)],
+    )
 
-    # Create test axial component
-    b_cp = make_arc(15)
-    b = Backbone(b_cp)
-    NUM_CS = 11
-    scale = np.geomspace(0.25, 1.5, NUM_CS) * 5
-    pos = np.linspace(0, 1, NUM_CS)
-    cs_list = [CrossSection(scale[i] * base_cp[:, :2], pos[i]) for i in range(NUM_CS)]
-    ac = AxialComponent(b, cs_list)
-    # ac.mesh.show()
+    if res.fun > 1e-10:
+        print(
+            "Failed to find an optimal spacing, the radii are probably too small for the given length."
+        )
+    else:
 
-    # Adjust controlpoints
-    orig_cp = ac.controlpoints
-    center_cp = orig_cp[2:-2]
+        spacing = res.x
+        print("Spacing: ", spacing)
+        length, lr, la, quad, spacing, rr, ra = calc_profile_hemi_hemi(
+            spacing, r1, r2, r3, plot=True
+        )
 
-    import matplotlib.pyplot as plt
+        # Sample piecewise func
+        # Construct piecewise polynomial
+        x = np.linspace(-1, length - 1)
+        y = np.zeros(len(x))
+        for i in range(len(x)):
+            y[i] = piecewise_func(x[i], lr, la, quad, spacing, rr, ra)
 
-    ax = plt.figure().add_subplot(projection="3d")
-
-    arr = center_cp
-    for i in range(arr.shape[0]):
-        pts = arr[i]
-        # # b = Backbone(out)
-        # t = np.linspace(0, 1, 100)
-        # pts = b.r(t)
-        ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], "-b*")
-    ax.set_aspect("auto")
-    plt.show()
-
-    cp_hemisphere_right = calc_cp_hemisphere(center_cp[-1], ac.r(1.0), ac.T(1.0), scale[-1])
-    cp_hemisphere_left = calc_cp_hemisphere(center_cp[0], ac.r(0.0), -ac.T(0.0), scale[0])
-
-    new_cp = np.vstack([cp_hemisphere_left[:0:-1], center_cp, cp_hemisphere_right[1:]])
-
-    import copy
-
-    new_ac = copy.deepcopy(ac)
-    new_ac.controlpoints = new_cp
-    new_ac.num_rows = new_cp.shape[0]
-    new_ac.make_surface()
-    new_ac.make_mesh()
-    new_ac.mesh.show(smooth=False)
+        ax = plt.figure().add_subplot()
+        ax.plot(x, y, "r-*")
+        ax.set_aspect("equal")
+        plt.show()
+        print("Done")
