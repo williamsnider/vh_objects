@@ -3,17 +3,21 @@ import numpy as np
 import pyvista as pv
 import scipy.spatial
 import pickle
+import trimesh.exchange
 
 # Mesh
-filename = "/home/oconnorlab/code/objects/sample_shapes/stimulus_set_A/pkl/shape_20.pkl"
-with open(filename, "rb") as f:
-    shape = pickle.load(f)
-tri_mesh = shape.mesh_with_interface
+filename = "/home/oconnorlab/code/objects/sample_shapes/stimulus_set_C/stl/0012.stl"
+# with open(filename, "rb") as f:
+#     # shape = pickle.load(f)
+#     tri_mesh = trimesh.exchange.stl.load_stl(f)
+
+tri_mesh = trimesh.load_mesh(filename)
+
 
 # Shift center of mass to origin
-tri_mesh.apply_translation(-shape.mesh.center_mass)
+tri_mesh.apply_translation(-tri_mesh.center_mass)
 
-mesh = pv.wrap(shape.mesh_with_interface)
+mesh = pv.wrap(tri_mesh)
 pts = mesh.points
 # cpos = mesh.plot()
 

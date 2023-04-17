@@ -130,7 +130,9 @@ volumetric_x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH * 2
 volumetric_y = VOLUMETRIC_RADII
 volumetric_poly = np.polyfit(volumetric_x, volumetric_y, 2)
 volumetric_scale = np.polyval(volumetric_poly, pos_seg2)
-volumetric_cs = [CrossSection(volumetric_scale[i] * round_cp, pos[i]) for i in range(NUM_CS)]
+volumetric_cs = [
+    CrossSection(volumetric_scale[i] * round_cp, pos[i]) for i in range(NUM_CS)
+]
 
 # Construct axial component
 volumetric = AxialComponent(
@@ -173,7 +175,9 @@ backbone_x_width = Backbone(b_cp, reparameterize=True)
 t = np.linspace(0, 2 * np.pi, NUM_CP_PER_BASE_SHEET, endpoint=False).reshape(-1, 1)
 round_cs_cp = np.hstack([np.zeros(t.shape), np.cos(t), np.sin(t)])
 base_sheet = round_cs_cp * X_WIDTH
-cp = construct_sheet(base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp = construct_sheet(
+    base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET
+)
 surf = make_surface(cp)
 sheet_round_K0 = make_mesh(surf, 100, 100)
 
@@ -272,7 +276,9 @@ sheet_point_K0 = make_mesh(surf, 100, 100)
 
 bent_cp = bend_sheet(sheet_point_cp, b_appendage_K1, point_x[2] - point_x[0])
 surf = make_surface(bent_cp)
-sheet_point_K1 = make_mesh(surf, 100, 100)  # TODO: Has artifact, fix after deciding on thickness/size
+sheet_point_K1 = make_mesh(
+    surf, 100, 100
+)  # TODO: Has artifact, fix after deciding on thickness/size
 # sheet_point_bent.show(smooth=False)
 sheet_point_K2 = sheet_point_K1.copy()
 sheet_point_K2.apply_transform(T_K2)
@@ -307,12 +313,15 @@ def transform_ac(ac, T, offset):
         T_shift_to_origin[0, 3] = -ac.mesh.bounds[0, 0] - offset
         ac.mesh = ac.mesh.apply_transform(T_shift_to_origin)
         ac.controlpoints = (
-            np.dstack([ac.controlpoints, np.ones([*ac.controlpoints.shape[:-1], 1])]) @ T_shift_to_origin.T
+            np.dstack([ac.controlpoints, np.ones([*ac.controlpoints.shape[:-1], 1])])
+            @ T_shift_to_origin.T
         )[:, :, :3]
 
     # Rotate about y-axis
     ac.mesh = ac.mesh.apply_transform(T)
-    ac.controlpoints = (np.dstack([ac.controlpoints, np.ones([*ac.controlpoints.shape[:-1], 1])]) @ T.T)[:, :, :3]
+    ac.controlpoints = (
+        np.dstack([ac.controlpoints, np.ones([*ac.controlpoints.shape[:-1], 1])]) @ T.T
+    )[:, :, :3]
     return ac
 
 
@@ -323,7 +332,10 @@ pos_app = np.linspace(0, APPENDAGE_LENGTH, NUM_CS)
 
 # Point
 scale = np.polyval(point_poly, pos_app)
-cs_list = [CrossSection(controlpoints=round_cp * scale[i], position=pos[i]) for i in range(NUM_CS)]
+cs_list = [
+    CrossSection(controlpoints=round_cp * scale[i], position=pos[i])
+    for i in range(NUM_CS)
+]
 ac_point = AxialComponent(
     b_appendage_K0,
     cs_list,
@@ -338,7 +350,10 @@ ac_point = transform_ac(ac_point, T_ac, 0.0)
 
 # Leaf
 scale = np.polyval(leaf_poly, pos_app)
-cs_list = [CrossSection(controlpoints=round_cp * scale[i], position=pos[i]) for i in range(NUM_CS)]
+cs_list = [
+    CrossSection(controlpoints=round_cp * scale[i], position=pos[i])
+    for i in range(NUM_CS)
+]
 ac_leaf = AxialComponent(
     b_appendage_K0,
     cs_list,
@@ -589,11 +604,25 @@ vec_to_J2_orth = np.cross(vec_to_J2, vec_axial_component)
 
 J1_pos = 0.5
 J2_pos = 1.0
-J1_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J1, volumetric.r(J1_pos)) + XYZ_OFFSET * vec_to_J1
-J1_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, volumetric.r(J1_pos)) + -XYZ_OFFSET * vec_to_J1
-J2_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J2, volumetric.r(J2_pos)) + XYZ_OFFSET * vec_to_J2
-J2_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, volumetric.r(J2_pos)) + -XYZ_OFFSET * vec_to_J2
-CO_xyz = find_line_mesh_intersection(volumetric.mesh, vec_axial_component, volumetric.r(J2_pos))
+J1_xyz_U = (
+    find_line_mesh_intersection(volumetric.mesh, vec_to_J1, volumetric.r(J1_pos))
+    + XYZ_OFFSET * vec_to_J1
+)
+J1_xyz_D = (
+    find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, volumetric.r(J1_pos))
+    + -XYZ_OFFSET * vec_to_J1
+)
+J2_xyz_U = (
+    find_line_mesh_intersection(volumetric.mesh, vec_to_J2, volumetric.r(J2_pos))
+    + XYZ_OFFSET * vec_to_J2
+)
+J2_xyz_D = (
+    find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, volumetric.r(J2_pos))
+    + -XYZ_OFFSET * vec_to_J2
+)
+CO_xyz = find_line_mesh_intersection(
+    volumetric.mesh, vec_axial_component, volumetric.r(J2_pos)
+)
 # CO_xyz = (
 #     find_line_mesh_intersection(volumetric.mesh, vec_axial_component, volumetric.r(1.0))
 #     + XYZ_OFFSET * vec_axial_component
@@ -604,16 +633,32 @@ R_L_U = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, y_th, -x_th])).as_ma
 R_B_U = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, y_th, -x_th])).as_matrix()
 R_R_U = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, y_th, -x_th])).as_matrix()
 
-R_F_D = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
-R_L_D = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
-R_B_D = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
-R_R_D = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_F_D = Rotation.from_euler(
+    "zyx", np.array([0 * np.pi / 2, y_th, -x_th + np.pi])
+).as_matrix()
+R_L_D = Rotation.from_euler(
+    "zyx", np.array([3 * np.pi / 2, y_th, -x_th + np.pi])
+).as_matrix()
+R_B_D = Rotation.from_euler(
+    "zyx", np.array([2 * np.pi / 2, y_th, -x_th + np.pi])
+).as_matrix()
+R_R_D = Rotation.from_euler(
+    "zyx", np.array([1 * np.pi / 2, y_th, -x_th + np.pi])
+).as_matrix()
 
 # Collinear rotations
-R_U = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 0 * np.pi / 2])).as_matrix()
-R_L = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 3 * np.pi / 2])).as_matrix()
-R_D = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 2 * np.pi / 2])).as_matrix()
-R_R = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])).as_matrix()
+R_U = Rotation.from_euler(
+    "zyx", np.array([np.pi, np.pi / 2, -x_th + 0 * np.pi / 2])
+).as_matrix()
+R_L = Rotation.from_euler(
+    "zyx", np.array([np.pi, np.pi / 2, -x_th + 3 * np.pi / 2])
+).as_matrix()
+R_D = Rotation.from_euler(
+    "zyx", np.array([np.pi, np.pi / 2, -x_th + 2 * np.pi / 2])
+).as_matrix()
+R_R = Rotation.from_euler(
+    "zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])
+).as_matrix()
 
 
 def calc_T(R, xyz):
@@ -932,14 +977,18 @@ T_dict = {
 
 post_backbone_cp = np.hstack(
     [
-        np.linspace(POST_OFFSET, INTERFACE_SHIFT - POST_OFFSET, NUM_CP_PER_BACKBONE).reshape(-1, 1),
+        np.linspace(
+            POST_OFFSET, INTERFACE_SHIFT - POST_OFFSET, NUM_CP_PER_BACKBONE
+        ).reshape(-1, 1),
         np.zeros((NUM_CP_PER_BACKBONE, 1)),
         np.zeros((NUM_CP_PER_BACKBONE, 1)),
     ]
 )
 post_backbone = Backbone(post_backbone_cp, reparameterize=True)
 post_radius = 5
-post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
+post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(
+    -1, 1
+)
 post_cp = np.hstack((POST_RADIUS * np.cos(post_th), POST_RADIUS * np.sin(post_th)))
 post_cs_list = [
     CrossSection(controlpoints=post_cp, position=0.0),
@@ -955,7 +1004,9 @@ post_ac = AxialComponent(post_backbone, post_cs_list, smooth_with_post=False)
 
 def slice_mesh(mesh, extent, T):
     mesh = mesh.copy()
-    slicer = trimesh.primitives.Box(extents=np.array([extent, extent, extent]), transform=T)
+    slicer = trimesh.primitives.Box(
+        extents=np.array([extent, extent, extent]), transform=T
+    )
     split_mesh, _ = calc_mesh_boolean_and_edges(mesh, slicer, "difference")
 
     return split_mesh
@@ -1068,6 +1119,11 @@ def build_shape(inputs):
     mesh_with_interface.export(filename)
 
     mesh_with_interface.show(smooth=False)
+    import trimesh.scene
+
+    scene = trimesh.Scene()
+    scene.add_geometry(mesh_with_interface)
+    scene.lights = trimesh.scene.lighting.autolight(scene)
     return mesh_with_interface
 
 
