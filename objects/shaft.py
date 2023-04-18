@@ -1,5 +1,3 @@
-# Make shaft given length, r1, r2, r3
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
@@ -147,6 +145,14 @@ class Shaft:
             self.spacing = res.x
             return True
 
+    def get_T(self, pos):
+        T = np.eye(4)
+        T[:3, 0] = self.backbone.T(pos).reshape(-1)
+        T[:3, 1] = self.backbone.N(pos).reshape(-1)
+        T[:3, 2] = self.backbone.B(pos).reshape(-1)
+        T[:3, 3] = self.backbone.r(pos).reshape(-1)
+        return T
+
     def make_shape(self):
 
         x = self.x
@@ -213,11 +219,7 @@ class Shaft:
 
             # Shift according to x
             pos = np.round(x[i] / x[-1], 8)
-            T = np.eye(4)
-            T[:3, 0] = self.backbone.T(pos).reshape(-1)
-            T[:3, 1] = self.backbone.N(pos).reshape(-1)
-            T[:3, 2] = self.backbone.B(pos).reshape(-1)
-            T[:3, 3] = self.backbone.r(pos).reshape(-1)
+            T = self.get_T(pos)
 
             # Homogenous coordinates
             homo_cs = np.hstack([new_cs, np.ones((new_cs.shape[0], 1))])
@@ -272,24 +274,38 @@ class Shaft:
 
     def apply_transform(self, T):
         self.mesh = self.mesh.apply_transform(T)
-        self.cp = (np.hstack([self.cp, np.ones(len(self.cp))]) @ T)[:, :3]
-        self.l_sphere_origin = (np.hstack([self.l_sphere_origin, np.ones(len(self.l_sphere_origin))]) @ T)[:, :3]
-        self.r_sphere_origin = (np.hstack([self.r_sphere_origin, np.ones(len(self.r_sphere_origin))]) @ T)[:, :3]
+        self.cp = (np.dstack([self.cp, np.ones((*self.cp.shape[:2], 1))]) @ T)[:, :, :3]
+        self.l_sphere_origin = (np.concatenate([self.l_sphere_origin, np.array([1])]) @ T.T)[:3]
+        self.r_sphere_origin = (np.concatenate([self.r_sphere_origin, np.array([1])]) @ T.T)[:3]
 
 
 if __name__ == "__main__":
 
-    shaft = Shaft(25, 2, 4, 2, np.pi, "two_hemi", 11, 50)
-    shaft.mesh.visual.vertex_colors = np.array([255, 255, 0, 50])
+    shaft1 = Shaft(25, 2, 4, 2, np.pi / 2, "two_hemi", 11, 50)
+    shaft1.mesh.visual.vertex_colors = np.array([255, 255, 0, 50])
+
+    shaft2 = Shaft(25, 2, 4, 2, np.pi / 2, "two_hemi", 11, 50)
+    shaft2.mesh.visual.vertex_colors = np.array([255, 0, 255, 75])
+
+    # Shift to origin
+    T = np.eye(4)
+    T[:3, 3] = -shaft2.l_sphere_origin
+    shaft2.apply_transform(T)
+
+    # Shift to align with shaft1
+    T = shaft1.get_T(1.0)
+    T[:3, 3] = shaft1.r_sphere_origin
+    shaft2.apply_transform(T)
+
     import trimesh
 
     l = trimesh.primitives.creation.icosphere()
-    l.apply_translation(shaft.l_sphere_origin)
+    l.apply_translation(shaft2.l_sphere_origin)
     r = trimesh.primitives.creation.icosphere()
-    r.apply_translation(shaft.r_sphere_origin)
+    r.apply_translation(shaft1.r_sphere_origin)
 
     scene = trimesh.Scene()
-    scene.add_geometry([shaft.mesh, l, r])
+    scene.add_geometry([shaft1.mesh, shaft2.mesh, r, l])
     scene.show()
 
     # shaft.mesh.show()
