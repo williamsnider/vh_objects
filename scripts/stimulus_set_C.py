@@ -31,7 +31,7 @@ from pathlib import Path
 NUM_CP_PER_BACKBONE = 5
 SEGMENT_LENGTH = 20
 NUM_CS = 11
-X_WIDTH = 6  # base radius off which other features are derived
+X_WIDTH = 5  # base radius off which other features are derived
 VOLUMETRIC_RADII = np.array([1.01 * X_WIDTH, 2.01 * X_WIDTH, 1.01 * X_WIDTH])
 SHEET_THICKNESS = 3
 NUM_CP_PER_BASE_SHEET = 50
@@ -44,7 +44,7 @@ POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
 assert POINT_ROUNDOVER_OFFSET < POINT_RADII[-1]
 
 LEAF_RADII = np.array([1 * X_WIDTH, 1.5 * X_WIDTH, 0.25 * X_WIDTH])
-APPENDAGE_LENGTH = 24
+APPENDAGE_LENGTH = 4 * X_WIDTH
 
 POST_OFFSET = 2
 fairing_distance = 3
@@ -53,7 +53,7 @@ SAVE_DIR = Path("./sample_shapes/stimulus_set_C/stl/")
 POST_RADIUS = X_WIDTH * 0.99
 OVERLAP_OFFSET = 1
 
-SLICER_DEPTH = -1.9 * X_WIDTH
+SLICER_DEPTH = -1.0 * X_WIDTH
 XYZ_OFFSET = 0.25
 
 # SPHERE_RADIUS = 15
@@ -603,7 +603,7 @@ vec_to_J2 = np.array([0, np.sin(x_th), np.cos(x_th)])
 vec_to_J2_orth = np.cross(vec_to_J2, vec_axial_component)
 
 J1_pos = 0.5
-J2_pos = 1.0
+J2_pos = 0.95
 J1_xyz_U = (
     find_line_mesh_intersection(volumetric.mesh, vec_to_J1, volumetric.r(J1_pos))
     + XYZ_OFFSET * vec_to_J1
@@ -1127,32 +1127,32 @@ def build_shape(inputs):
     return mesh_with_interface
 
 
-count = 12
+count = 15
 
 
-def show_scene(inputs):
-    scene = trimesh.Scene()
+# def show_scene(inputs):
+#     scene = trimesh.Scene()
 
-    shape_number, mesh_names, T_names = inputs
+#     shape_number, mesh_names, T_names = inputs
 
-    # Get mesh and T values
-    mesh_list = []
-    T_list = []
-    for i in range(len(mesh_names)):
-        mesh_list.append(mesh_dict[mesh_names[i]])
-        T_list.append(T_dict[T_names[i]])
+#     # Get mesh and T values
+#     mesh_list = []
+#     T_list = []
+#     for i in range(len(mesh_names)):
+#         mesh_list.append(mesh_dict[mesh_names[i]])
+#         T_list.append(T_dict[T_names[i]])
 
-    # Transform meshes
-    new_mesh_list = []
-    for i, mesh in enumerate(mesh_list):
-        mesh = mesh.copy()
-        new_mesh_list.append(mesh.apply_transform(T_list[i]))
+#     # Transform meshes
+#     new_mesh_list = []
+#     for i, mesh in enumerate(mesh_list):
+#         mesh = mesh.copy()
+#         new_mesh_list.append(mesh.apply_transform(T_list[i]))
 
-    scene.add_geometry(new_mesh_list)
-    scene.show()
+#     scene.add_geometry(new_mesh_list)
+#     scene.show()
 
 
-# Samples to print
+# # Samples to print
 
 # Sheet point
 inputs = (
@@ -1167,11 +1167,11 @@ inputs = (
     ],
     [
         "T_eye",
+        "T_CO_U",
         "T_J1_F_U",
         "T_J2_F_U",
         "T_J1_F_D",
         "T_J2_F_D",
-        "T_CO_U",
     ],
 )
 # show_scene(inputs)
@@ -1182,15 +1182,19 @@ inputs = (
     count,
     [
         "volumetric",
-        "sheet_point_K1",
-        "sheet_point_K1",
         "sheet_point_K0",
+        "sheet_point_K1",
+        "sheet_point_K1",
+        "sheet_point_K1",
+        "sheet_point_K1",
     ],
     [
         "T_eye",
+        "T_CO_L",
         "T_J1_F_U",
         "T_J2_F_U",
-        "T_CO_L",
+        "T_J1_B_D",
+        "T_J2_B_D",
     ],
 )
 s = build_shape(inputs)

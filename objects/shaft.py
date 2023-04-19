@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from objects.utilities import make_surface, make_mesh
 from objects.backbone import Backbone
+from copy import deepcopy
+from scipy.spatial.transform import Rotation
 
 
 def plot_profile(xx, yy, x, y, lxx, lyy, rxx, ryy):
@@ -64,7 +66,11 @@ def calc_profile_hemi_hemi(spacing, r1, r2, r3, lengthtype="", plot=False):
 
     # Calculate length
     if lengthtype == "two_hemi":
-        length = lr * (np.cos(0) - np.cos(np.pi - lth)) + 2 * spacing + rr * (np.cos(0) - np.cos(rth))
+        length = (
+            lr * (np.cos(0) - np.cos(np.pi - lth))
+            + 2 * spacing
+            + rr * (np.cos(0) - np.cos(rth))
+        )
     elif lengthtype == "one_hemi":
         length = 2 * spacing + rr * (np.cos(0) - np.cos(rth))
 
@@ -81,7 +87,9 @@ def calc_profile_hemi_hemi(spacing, r1, r2, r3, lengthtype="", plot=False):
     ryy = rr * np.sin(rtt)
 
     if plot == True:
-        plot_profile(xx - lxx[0], yy, x - lxx[0], y, lxx - lxx[0], lyy, rxx - lxx[0], ryy)
+        plot_profile(
+            xx - lxx[0], yy, x - lxx[0], y, lxx - lxx[0], lyy, rxx - lxx[0], ryy
+        )
     # assert np.isclose(length, rxx[-1] - lxx[0])
 
     # Shift everything so that shapes starts at x=0
@@ -105,7 +113,9 @@ def calc_profile_hemi_hemi(spacing, r1, r2, r3, lengthtype="", plot=False):
 def optimize_spacing(*inputs):
     spacing, r1, r2, r3, GOAL_LENGTH, lengthtype = inputs
 
-    length, _, _, _, _, _, _, _, _, _ = calc_profile_hemi_hemi(spacing, r1, r2, r3, lengthtype, plot=False)
+    length, _, _, _, _, _, _, _, _, _ = calc_profile_hemi_hemi(
+        spacing, r1, r2, r3, lengthtype, plot=False
+    )
     return (length - GOAL_LENGTH) ** 2
 
 
@@ -138,7 +148,9 @@ class Shaft:
             bounds=[(0.0001, self.length)],
         )
         if res.fun > 1e-10:
-            print("Failed to find an optimal spacing, the radii are probably too large for the given length.")
+            print(
+                "Failed to find an optimal spacing, the radii are probably too large for the given length."
+            )
             self.spacing = None
             return False
         else:
@@ -163,7 +175,9 @@ class Shaft:
         x[-2] = x[-1]
 
         # Base cross section
-        th = np.linspace(0, 2 * np.pi, self.num_cp_per_cs, endpoint=False).reshape(-1, 1)
+        th = np.linspace(0, 2 * np.pi, self.num_cp_per_cs, endpoint=False).reshape(
+            -1, 1
+        )
         base_cs = np.hstack([np.zeros(th.shape), np.cos(th), np.sin(th)])
 
         if self.theta != 0:
@@ -181,13 +195,19 @@ class Shaft:
             # Calculate arc
             arc_length = self.length - self.ldist - self.rdist
             radius = arc_length / self.theta
-            t = np.linspace(3 * np.pi / 2, 3 * np.pi / 2 + self.theta, 100).reshape(-1, 1)
-            arc_cp = np.hstack([radius * np.cos(t), radius * np.sin(t), np.zeros(t.shape)])  # Sample arc
+            t = np.linspace(3 * np.pi / 2, 3 * np.pi / 2 + self.theta, 100).reshape(
+                -1, 1
+            )
+            arc_cp = np.hstack(
+                [radius * np.cos(t), radius * np.sin(t), np.zeros(t.shape)]
+            )  # Sample arc
             arc_cp -= arc_cp[0]  # Shift start to origin
             arc_cp += l_cp[-1]  # Shift start to end of l_cp
 
             # Calculate r portion
-            T_vec = np.array([-np.sin(t[-1][0]), np.cos(t[-1][0]), 0]).reshape(1, -1)  # vector tangent at end of arc
+            T_vec = np.array([-np.sin(t[-1][0]), np.cos(t[-1][0]), 0]).reshape(
+                1, -1
+            )  # vector tangent at end of arc
             r_cp = (
                 T_vec * np.linspace(0, self.rdist, NUM_L_CP).reshape(-1, 1) + arc_cp[-1]
             )  # Shift start to end of arc_cp
@@ -206,6 +226,7 @@ class Shaft:
                 ]
             )
 
+        # Rotate so that curve is away from +Z axis
         self.backbone = Backbone(b_cp, reparameterize=True)
 
         # Shift points according to backbone
@@ -233,7 +254,7 @@ class Shaft:
         # cp[:, :, 0] = x.reshape(-1, 1)
 
         surf = make_surface(cp)
-        mesh = make_mesh(surf, 100, 100)
+        mesh = make_mesh(surf, 250, 250)
 
         return mesh, cp
 
@@ -269,14 +290,25 @@ class Shaft:
         self.mesh = mesh
 
     def calc_sphere_origins(self):
-        self.l_sphere_origin = (self.backbone.r(0.0) + self.backbone.T(0.0) * self.l_sphere_radius).ravel()
-        self.r_sphere_origin = (self.backbone.r(1.0) + -self.backbone.T(1.0) * self.r_sphere_radius).ravel()
+        self.l_sphere_origin = (
+            self.backbone.r(0.0) + self.backbone.T(0.0) * self.l_sphere_radius
+        ).ravel()
+        self.r_sphere_origin = (
+            self.backbone.r(1.0) + -self.backbone.T(1.0) * self.r_sphere_radius
+        ).ravel()
 
     def apply_transform(self, T):
         self.mesh = self.mesh.apply_transform(T)
         self.cp = (np.dstack([self.cp, np.ones((*self.cp.shape[:2], 1))]) @ T)[:, :, :3]
-        self.l_sphere_origin = (np.concatenate([self.l_sphere_origin, np.array([1])]) @ T.T)[:3]
-        self.r_sphere_origin = (np.concatenate([self.r_sphere_origin, np.array([1])]) @ T.T)[:3]
+        self.l_sphere_origin = (
+            np.concatenate([self.l_sphere_origin, np.array([1])]) @ T.T
+        )[:3]
+        self.r_sphere_origin = (
+            np.concatenate([self.r_sphere_origin, np.array([1])]) @ T.T
+        )[:3]
+
+    def copy(self):
+        return deepcopy(self)
 
 
 if __name__ == "__main__":
