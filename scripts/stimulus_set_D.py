@@ -24,61 +24,24 @@ from pathlib import Path
 import scipy
 import pyrender
 import cv2
+from multiprocessing import Pool
+from tqdm import tqdm
 
-### Parameters ###
-NUM_CP_PER_BACKBONE = 5
-SEGMENT_LENGTH = 40
-NUM_CS = 11
-X_WIDTH = 4.25  # base radius off which other features are derived.
-NUM_CP_PER_CROSS_SECTION = 50
-
-# Limb sizes
-ac_radii = np.array([0.1 * X_WIDTH, 1 * X_WIDTH, 2 * X_WIDTH])
-ac_theta_dict = {"th0": 0, "th1": np.pi / 2}
-ac_junc_angles = {"ja0": 0, "ja1": np.pi / 4, "ja2": np.pi / 2}
-ac_junc_rotations = {"r0": 0, "r1": np.pi}
-SPHERE_ALIGNMENT_OFFSET = np.array(
-    [0.25, 0.1, 0.1]
-)  # Instead of perfectly aligning the left and right spheres of limb1 and limb2, shift limb2 slightly, which is necessary for the boolean union to work. Because these shifts are small (<0.25mm), this should be OK.
-
-# Post and interface
-POST_RADIUS = ac_radii[1] * 0.99
-POST_OFFSET = 2  # Post and interface
-
-# Saving png and stl
-SAVE_DIR = Path("./sample_shapes/stimulus_set_D/")
-
-#################################
-### Axial Components / Shafts ###
-#################################
-
-# Construct dict containing the different shafts that serve as Limb1 and Limb2
-shaft_dict = {}
-for theta_name in ac_theta_dict.keys():
-    for r1_name in ["1"]:
-        for r2_name in ["1", "2"]:
-            for r3_name in ["0", "1", "2"]:
-
-                s_name = "_".join(["s", theta_name, r1_name, r2_name, r3_name])
-                r1 = ac_radii[int(r1_name)]
-                r2 = ac_radii[int(r2_name)]
-                r3 = ac_radii[int(r3_name)]
-                theta = ac_theta_dict[theta_name]
-
-                shaft_dict[s_name] = Shaft(
-                    SEGMENT_LENGTH,
-                    r1,
-                    r2,
-                    r3,
-                    theta,
-                    lengthtype="two_hemi",  # Length takes into account both spherical ends
-                    num_cs=NUM_CS,
-                    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
-                )
-
-##############
-### Shapes ###
-##############
+from scripts.stimulus_set_params import (
+    NUM_CP_PER_BACKBONE,
+    SEGMENT_LENGTH,
+    NUM_CS,
+    X_WIDTH,
+    NUM_CP_PER_CROSS_SECTION,
+    ac_radii,
+    ac_theta_dict,
+    ac_junc_angles,
+    ac_junc_rotations,
+    SPHERE_ALIGNMENT_OFFSET,
+    POST_RADIUS,
+    POST_OFFSET,
+    SAVE_DIR,
+)
 
 
 class Shape:
@@ -246,6 +209,39 @@ class Shape:
             return color
         else:
             cv2.imwrite(filename, color)
+
+
+#########################################
+### Shafts for Limb1 and Limb2 Shapes ###
+#########################################
+
+# Construct dict containing the different shafts that serve as Limb1 and Limb2
+shaft_dict = {}
+for theta_name in ac_theta_dict.keys():
+    for r1_name in ["1"]:
+        for r2_name in ["1", "2"]:
+            for r3_name in ["0", "1", "2"]:
+
+                s_name = "_".join(["s", theta_name, r1_name, r2_name, r3_name])
+                r1 = ac_radii[int(r1_name)]
+                r2 = ac_radii[int(r2_name)]
+                r3 = ac_radii[int(r3_name)]
+                theta = ac_theta_dict[theta_name]
+
+                shaft_dict[s_name] = Shaft(
+                    SEGMENT_LENGTH,
+                    r1,
+                    r2,
+                    r3,
+                    theta,
+                    lengthtype="two_hemi",  # Length takes into account both spherical ends
+                    num_cs=NUM_CS,
+                    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+                )
+
+##############################
+### Limb1 and Limb2 Shapes ###
+##############################
 
 
 def construct_shapes(inputs):
@@ -438,9 +434,6 @@ for L1_name in [
                 )
                 count += 1
 
-
-from multiprocessing import Pool
-from tqdm import tqdm
 
 # for i, comb in enumerate(combs[:]):
 #     construct_shapes(comb)

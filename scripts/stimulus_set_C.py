@@ -21,40 +21,285 @@ import trimesh
 from scripts.sheets import plot_arr
 from scipy.spatial.transform.rotation import Rotation
 from pathlib import Path
+from objects.shaft import Shaft
+from scripts.stimulus_set_params import (
+    NUM_CP_PER_BACKBONE,
+    NUM_CP_PER_BASE_SHEET,
+    NUM_CP_PER_CROSS_SECTION,
+    NUM_CS,
+    NUM_CS_PER_SHEET,
+    SEGMENT_LENGTH,
+    X_WIDTH,
+    VOLUMETRIC_RADII,
+    SHEET_THICKNESS,
+    POINT_RADII,
+    POINT_ROUNDOVER_OFFSET,
+    LEAF_RADII,
+    APPENDAGE_LENGTH,
+    POST_RADIUS,
+    POST_OFFSET,
+    SAVE_DIR,
+)
 
-# TODO: Check RADII
-# TODO: Think about slanting everything away for ease of 3D printing (without supports)
-# TODO: Optimize based on only far side hemisphere
-
-
-### Parameters ###
-NUM_CP_PER_BACKBONE = 5
-SEGMENT_LENGTH = 20
-NUM_CS = 11
-X_WIDTH = 5  # base radius off which other features are derived
-VOLUMETRIC_RADII = np.array([1.01 * X_WIDTH, 2.01 * X_WIDTH, 1.01 * X_WIDTH])
-SHEET_THICKNESS = 3
-NUM_CP_PER_BASE_SHEET = 50
-NUM_CS_PER_SHEET = 11
-NUM_CP_PER_CROSS_SECTION = 50
-
-
-POINT_RADII = np.array([1 * X_WIDTH, 0.5 * X_WIDTH, 0.3 * X_WIDTH])
-POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
-assert POINT_ROUNDOVER_OFFSET < POINT_RADII[-1]
-
-LEAF_RADII = np.array([1 * X_WIDTH, 1.5 * X_WIDTH, 0.25 * X_WIDTH])
-APPENDAGE_LENGTH = 4 * X_WIDTH
-
-POST_OFFSET = 2
 fairing_distance = 3
-SAVE_DIR = Path("./sample_shapes/stimulus_set_C/stl/")
 
-POST_RADIUS = X_WIDTH * 0.99
-OVERLAP_OFFSET = 1
+######################################
+### Base Components and Appendages ###
+######################################
 
-SLICER_DEPTH = -1.0 * X_WIDTH
-XYZ_OFFSET = 0.25
+volumetric = Shaft(
+    SEGMENT_LENGTH,
+    VOLUMETRIC_RADII[0],
+    VOLUMETRIC_RADII[1],
+    VOLUMETRIC_RADII[2],
+    theta=0,
+    lengthtype="one_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
+
+# TODO: This should be lengthtype "one_hemi"
+
+app1 = Shaft(
+    APPENDAGE_LENGTH,
+    1.0 * X_WIDTH,
+    1.0 * X_WIDTH,
+    1.65 * X_WIDTH,
+    theta=0,
+    lengthtype="one_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
+
+app2 = Shaft(
+    APPENDAGE_LENGTH,
+    1.0 * X_WIDTH,
+    1.5 * X_WIDTH,
+    0.1 * X_WIDTH,
+    theta=0,
+    lengthtype="one_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
+
+app3 = Shaft(
+    APPENDAGE_LENGTH,
+    1.0 * X_WIDTH,
+    2.0 * X_WIDTH,
+    1.0 * X_WIDTH,
+    theta=0,
+    lengthtype="one_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
+
+app4 = Shaft(
+    APPENDAGE_LENGTH,
+    1.0 * X_WIDTH,
+    1.0 * X_WIDTH,
+    0.1 * X_WIDTH,
+    theta=0,
+    lengthtype="one_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
+
+app_point = Shaft(
+    APPENDAGE_LENGTH,
+    2.0 * X_WIDTH,
+    0.9 * X_WIDTH,
+    0.1 * X_WIDTH,
+    0,
+    lengthtype="one_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
+
+app_round = trimesh.primitives.creation.icosphere(3, radius=2 * X_WIDTH)
+
+# For sheets, create a controlpoint grid, surface, and mesh from scratch (i.e. without the Shaft class).
+
+T_K2 = np.eye(4)
+T_K2[:3, :3] = Rotation.from_rotvec(np.pi * np.array([0, 0, 1])).as_matrix()
+
+# Straight backbone for appendages
+# b_cp = np.hstack(
+#     [
+#         np.linspace(0, APPENDAGE_LENGTH, NUM_CP_PER_BACKBONE).reshape(-1, 1),
+#         np.zeros((NUM_CP_PER_BACKBONE, 1)),
+#         np.zeros((NUM_CP_PER_BACKBONE, 1)),
+#     ]
+# )
+# b_appendage_K0 = Backbone(b_cp, reparameterize=True)
+
+# Backbone for bending sheets
+b_cp = approximate_arc(np.pi / 2, APPENDAGE_LENGTH, 5)
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K1 = Backbone(b_cp, reparameterize=True)
+
+b_cp = approximate_arc(np.pi / 2, X_WIDTH, 5)
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+backbone_x_width = Backbone(b_cp, reparameterize=True)
+
+# Round sheet
+t = np.linspace(0, 2 * np.pi, NUM_CP_PER_BASE_SHEET, endpoint=False).reshape(-1, 1)
+round_cs_cp = np.hstack([np.zeros(t.shape), np.cos(t), np.sin(t)])
+base_sheet = round_cs_cp * X_WIDTH
+cp = construct_sheet(
+    base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET
+)
+surf = make_surface(cp)
+sheet_round_K0 = make_mesh(surf, 75, 75)
+
+# Bend round sheet
+bent_cp = bend_sheet(cp, backbone_x_width, X_WIDTH)
+surf = make_surface(bent_cp)
+sheet_round_K1 = make_mesh(surf, 75, 75)
+sheet_round_K2 = sheet_round_K1.copy()
+sheet_round_K2.apply_transform(T_K2)
+
+
+# Leaf sheet
+num_edge_cp = 7
+base_round_cp = 3
+top_round_cp = 1
+leaf_x = np.linspace(0, 1, 3) * APPENDAGE_LENGTH
+leaf_y = LEAF_RADII
+leaf_poly = np.polyfit(leaf_x, leaf_y, 2)
+leaf_cp = make_base_cp(leaf_poly, leaf_x, num_edge_cp, base_round_cp, top_round_cp)
+mean_xyz = leaf_cp.mean(axis=0)
+leaf_cp = leaf_cp - mean_xyz  # Shift to origin for scaling
+cp = construct_sheet(leaf_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
+surf = make_surface(cp)
+sheet_leaf_K0 = make_mesh(surf, 100, 100)
+
+# Bent leaf sheet
+bent_cp = bend_sheet(cp, b_appendage_K1, leaf_x[2] - leaf_x[0])
+surf = make_surface(bent_cp)
+sheet_leaf_K1 = make_mesh(surf, 100, 100)
+sheet_leaf_K2 = sheet_leaf_K1.copy()
+sheet_leaf_K2.apply_transform(T_K2)
+
+
+# Point sheet
+
+# Calculate widths
+point_x = np.linspace(0, APPENDAGE_LENGTH, 3)
+point_y = POINT_RADII  # 3 radii determine polynomial form
+point_poly = np.polyfit(point_x, point_y, 2)
+
+# But sample along 4th position to ensure smooth transition into shape
+xvals = np.linspace(-APPENDAGE_LENGTH * 2 / 3, APPENDAGE_LENGTH, NUM_CS)
+widths = np.polyval(point_poly, xvals)
+
+# Calculate z_levels
+z_levels = np.linspace(-APPENDAGE_LENGTH * 2 / 3, APPENDAGE_LENGTH, NUM_CS)
+
+# Assign controlpoints
+cp = np.zeros((NUM_CS, 8, 3))
+for i, width in enumerate(widths):
+
+    if width == 0:
+        inner = np.zeros((8, 2))
+    else:
+        inner = np.array(
+            [
+                [SHEET_THICKNESS / 2, 0],
+                [SHEET_THICKNESS / 2, width - POINT_ROUNDOVER_OFFSET],
+                [0, width],
+                [-SHEET_THICKNESS / 2, width - POINT_ROUNDOVER_OFFSET],
+                [-SHEET_THICKNESS / 2, 0],
+                [-SHEET_THICKNESS / 2, -width + POINT_ROUNDOVER_OFFSET],
+                [0, -width],
+                [SHEET_THICKNESS / 2, -width + POINT_ROUNDOVER_OFFSET],
+            ]
+        )
+
+    xyz = np.hstack([inner, z_levels[i] * np.ones((inner.shape[0], 1))])
+
+    cp[i, :, :] = xyz
+
+# Roundover edges
+
+# side_y = POINT_RADII + POINT_ROUNDOVER_OFFSET
+side_poly = point_poly  # np.polyfit(x, side_y, 2)
+bot, _ = calc_hemisphere_controlpoints(
+    cp[0],
+    np.array([0, 0, 1]),
+    cp[0].mean(axis=0),
+    side_poly,
+    -APPENDAGE_LENGTH * 2 / 3,
+    morph_to_ellipse=True,
+)
+top, _ = calc_hemisphere_controlpoints(
+    cp[-1],
+    np.array([0, 0, 1]),
+    cp[-1].mean(axis=0),
+    side_poly,
+    point_x[-1],
+    morph_to_ellipse=True,
+)
+sheet_point_cp = np.vstack([bot, cp, top[-2::-1]])
+surf = make_surface(sheet_point_cp)
+sheet_point_K0 = make_mesh(surf, 75, 75)
+
+bent_cp = bend_sheet(sheet_point_cp, b_appendage_K1, point_x[2] - point_x[0])
+surf = make_surface(bent_cp)
+sheet_point_K1 = make_mesh(
+    surf, 75, 75
+)  # TODO: Has artifact, fix after deciding on thickness/size
+# sheet_point_bent.show(smooth=False)
+sheet_point_K2 = sheet_point_K1.copy()
+sheet_point_K2.apply_transform(T_K2)
+
+
+mesh_list = [
+    volumetric.mesh,
+    app1.mesh,
+    app2.mesh,
+    app3.mesh,
+    app4.mesh,
+    app_point.mesh,
+    sheet_round_K0,
+    sheet_round_K1,
+    sheet_round_K2,
+    app_round,
+    sheet_leaf_K0,
+    sheet_leaf_K1,
+    sheet_leaf_K2,
+    sheet_point_K0,
+    sheet_point_K1,
+    sheet_point_K2,
+]
+
+
+scene = trimesh.Scene()
+shift = np.array([0.0, 0.0, 0.0])
+for m in mesh_list:
+
+    mesh = copy.deepcopy(m)
+
+    # Shift so bounds in lower left corner
+    mesh = mesh.apply_translation(np.array([0, mesh.extents[1] / 2, 0]))
+    mesh = mesh.apply_translation(shift)
+
+    scene.add_geometry(mesh)
+
+    extents = np.copy(mesh.extents)
+    extents[0] = 0
+    extents[2] = 0
+    shift += extents * 1.1
+scene.show()
+
+
+y = np.array([1.0 * X_WIDTH, 1.5 * X_WIDTH, 0.1 * X_WIDTH])
+optimal_backbone_length = optimize_backbone_length(APPENDAGE_LENGTH, *y, "far")
+ac2 = make_ac(optimal_backbone_length, *y)
+ac2 = transform_ac(ac2, T_ac, offset)
+
 
 # SPHERE_RADIUS = 15
 

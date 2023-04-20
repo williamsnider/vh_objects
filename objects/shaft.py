@@ -207,14 +207,15 @@ class Shaft:
             NUM_L_CP = 5
             l_cp = np.hstack(
                 [
-                    np.linspace(0, self.ldist, NUM_L_CP).reshape(-1, 1),
+                    np.linspace(x[0], x[self.num_cs], NUM_L_CP).reshape(-1, 1),
                     np.zeros((NUM_L_CP, 1)),
                     np.zeros((NUM_L_CP, 1)),
                 ]
             )
 
             # Calculate arc
-            arc_length = self.length - self.ldist - self.rdist
+            ldist = x[self.num_cs] - x[0]  # Handles one-hemi case
+            arc_length = self.length - ldist - self.rdist
             radius = arc_length / self.theta
             t = np.linspace(3 * np.pi / 2, 3 * np.pi / 2 + self.theta, 100).reshape(
                 -1, 1
@@ -241,26 +242,16 @@ class Shaft:
             NUM_L_CP = 5
             b_cp = np.hstack(
                 [
-                    np.linspace(0, self.length, NUM_L_CP).reshape(-1, 1),
+                    np.linspace(x[0], x[-1], NUM_L_CP).reshape(-1, 1),
                     np.zeros((NUM_L_CP, 1)),
                     np.zeros((NUM_L_CP, 1)),
                 ]
             )
 
-        # # Calc new_cp (no straight portions)
-        # arc_length = self.length
-        # radius = arc_length / self.theta
-        # t = np.linspace(3 * np.pi / 2, 3 * np.pi / 2 + self.theta, 100).reshape(-1, 1)
-        # arc_cp = np.hstack(
-        #     [radius * np.cos(t), radius * np.sin(t), np.zeros(t.shape)]
-        # )  # Sample arc
-        # arc_cp -= arc_cp[0]  # Shift start to origin
-
         # import matplotlib.pyplot as plt
 
         # ax = plt.figure().add_subplot()
         # ax.plot(b_cp[:, 0], b_cp[:, 1])
-        # ax.plot(arc_cp[:, 0], arc_cp[:, 1], "g.-")
         # plt.show()
         self.backbone = Backbone(b_cp, reparameterize=True)
         # self.backbone = Backbone(arc_cp, reparameterize=True)
@@ -275,7 +266,8 @@ class Shaft:
             new_cs *= y[i]
 
             # Shift according to x
-            pos = np.round(x[i] / x[-1], 8)
+            pos = np.round((x[i] - x[0]) / (x[-1] - x[0]), 8)
+            assert 0.0 <= pos <= 1.0
             T = self.get_T(pos)
 
             # Homogenous coordinates
@@ -367,10 +359,9 @@ if __name__ == "__main__":
         AC_RADII[1],
         AC_RADII[2],
         np.pi / 2,
-        "two_hemi",
+        "one_hemi",
         11,
         50,
-        truncate_hemi1=True,
     )
     shaft1.mesh.visual.vertex_colors = np.array([255, 255, 0, 50])
 
