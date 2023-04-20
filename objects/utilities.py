@@ -767,7 +767,11 @@ def fuse_meshes(meshA, meshB, fairing_distance, operation, add_verts=None):
 
             faired_mesh = fair_mesh(union_mesh, all_neighbors, HARMONIC_POWER)
 
-            if faired_mesh.vertices.__array__().max() > 1e8:
+            if (
+                faired_mesh.vertices.__array__().max() > 1e8
+                or faired_mesh.vertices.__array__().max() < 1e-30
+                or np.any(np.isnan(faired_mesh.vertices))
+            ):
                 print(
                     "Fairing failed, possibly because the slopes are incompatible / too sharp given how close they are."
                 )

@@ -90,19 +90,37 @@ class Backbone:
         if type(t) != type(np.array(0)):
             t = np.array(t, dtype="float64")
 
+        SHIFT = 0.01  # use this interval to  judge dx
+
         # Copy t to avoid problems when it gets changed
-        t = t.copy()  # Changing t was causing a bug
+        t0 = t.copy()  # Changing t was causing a bug
+        tf = t0 + SHIFT
 
-        # Handle array that may contain t == 0 or t == 1
-        mask_t_0 = t == 0
-        mask_t_1 = t == 1
-        t[mask_t_0] = EPSILON
-        t[mask_t_1] = 1 - EPSILON
+        if tf > 1.0:
+            t0 -= SHIFT
+            tf -= SHIFT
 
-        dx = self.backbone.derivative(t, 1)
+        dx = self.r(tf) - self.r(t0)  # Approximation of derivative
 
         # Negative/positive values close to zero cause inconsistency when taking cross product
         dx = np.round(dx, 8)
+
+        # if type(t) != type(np.array(0)):
+        #     t = np.array(t, dtype="float64")
+
+        # # Copy t to avoid problems when it gets changed
+        # t = t.copy()  # Changing t was causing a bug
+
+        # # Handle array that may contain t == 0 or t == 1
+        # mask_t_0 = t == 0
+        # mask_t_1 = t == 1
+        # t[mask_t_0] = EPSILON
+        # t[mask_t_1] = 1 - EPSILON
+
+        # dx = self.backbone.derivative(t, 1)
+
+        # # Negative/positive values close to zero cause inconsistency when taking cross product
+        # dx = np.round(dx, 8)
         return dx
 
     def r(self, t):
@@ -121,10 +139,12 @@ class Backbone:
         dx = self.dx(t)
         dx_norm = np.linalg.norm(dx, axis=1, keepdims=True)
 
-        if dx_norm == 0:
-            T = np.array([[1, 0, 0]])
-        else:
-            T = dx / dx_norm
+        assert ~(np.isclose(dx_norm, 0))
+
+        # if dx_norm == 0:
+        #     T = np.array([[1, 0, 0]])
+        # else:
+        T = dx / dx_norm
         return T
 
     def N(self, t):

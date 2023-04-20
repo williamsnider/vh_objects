@@ -120,7 +120,18 @@ def optimize_spacing(*inputs):
 
 
 class Shaft:
-    def __init__(self, length, r1, r2, r3, theta, lengthtype, num_cs, num_cp_per_cs):
+    def __init__(
+        self,
+        length,
+        r1,
+        r2,
+        r3,
+        theta,
+        lengthtype,
+        num_cs,
+        num_cp_per_cs,
+        truncate_hemi1=False,
+    ):
         self.length = length
         self.r1 = r1
         self.r2 = r2
@@ -129,6 +140,7 @@ class Shaft:
         self.lengthtype = lengthtype
         self.num_cs = num_cs
         self.num_cp_per_cs = num_cp_per_cs
+        self.truncacte_hemi1 = truncate_hemi1
 
         success = self.calc_optimal_spacing()
         if success == False:
@@ -173,6 +185,15 @@ class Shaft:
         # Adjust second and second-to-last x to be zero (ensures non-sharp ending)
         x[1] = x[0]
         x[-2] = x[-1]
+
+        # Truncate intiial section to help with boolean fusion
+        if self.truncacte_hemi1 == True:
+            newx = x.copy()
+            xmin = x[self.num_cs - 1] * 1 / 4
+            xmax = x[self.num_cs - 1]
+            newx[1 : self.num_cs] = np.linspace(xmin, xmax, self.num_cs - 1)
+            newx[0] = newx[1]  # Adjust to be zero
+            x = newx
 
         # Base cross section
         th = np.linspace(0, 2 * np.pi, self.num_cp_per_cs, endpoint=False).reshape(
@@ -226,8 +247,23 @@ class Shaft:
                 ]
             )
 
-        # Rotate so that curve is away from +Z axis
+        # # Calc new_cp (no straight portions)
+        # arc_length = self.length
+        # radius = arc_length / self.theta
+        # t = np.linspace(3 * np.pi / 2, 3 * np.pi / 2 + self.theta, 100).reshape(-1, 1)
+        # arc_cp = np.hstack(
+        #     [radius * np.cos(t), radius * np.sin(t), np.zeros(t.shape)]
+        # )  # Sample arc
+        # arc_cp -= arc_cp[0]  # Shift start to origin
+
+        # import matplotlib.pyplot as plt
+
+        # ax = plt.figure().add_subplot()
+        # ax.plot(b_cp[:, 0], b_cp[:, 1])
+        # ax.plot(arc_cp[:, 0], arc_cp[:, 1], "g.-")
+        # plt.show()
         self.backbone = Backbone(b_cp, reparameterize=True)
+        # self.backbone = Backbone(arc_cp, reparameterize=True)
 
         # Shift points according to backbone
         cp = np.zeros((len(x), self.num_cp_per_cs, 3))
@@ -253,8 +289,17 @@ class Shaft:
 
         # cp[:, :, 0] = x.reshape(-1, 1)
 
+        # # Plot self.backbone
+        # tt = np.linspace(0, 1.0)
+        # pts = self.backbone.r(tt)
+        # import matplotlib.pyplot as plt
+
+        # ax = plt.figure().add_subplot(projection="3d")
+        # ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], "-k")
+        # plt.show()
+
         surf = make_surface(cp)
-        mesh = make_mesh(surf, 250, 250)
+        mesh = make_mesh(surf, 75, 75)
 
         return mesh, cp
 
@@ -313,31 +358,49 @@ class Shaft:
 
 if __name__ == "__main__":
 
-    shaft1 = Shaft(25, 2, 4, 2, np.pi / 2, "two_hemi", 11, 50)
+    APPENDAGE_LENGTH = 40
+    X_WIDTH = 4.25
+    AC_RADII = np.array([0.1, 1, 2]) * X_WIDTH
+    shaft1 = Shaft(
+        APPENDAGE_LENGTH,
+        AC_RADII[1],
+        AC_RADII[1],
+        AC_RADII[2],
+        np.pi / 2,
+        "two_hemi",
+        11,
+        50,
+        truncate_hemi1=True,
+    )
     shaft1.mesh.visual.vertex_colors = np.array([255, 255, 0, 50])
 
-    shaft2 = Shaft(25, 2, 4, 2, np.pi / 2, "two_hemi", 11, 50)
-    shaft2.mesh.visual.vertex_colors = np.array([255, 0, 255, 75])
+    from scripts.sheets import plot_arr
 
-    # Shift to origin
-    T = np.eye(4)
-    T[:3, 3] = -shaft2.l_sphere_origin
-    shaft2.apply_transform(T)
+    plot_arr(shaft1.cp)
+    shaft1.mesh.show()
 
-    # Shift to align with shaft1
-    T = shaft1.get_T(1.0)
-    T[:3, 3] = shaft1.r_sphere_origin
-    shaft2.apply_transform(T)
+    # shaft2 = Shaft(25, 2, 4, 2, np.pi / 2, "two_hemi", 11, 50)
+    # shaft2.mesh.visual.vertex_colors = np.array([255, 0, 255, 75])
 
-    import trimesh
+    # # Shift to origin
+    # T = np.eye(4)
+    # T[:3, 3] = -shaft2.l_sphere_origin
+    # shaft2.apply_transform(T)
 
-    l = trimesh.primitives.creation.icosphere()
-    l.apply_translation(shaft2.l_sphere_origin)
-    r = trimesh.primitives.creation.icosphere()
-    r.apply_translation(shaft1.r_sphere_origin)
+    # # Shift to align with shaft1
+    # T = shaft1.get_T(1.0)
+    # T[:3, 3] = shaft1.r_sphere_origin
+    # shaft2.apply_transform(T)
 
-    scene = trimesh.Scene()
-    scene.add_geometry([shaft1.mesh, shaft2.mesh, r, l])
-    scene.show()
+    # import trimesh
+
+    # l = trimesh.primitives.creation.icosphere()
+    # l.apply_translation(shaft2.l_sphere_origin)
+    # r = trimesh.primitives.creation.icosphere()
+    # r.apply_translation(shaft1.r_sphere_origin)
+
+    # scene = trimesh.Scene()
+    # scene.add_geometry([shaft1.mesh, shaft2.mesh, r, l])
+    # scene.show()
 
     # shaft.mesh.show()
