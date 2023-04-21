@@ -281,10 +281,10 @@ class Shaft:
 
 if __name__ == "__main__":
 
-    shaft1 = Shaft(25, 2, 4, 2, np.pi / 2, "two_hemi", 11, 50)
+    shaft1 = Shaft(25, 2, 4, 4, np.pi / 4, "two_hemi", 11, 50)
     shaft1.mesh.visual.vertex_colors = np.array([255, 255, 0, 50])
 
-    shaft2 = Shaft(25, 2, 4, 2, np.pi / 2, "two_hemi", 11, 50)
+    shaft2 = Shaft(25, 4, 4, 2, np.pi / 4, "two_hemi", 11, 50)
     shaft2.mesh.visual.vertex_colors = np.array([255, 0, 255, 75])
 
     # Shift to origin
