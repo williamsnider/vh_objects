@@ -25,7 +25,7 @@ POST_OFFSET = 2  # Post and interface
 SAVE_DIR = Path("./sample_shapes/stimulus_set_D/")
 
 # Volumetric and appendage sizes
-APPENDAGE_LENGTH = 25
+APPENDAGE_LENGTH = 20
 SHEET_THICKNESS = 3
 NUM_CP_PER_BASE_SHEET = 50
 NUM_CS_PER_SHEET = 11

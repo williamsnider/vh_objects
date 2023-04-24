@@ -11,10 +11,10 @@ EPSILON = 1e-2  # Used to estimate b-spline derivative
 
 # AxialComponent construction
 SAMPLING_DENSITY_U = (
-    250  # Number of samples along round axis of 'cylinder' axial component
+    75  # Number of samples along round axis of 'cylinder' axial component
 )
 SAMPLING_DENSITY_V = (
-    250  # Number of samples along long axis of 'cylinder' axial component
+    75  # Number of samples along long axis of 'cylinder' axial component
 )
 SHRINK_FACTOR = 0.5  # Impacts surface slope near endpoints
 ORDER = 3  # quadratic B-spline

@@ -7,7 +7,12 @@ from objects.utilities import (
     fuse_meshes,
 )
 from objects.parameters import INTERFACE_PATH, INTERFACE_SHIFT
-from scripts.stimulus_set_params import POST_OFFSET, NUM_CP_PER_CROSS_SECTION, NUM_CP_PER_BACKBONE, POST_RADIUS
+from scripts.stimulus_set_params import (
+    POST_OFFSET,
+    NUM_CP_PER_CROSS_SECTION,
+    NUM_CP_PER_BACKBONE,
+    POST_RADIUS,
+)
 from objects.interface import load_interface
 from scipy.spatial.transform.rotation import Rotation
 from pathlib import Path
@@ -24,6 +29,7 @@ class Shape:
         self,
         mesh_list,
         T_list,
+        boolean_list,
         label,
         description,
         save_dir,
@@ -33,6 +39,7 @@ class Shape:
     ):
         self.mesh_list = mesh_list
         self.T_list = T_list
+        self.boolean_list = boolean_list
         self.label = label
         self.description = description
         self.T_final = T_final
@@ -61,8 +68,12 @@ class Shape:
 
         # Fuse meshes
         meshA = new_mesh_list[0]
+        i = 1
         for meshB in new_mesh_list[1:]:
-            meshA = fuse_meshes(meshA, meshB, self.fairing_distance, "union")
+            meshA = fuse_meshes(
+                meshA, meshB, self.fairing_distance, self.boolean_list[i]
+            )
+            i += 1
 
         # Apply T_final
         self.mesh = meshA.apply_transform(self.T_final)
@@ -72,15 +83,24 @@ class Shape:
         # Attach post
         post_backbone_cp = np.hstack(
             [
-                np.linspace(POST_OFFSET, INTERFACE_SHIFT - POST_OFFSET, NUM_CP_PER_BACKBONE).reshape(-1, 1),
+                np.linspace(
+                    POST_OFFSET, INTERFACE_SHIFT - POST_OFFSET, NUM_CP_PER_BACKBONE
+                ).reshape(-1, 1),
                 np.zeros((NUM_CP_PER_BACKBONE, 1)),
                 np.zeros((NUM_CP_PER_BACKBONE, 1)),
             ]
         )
         post_backbone = Backbone(post_backbone_cp, reparameterize=True)
-        post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
-        post_cp = np.hstack((POST_RADIUS * np.cos(post_th), POST_RADIUS * np.sin(post_th)))
-        post_cs_list = [CrossSection(controlpoints=post_cp, position=pos) for pos in [0.0, 0.01, 0.99, 1.0]]
+        post_th = np.linspace(
+            0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False
+        ).reshape(-1, 1)
+        post_cp = np.hstack(
+            (POST_RADIUS * np.cos(post_th), POST_RADIUS * np.sin(post_th))
+        )
+        post_cs_list = [
+            CrossSection(controlpoints=post_cp, position=pos)
+            for pos in [0.0, 0.01, 0.99, 1.0]
+        ]
         post_ac = AxialComponent(post_backbone, post_cs_list, smooth_with_post=False)
 
         # Shift post in z direction (to improve alignment with shape)
