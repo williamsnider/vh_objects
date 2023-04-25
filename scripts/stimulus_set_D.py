@@ -1,5 +1,6 @@
 import numpy as np
 from objects.shaft import Shaft
+from objects.shape import Shape
 from scipy.spatial.transform.rotation import Rotation
 from multiprocessing import Pool
 from tqdm import tqdm
@@ -72,7 +73,6 @@ def construct_shapes(inputs):
     if L2_name == None:
         mesh_list = [shaft1.mesh]
         T_list = [np.eye(4)]
-        label = str(count)
         description = "-".join([L1_name])
     else:
         shaft2 = shaft_dict[L2_name].copy()
@@ -118,30 +118,42 @@ def construct_shapes(inputs):
 
         mesh_list = [shaft1.mesh, shaft2.mesh]
         T_list = [np.eye(4), T]
-        label = str(count)
         description = "-".join([L1_name, junc_rotation_name, junc_angle_name, L2_name])
+
+    label = "D" + str(count).zfill(3)
 
     # Transform final shape to align correctly with interface
     T_final = np.eye(4)
 
     if "th0" in L1_name:
-        T_final[:3, :3] = Rotation.from_euler("xyz", np.array([np.pi / 2, 0, 0])).as_matrix()
+        T_final[:3, :3] = Rotation.from_euler(
+            "xyz", np.array([-np.pi / 2, 0, 0])
+        ).as_matrix()
 
     # Rotate shapes with a curved Limb1 (endpoint of L1 will be at midpoint in Z-dimension which is most efficient for storage on shelves)
     elif "th1" in L1_name:
-        T_final[:3, :3] = Rotation.from_euler("xyz", np.array([np.pi / 2, np.pi / 4, 0])).as_matrix()
+        T_final[:3, :3] = Rotation.from_euler(
+            "xyz", np.array([-np.pi / 2, -np.pi / 4, 0])
+        ).as_matrix()
     else:
         raise NotImplementedError
 
+    # Shift up shapes for all limb1s
+    # if "s_th1" == description[:5]:
+    all_z_shift = -2
+    T_final[2, 3] = all_z_shift
+
     # Shift down post for curved limb1s
     if "s_th1" == description[:5]:
-        post_z_shift = -X_WIDTH * 0.7
+        post_z_shift = +X_WIDTH * 0.6 + all_z_shift
     else:
-        post_z_shift = 0
+        post_z_shift = all_z_shift
 
+    boolean_list = ["union" for _ in mesh_list]
     s = Shape(
         mesh_list,
         T_list,
+        boolean_list,
         label,
         description,
         SAVE_DIR,
@@ -244,4 +256,6 @@ for L1_name in [
 if __name__ == "__main__":
 
     with Pool() as pool:
-        mapped_values = list(tqdm(pool.imap_unordered(construct_shapes, combs), total=len(combs)))
+        mapped_values = list(
+            tqdm(pool.imap_unordered(construct_shapes, combs), total=len(combs))
+        )

@@ -25,7 +25,7 @@ POST_OFFSET = 2  # Post and interface
 SAVE_DIR = Path("./sample_shapes/stimulus_set_D/")
 
 # Volumetric and appendage sizes
-APPENDAGE_LENGTH = 20
+APPENDAGE_LENGTH = SEGMENT_LENGTH / 2
 SHEET_THICKNESS = 3
 NUM_CP_PER_BASE_SHEET = 50
 NUM_CS_PER_SHEET = 11
@@ -34,7 +34,7 @@ VOLUMETRIC_RADII = np.array([1.01 * X_WIDTH, 2.01 * X_WIDTH, 1.01 * X_WIDTH])
 POINT_RADII = np.array([1 * X_WIDTH, 0.5 * X_WIDTH, 0.3 * X_WIDTH])
 POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
 assert POINT_ROUNDOVER_OFFSET < POINT_RADII[-1]
-LEAF_RADII = np.array([1 * X_WIDTH, 1.5 * X_WIDTH, 0.25 * X_WIDTH])
+LEAF_RADII = np.array([1 * X_WIDTH, 1.4 * X_WIDTH, 0.25 * X_WIDTH])
 ROUND_RADIUS = 1.25 * X_WIDTH  # radius of sphere and sheet_round
 
 # Modifying appendages to align better
