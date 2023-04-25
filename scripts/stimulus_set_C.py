@@ -42,13 +42,14 @@ from scripts.stimulus_set_params import (
     POST_OFFSET,
     SAVE_DIR,
     XYZ_OFFSET,
+    ROUND_RADIUS,
 )
 
 FAIRING_DISTANCE = 3
 POST_Z_SHIFT = 0
 
-uu = 50
-vv = 50
+uu = 75
+vv = 75
 
 ######################################
 ### Base Components and Appendages ###
@@ -57,9 +58,7 @@ vv = 50
 
 def slice_mesh(mesh, extent, T):
     mesh = mesh.copy()
-    slicer = trimesh.primitives.Box(
-        extents=np.array([extent, extent, extent]), transform=T
-    )
+    slicer = trimesh.primitives.Box(extents=np.array([extent, extent, extent]), transform=T)
     split_mesh, _ = calc_mesh_boolean_and_edges(mesh, slicer, "difference")
 
     return split_mesh
@@ -159,17 +158,7 @@ app_point_concave = app_point_convex.copy()
 app_point_concave = app_point_concave.apply_transform(T)
 
 
-# Slice convex to keep it from going through shape
-extent = 100
-T = np.eye(4)
-T[2, 3] = -extent / 2 - 1 * X_WIDTH
-app_point_convex = slice_mesh(
-    app_point_convex,
-    100,
-    T,
-)
-
-app_round_concave = trimesh.primitives.creation.icosphere(3, radius=1.25 * X_WIDTH)
+app_round_concave = trimesh.primitives.creation.icosphere(3, radius=ROUND_RADIUS)
 app_round_convex = app_round_concave.copy()
 
 
@@ -193,10 +182,8 @@ backbone_x_width = Backbone(b_cp, reparameterize=True)
 # Round sheet
 t = np.linspace(0, 2 * np.pi, NUM_CP_PER_BASE_SHEET, endpoint=False).reshape(-1, 1)
 round_cs_cp = np.hstack([np.zeros(t.shape), np.cos(t), np.sin(t)])
-base_sheet = round_cs_cp * X_WIDTH
-cp = construct_sheet(
-    base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET
-)
+base_sheet = round_cs_cp * ROUND_RADIUS
+cp = construct_sheet(base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
 surf = make_surface(cp)
 sheet_round_K0 = make_mesh(surf, uu, vv)
 
@@ -232,6 +219,7 @@ sheet_leaf_K2.apply_transform(T_K2)
 
 
 # Point sheet
+NUM_POINT_CS = NUM_CS * 2
 
 # Calculate widths
 point_x = np.linspace(0, APPENDAGE_LENGTH, 3)
@@ -239,14 +227,14 @@ point_y = POINT_RADII  # 3 radii determine polynomial form
 point_poly = np.polyfit(point_x, point_y, 2)
 
 # But sample along 4th position to ensure smooth transition into shape
-xvals = np.linspace(-APPENDAGE_LENGTH * 2 / 3, APPENDAGE_LENGTH, NUM_CS)
+xvals = np.linspace(-APPENDAGE_LENGTH * 2 / 3, APPENDAGE_LENGTH, NUM_POINT_CS)
 widths = np.polyval(point_poly, xvals)
 
 # Calculate z_levels
-z_levels = np.linspace(-APPENDAGE_LENGTH * 2 / 3, APPENDAGE_LENGTH, NUM_CS)
+z_levels = np.linspace(-APPENDAGE_LENGTH * 2 / 3, APPENDAGE_LENGTH, NUM_POINT_CS)
 
 # Assign controlpoints
-cp = np.zeros((NUM_CS, 8, 3))
+cp = np.zeros((NUM_POINT_CS, 8, 3))
 for i, width in enumerate(widths):
 
     if width == 0:
@@ -295,13 +283,29 @@ sheet_point_K0 = make_mesh(surf, uu, vv)
 
 bent_cp = bend_sheet(sheet_point_cp, b_appendage_K1, point_x[2] - point_x[0])
 surf = make_surface(bent_cp)
-sheet_point_K1 = make_mesh(
-    surf, uu, vv
-)  # TODO: Has artifact, fix after deciding on thickness/size
-# sheet_point_bent.show(smooth=False)
+sheet_point_K1 = make_mesh(surf, uu, vv)  # TODO: Has artifact, fix after deciding on thickness/size
 sheet_point_K2 = sheet_point_K1.copy()
 sheet_point_K2.apply_transform(T_K2)
 
+# Slice certain meshes to keep it from going through shape
+extent = 100
+T = np.eye(4)
+T[2, 3] = -extent / 2 - 1 * X_WIDTH
+app_point_convex = slice_mesh(
+    app_point_convex,
+    100,
+    T,
+)
+
+sheet_point_K0 = slice_mesh(sheet_point_K0, extent, T)
+sheet_point_K1 = slice_mesh(sheet_point_K1, extent, T)
+sheet_point_K2 = slice_mesh(sheet_point_K2, extent, T)
+sheet_leaf_K0 = slice_mesh(sheet_leaf_K0, extent, T)
+sheet_leaf_K1 = slice_mesh(sheet_leaf_K1, extent, T)
+sheet_leaf_K2 = slice_mesh(sheet_leaf_K2, extent, T)
+sheet_round_K0 = slice_mesh(sheet_round_K0, extent, T)
+sheet_round_K1 = slice_mesh(sheet_round_K1, extent, T)
+sheet_round_K2 = slice_mesh(sheet_round_K2, extent, T)
 
 mesh_dict = {
     "thin": thin.mesh,
@@ -376,72 +380,36 @@ vec_to_J2 = np.array([0, np.sin(x_th), np.cos(x_th)])
 vec_to_J2_orth = np.cross(vec_to_J2, vec_axial_component)
 
 J1_pos = volumetric.backbone.r(0.5)
-J2_pos = np.array([SEGMENT_LENGTH - X_WIDTH, 0, 0])
-CO_xyz = np.array([SEGMENT_LENGTH, 0, 0])
+J2_pos = np.array([SEGMENT_LENGTH - X_WIDTH - 1, 0, 0])
+CO_xyz = np.array([SEGMENT_LENGTH - X_WIDTH / 2, 0, 0])
 
 # Volumetric
-J1_volu_xyz_U = (
-    find_line_mesh_intersection(volumetric.mesh, vec_to_J1, J1_pos)
-    + XYZ_OFFSET * vec_to_J1
-)
-J1_volu_xyz_D = (
-    find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, J1_pos)
-    + -XYZ_OFFSET * vec_to_J1
-)
-J2_volu_xyz_U = (
-    find_line_mesh_intersection(volumetric.mesh, vec_to_J2, J2_pos)
-    + XYZ_OFFSET * vec_to_J2
-)
-J2_volu_xyz_D = (
-    find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, J2_pos)
-    + -XYZ_OFFSET * vec_to_J2
-)
+J1_volu_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J1, J1_pos) + XYZ_OFFSET * vec_to_J1
+J1_volu_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, J1_pos) + -XYZ_OFFSET * vec_to_J1
+J2_volu_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J2, J2_pos) + XYZ_OFFSET * vec_to_J2
+J2_volu_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, J2_pos) + -XYZ_OFFSET * vec_to_J2
 
 # Thin
-J1_thin_xyz_U = (
-    find_line_mesh_intersection(thin.mesh, vec_to_J1, J1_pos) + XYZ_OFFSET * vec_to_J1
-)
-J1_thin_xyz_D = (
-    find_line_mesh_intersection(thin.mesh, -vec_to_J1, J1_pos) + -XYZ_OFFSET * vec_to_J1
-)
-J2_thin_xyz_U = (
-    find_line_mesh_intersection(thin.mesh, vec_to_J2, J2_pos) + XYZ_OFFSET * vec_to_J2
-)
-J2_thin_xyz_D = (
-    find_line_mesh_intersection(thin.mesh, -vec_to_J2, J2_pos) + -XYZ_OFFSET * vec_to_J2
-)
+J1_thin_xyz_U = find_line_mesh_intersection(thin.mesh, vec_to_J1, J1_pos) + XYZ_OFFSET * vec_to_J1
+J1_thin_xyz_D = find_line_mesh_intersection(thin.mesh, -vec_to_J1, J1_pos) + -XYZ_OFFSET * vec_to_J1
+J2_thin_xyz_U = find_line_mesh_intersection(thin.mesh, vec_to_J2, J2_pos) + XYZ_OFFSET * vec_to_J2
+J2_thin_xyz_D = find_line_mesh_intersection(thin.mesh, -vec_to_J2, J2_pos) + -XYZ_OFFSET * vec_to_J2
 
 R_F_U = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, y_th, -x_th])).as_matrix()
 R_L_U = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, y_th, -x_th])).as_matrix()
 R_B_U = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, y_th, -x_th])).as_matrix()
 R_R_U = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, y_th, -x_th])).as_matrix()
 
-R_F_D = Rotation.from_euler(
-    "zyx", np.array([0 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
-R_L_D = Rotation.from_euler(
-    "zyx", np.array([3 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
-R_B_D = Rotation.from_euler(
-    "zyx", np.array([2 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
-R_R_D = Rotation.from_euler(
-    "zyx", np.array([1 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
+R_F_D = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_L_D = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_B_D = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_R_D = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
 
 # Collinear rotations
-R_U = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 0 * np.pi / 2])
-).as_matrix()
-R_L = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 3 * np.pi / 2])
-).as_matrix()
-R_D = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 2 * np.pi / 2])
-).as_matrix()
-R_R = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])
-).as_matrix()
+R_U = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 0 * np.pi / 2])).as_matrix()
+R_L = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 3 * np.pi / 2])).as_matrix()
+R_D = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 2 * np.pi / 2])).as_matrix()
+R_R = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])).as_matrix()
 
 
 def calc_T(R, xyz):
@@ -544,14 +512,14 @@ T_dict = {
 ### Combinations of Shapes (Volumetric/Thin + Appendages) ###
 #############################################################
 combs = []
-count = 200
+count = 0
 
 
 def build_shape(inputs):
     mesh_list = [mesh_dict[n] for n in inputs[0]]
     T_list = [T_dict[n] for n in inputs[1]]
     boolean_list = inputs[2]
-    label = str(inputs[3])
+    label = "D" + str(inputs[3].zfill(3))
 
     description = inputs[4]
     save_dir = inputs[5]
@@ -577,78 +545,81 @@ def build_shape(inputs):
 ### Case: Thin Backbone ###
 ###########################
 
-# # J1 and J2 and Collinear
-# for J_app in ["app1", "app2", "app3", "app4"]:
-#     for CO_app in ["app1", "app2", "app3", "app4"]:
+# J1 and J2 and Collinear
+for J_app in ["app1", "app2", "app3", "app4"]:
+    for CO_app in ["app1", "app2", "app3", "app4"]:
 
-#         # Iterate through J1 only, J2 only, J1+CO, J2+CO, J1+J2+CO
-#         for J1_J2_CO in [
-#             [True, False, False],
-#             [False, True, False],
-#             [True, True, False],
-#             [True, False, True],
-#             [False, True, True],
-#             [True, True, True],
-#         ]:
+        # Iterate through J1 only, J2 only, J1+CO, J2+CO, J1+J2+CO
+        for J1_J2_CO in [
+            [True, False, False],
+            [False, True, False],
+            [True, True, False],
+            [True, False, True],
+            [False, True, True],
+            [True, True, True],
+        ]:
 
-#             withJ1, withJ2, withCO = J1_J2_CO
+            withJ1, withJ2, withCO = J1_J2_CO
 
-#             for hox in [False, True]:
+            for hox in [False, True]:
 
-#                 # Transformation matrices
-#                 T_J1 = "T_thin_J1_F_U"
-#                 T_J2 = "T_thin_J2_F_U"
-#                 T_CO = "T_CO_U"
-#                 T_J1_hox = T_J1[:-1] + "D"
-#                 T_J2_hox = T_J2[:-1] + "D"
+                # Transformation matrices
+                T_J1 = "T_thin_J1_F_U"
+                T_J2 = "T_thin_J2_F_U"
+                T_CO = "T_CO_U"
+                T_J1_hox = T_J1[:-1] + "D"
+                T_J2_hox = T_J2[:-1] + "D"
 
-#                 # Construct mesh and T_list
-#                 mesh_list = ["thin"]
-#                 T_list = ["T_eye"]
+                # Construct mesh and T_list
+                mesh_list = ["thin"]
+                T_list = ["T_eye"]
 
-#                 # Add CO
-#                 if withCO == True:
-#                     mesh_list.append(CO_app)
-#                     T_list.append(T_CO)
+                # Add CO
+                if withCO == True:
+                    mesh_list.append(CO_app)
+                    T_list.append(T_CO)
 
-#                 # Add J1
-#                 if withJ1 == True:
-#                     mesh_list.append(J_app)
-#                     T_list.append(T_J1)
+                # Add J1
+                if withJ1 == True:
+                    mesh_list.append(J_app)
+                    T_list.append(T_J1)
 
-#                     if hox == True:
-#                         mesh_list.append(J_app)
-#                         T_list.append(T_J1_hox)
+                    if hox == True:
+                        mesh_list.append(J_app)
+                        T_list.append(T_J1_hox)
 
-#                 # Add J2
-#                 if withJ2 == True:
-#                     mesh_list.append(J_app)
-#                     T_list.append(T_J2)
+                # Add J2
+                if withJ2 == True:
+                    mesh_list.append(J_app)
+                    T_list.append(T_J2)
 
-#                     if hox == True:
-#                         mesh_list.append(J_app)
-#                         T_list.append(T_J2_hox)
+                    if hox == True:
+                        mesh_list.append(J_app)
+                        T_list.append(T_J2_hox)
 
-#                 # Prevent duplicates for shapes by not looping for CO if not present
-#                 if withCO == False and CO_app != "app1":
-#                     continue
+                # Prevent duplicates for shapes by not looping for CO if not present
+                if withCO == False and CO_app != "app1":
+                    continue
 
-#                 # Assign combination of inputs
-#                 comb = [
-#                     mesh_list,
-#                     T_list,
-#                     str(count),
-#                     "",
-#                     SAVE_DIR,
-#                     "T_eye",
-#                     FAIRING_DISTANCE,
-#                     POST_Z_SHIFT,
-#                 ]
+                boolean_list = ["union" for _ in mesh_list]
 
-#                 # Do not add duplicates
-#                 if comb not in combs:
-#                     combs.append(comb)
-#                     count += 1
+                # Assign combination of inputs
+                comb = [
+                    mesh_list,
+                    T_list,
+                    boolean_list,
+                    str(count),
+                    "",
+                    SAVE_DIR,
+                    "T_eye",
+                    FAIRING_DISTANCE,
+                    POST_Z_SHIFT,
+                ]
+
+                # Do not add duplicates
+                if comb not in combs:
+                    combs.append(comb)
+                    count += 1
 
 #################################
 ### Case: Volumetric Backbone ###
@@ -760,6 +731,227 @@ for J_app in [
                     combs.append(comb)
                     count += 1
 
+#########################################
+### Case: Sheets with Collinear (K=0) ###
+#########################################
+
+# J1 and J2 and Collinear
+for J_app in [
+    "sheet_round_K0",
+    "sheet_round_K1",
+    "sheet_round_K2",
+    "sheet_point_K0",
+    "sheet_point_K1",
+    "sheet_point_K2",
+    "sheet_leaf_K0",
+    "sheet_leaf_K1",
+    "sheet_leaf_K2",
+]:
+    for CO_app in ["sheet_round_K0", "sheet_point_K0", "sheet_leaf_K0"]:
+
+        for J_ori in ["L_U", "F_U"]:
+
+            for CO_ori in ["L", "U"]:
+
+                # Iterate through J1 only, J2 only, J1+CO, J2+CO, J1+J2+CO
+                for J1_J2_CO in [
+                    [True, False, False],
+                    [False, True, False],
+                    [True, True, False],
+                    [True, False, True],
+                    [False, True, True],
+                    [True, True, True],
+                ]:
+
+                    withJ1, withJ2, withCO = J1_J2_CO
+
+                    # Constraint: thin side of sheet must be parallel to medial axis of base shape for J2
+                    if withJ2 == True and J_ori == "F_U":
+                        continue
+
+                    # Constraint: J1/J2 + Collinear has 1 curvature profile
+                    if (withJ2 == True or withJ1 == True) and withCO == True and any(["_K1" in J_app, "_K2" in J_app]):
+                        continue
+
+                    for hox in [False, True]:
+
+                        # Transformation matrices
+                        T_J1 = "T_volu_J1_" + J_ori
+                        T_J2 = "T_volu_J2_" + J_ori
+                        T_CO = "T_CO_" + CO_ori
+                        T_J1_hox = T_J1[:-1] + "D"
+                        T_J2_hox = T_J2[:-1] + "D"
+
+                        # Construct mesh and T_list
+                        mesh_list = ["volumetric"]
+                        T_list = ["T_eye"]
+                        boolean_list = [None]
+
+                        # Add CO
+                        if withCO == True:
+                            mesh_list.append(CO_app)
+                            T_list.append(T_CO)
+                            boolean_list.append("union")
+
+                        # Add J1
+                        if withJ1 == True:
+                            mesh_list.append(J_app)
+                            T_list.append(T_J1)
+
+                            if "concave" in J_app:
+                                boolean_list.append("difference")
+                            else:
+                                boolean_list.append("union")
+
+                            if hox == True:
+                                mesh_list.append(J_app)
+                                T_list.append(T_J1_hox)
+
+                                if "concave" in J_app:
+                                    boolean_list.append("difference")
+                                else:
+                                    boolean_list.append("union")
+
+                        # Add J2
+                        if withJ2 == True:
+                            mesh_list.append(J_app)
+                            T_list.append(T_J2)
+                            boolean_list.append("union")
+
+                            if hox == True:
+                                mesh_list.append(J_app)
+                                T_list.append(T_J2_hox)
+                                boolean_list.append("union")
+
+                        # Prevent duplicates for shapes by not looping for CO if not present
+                        if withCO == False and (CO_app != "sheet_round_K0" or CO_ori != "L"):
+                            continue
+
+                        # Assign combination of inputs
+                        comb = [
+                            mesh_list,
+                            T_list,
+                            boolean_list,
+                            str(count),
+                            "",
+                            SAVE_DIR,
+                            "T_eye",
+                            FAIRING_DISTANCE,
+                            POST_Z_SHIFT,
+                        ]
+
+                        combs.append(comb)
+                        count += 1
+
+
+##########################################
+### Case: Sheets with Collinear (K!=0) ###
+##########################################
+
+# J1 and J2 and Collinear
+for J_app in [
+    "sheet_round_K1",
+    "sheet_point_K1",
+    "sheet_leaf_K1",
+]:
+    for CO_app in ["sheet_round_K1", "sheet_point_K1", "sheet_leaf_K1"]:
+
+        for J_ori in ["F_U", "L_U"]:
+
+            for CO_ori in ["U", "L", "D"]:
+
+                # Iterate through J1+CO, J2+CO, J1+J2+CO
+                for J1_J2_CO in [
+                    [True, False, True],
+                    [False, True, True],
+                    [True, True, True],
+                ]:
+
+                    withJ1, withJ2, withCO = J1_J2_CO
+
+                    # Constraint: thin side of sheet must be parallel to medial axis of base shape for J2
+                    if withJ2 == True and J_ori == "F_U":
+                        continue
+
+                    # # Constraint: J1/J2 + Collinear has 1 curvature profile
+                    # if (withJ2 == True or withJ1 == True) and (withCO == True):
+                    #     continue
+
+                    for hox in [False, True]:
+
+                        # Transformation matrices
+                        T_J1 = "T_volu_J1_" + J_ori
+                        T_J2 = "T_volu_J2_" + J_ori
+                        T_CO = "T_CO_" + CO_ori
+                        T_J1_hox = T_J1[:-1] + "D"
+                        T_J2_hox = T_J2[:-1] + "D"
+
+                        # Construct mesh and T_list
+                        mesh_list = ["volumetric"]
+                        T_list = ["T_eye"]
+                        boolean_list = [None]
+
+                        # Add CO
+                        if withCO == True:
+                            mesh_list.append(CO_app)
+                            T_list.append(T_CO)
+                            boolean_list.append("union")
+
+                        # Add J1
+                        if withJ1 == True:
+                            mesh_list.append(J_app)
+                            T_list.append(T_J1)
+
+                            if "concave" in J_app:
+                                boolean_list.append("difference")
+                            else:
+                                boolean_list.append("union")
+
+                            if hox == True:
+                                mesh_list.append(J_app)
+                                T_list.append(T_J1_hox)
+
+                                if "concave" in J_app:
+                                    boolean_list.append("difference")
+                                else:
+                                    boolean_list.append("union")
+
+                        # Add J2
+                        if withJ2 == True:
+                            mesh_list.append(J_app)
+                            T_list.append(T_J2)
+                            boolean_list.append("union")
+
+                            if hox == True:
+                                mesh_list.append(J_app)
+                                T_list.append(T_J2_hox)
+                                boolean_list.append("union")
+
+                        # # Prevent duplicates for shapes by not looping for CO if not present
+                        # if withCO == False and (CO_app != "sheet_round_K0" or CO_ori != "L"):
+                        #     continue
+
+                        # Skip symmetric shape
+                        if hox == True and CO_ori == "D":
+                            continue
+
+                        # Assign combination of inputs
+                        comb = [
+                            mesh_list,
+                            T_list,
+                            boolean_list,
+                            str(count),
+                            "",
+                            SAVE_DIR,
+                            "T_eye",
+                            FAIRING_DISTANCE,
+                            POST_Z_SHIFT,
+                        ]
+
+                        combs.append(comb)
+                        count += 1
+
+
 # # J1
 # for appendage_type in ["sheet_round", "sheet_leaf", "sheet_point"]:
 #     for curvature_profile in ["K0", "K1", "K2"]:
@@ -795,15 +987,13 @@ for J_app in [
 ########################
 
 
-# for comb in combs:
+# for comb in combs[354:355]:
 #     build_shape(comb)
 
 if __name__ == "__main__":
 
     with Pool() as pool:
-        mapped_values = list(
-            tqdm(pool.imap_unordered(build_shape, combs), total=len(combs))
-        )
+        mapped_values = list(tqdm(pool.imap_unordered(build_shape, combs), total=len(combs)))
 
 
 # def build_shape(inputs):
@@ -1023,9 +1213,7 @@ volumetric_x = np.array([0, 0.5, 1]) * SEGMENT_LENGTH * 2
 volumetric_y = VOLUMETRIC_RADII
 volumetric_poly = np.polyfit(volumetric_x, volumetric_y, 2)
 volumetric_scale = np.polyval(volumetric_poly, pos_seg2)
-volumetric_cs = [
-    CrossSection(volumetric_scale[i] * round_cp, pos[i]) for i in range(NUM_CS)
-]
+volumetric_cs = [CrossSection(volumetric_scale[i] * round_cp, pos[i]) for i in range(NUM_CS)]
 
 # Construct axial component
 volumetric = AxialComponent(
@@ -1068,9 +1256,7 @@ backbone_x_width = Backbone(b_cp, reparameterize=True)
 t = np.linspace(0, 2 * np.pi, NUM_CP_PER_BASE_SHEET, endpoint=False).reshape(-1, 1)
 round_cs_cp = np.hstack([np.zeros(t.shape), np.cos(t), np.sin(t)])
 base_sheet = round_cs_cp * X_WIDTH
-cp = construct_sheet(
-    base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET
-)
+cp = construct_sheet(base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
 surf = make_surface(cp)
 sheet_round_K0 = make_mesh(surf, uu, vv)
 
@@ -1169,9 +1355,7 @@ sheet_point_K0 = make_mesh(surf, uu, vv)
 
 bent_cp = bend_sheet(sheet_point_cp, b_appendage_K1, point_x[2] - point_x[0])
 surf = make_surface(bent_cp)
-sheet_point_K1 = make_mesh(
-    surf, uu, vv
-)  # TODO: Has artifact, fix after deciding on thickness/size
+sheet_point_K1 = make_mesh(surf, uu, vv)  # TODO: Has artifact, fix after deciding on thickness/size
 # sheet_point_bent.show(smooth=False)
 sheet_point_K2 = sheet_point_K1.copy()
 sheet_point_K2.apply_transform(T_K2)
@@ -1206,15 +1390,12 @@ def transform_ac(ac, T, offset):
         T_shift_to_origin[0, 3] = -ac.mesh.bounds[0, 0] - offset
         ac.mesh = ac.mesh.apply_transform(T_shift_to_origin)
         ac.controlpoints = (
-            np.dstack([ac.controlpoints, np.ones([*ac.controlpoints.shape[:-1], 1])])
-            @ T_shift_to_origin.T
+            np.dstack([ac.controlpoints, np.ones([*ac.controlpoints.shape[:-1], 1])]) @ T_shift_to_origin.T
         )[:, :, :3]
 
     # Rotate about y-axis
     ac.mesh = ac.mesh.apply_transform(T)
-    ac.controlpoints = (
-        np.dstack([ac.controlpoints, np.ones([*ac.controlpoints.shape[:-1], 1])]) @ T.T
-    )[:, :, :3]
+    ac.controlpoints = (np.dstack([ac.controlpoints, np.ones([*ac.controlpoints.shape[:-1], 1])]) @ T.T)[:, :, :3]
     return ac
 
 
@@ -1225,10 +1406,7 @@ pos_app = np.linspace(0, APPENDAGE_LENGTH, NUM_CS)
 
 # Point
 scale = np.polyval(point_poly, pos_app)
-cs_list = [
-    CrossSection(controlpoints=round_cp * scale[i], position=pos[i])
-    for i in range(NUM_CS)
-]
+cs_list = [CrossSection(controlpoints=round_cp * scale[i], position=pos[i]) for i in range(NUM_CS)]
 ac_point = AxialComponent(
     b_appendage_K0,
     cs_list,
@@ -1243,10 +1421,7 @@ ac_point = transform_ac(ac_point, T_ac, 0.0)
 
 # Leaf
 scale = np.polyval(leaf_poly, pos_app)
-cs_list = [
-    CrossSection(controlpoints=round_cp * scale[i], position=pos[i])
-    for i in range(NUM_CS)
-]
+cs_list = [CrossSection(controlpoints=round_cp * scale[i], position=pos[i]) for i in range(NUM_CS)]
 ac_leaf = AxialComponent(
     b_appendage_K0,
     cs_list,
@@ -1497,25 +1672,11 @@ vec_to_J2_orth = np.cross(vec_to_J2, vec_axial_component)
 
 J1_pos = 0.5
 J2_pos = 0.95
-J1_xyz_U = (
-    find_line_mesh_intersection(volumetric.mesh, vec_to_J1, volumetric.r(J1_pos))
-    + APP_OFFSET * vec_to_J1
-)
-J1_xyz_D = (
-    find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, volumetric.r(J1_pos))
-    + -APP_OFFSET * vec_to_J1
-)
-J2_xyz_U = (
-    find_line_mesh_intersection(volumetric.mesh, vec_to_J2, volumetric.r(J2_pos))
-    + APP_OFFSET * vec_to_J2
-)
-J2_xyz_D = (
-    find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, volumetric.r(J2_pos))
-    + -APP_OFFSET * vec_to_J2
-)
-CO_xyz = find_line_mesh_intersection(
-    volumetric.mesh, vec_axial_component, volumetric.r(J2_pos)
-)
+J1_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J1, volumetric.r(J1_pos)) + APP_OFFSET * vec_to_J1
+J1_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, volumetric.r(J1_pos)) + -APP_OFFSET * vec_to_J1
+J2_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J2, volumetric.r(J2_pos)) + APP_OFFSET * vec_to_J2
+J2_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, volumetric.r(J2_pos)) + -APP_OFFSET * vec_to_J2
+CO_xyz = find_line_mesh_intersection(volumetric.mesh, vec_axial_component, volumetric.r(J2_pos))
 # CO_xyz = (
 #     find_line_mesh_intersection(volumetric.mesh, vec_axial_component, volumetric.r(1.0))
 #     + APP_OFFSET * vec_axial_component
@@ -1526,32 +1687,16 @@ R_L_U = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, y_th, -x_th])).as_ma
 R_B_U = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, y_th, -x_th])).as_matrix()
 R_R_U = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, y_th, -x_th])).as_matrix()
 
-R_F_D = Rotation.from_euler(
-    "zyx", np.array([0 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
-R_L_D = Rotation.from_euler(
-    "zyx", np.array([3 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
-R_B_D = Rotation.from_euler(
-    "zyx", np.array([2 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
-R_R_D = Rotation.from_euler(
-    "zyx", np.array([1 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
+R_F_D = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_L_D = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_B_D = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_R_D = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
 
 # Collinear rotations
-R_U = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 0 * np.pi / 2])
-).as_matrix()
-R_L = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 3 * np.pi / 2])
-).as_matrix()
-R_D = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 2 * np.pi / 2])
-).as_matrix()
-R_R = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])
-).as_matrix()
+R_U = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 0 * np.pi / 2])).as_matrix()
+R_L = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 3 * np.pi / 2])).as_matrix()
+R_D = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 2 * np.pi / 2])).as_matrix()
+R_R = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])).as_matrix()
 
 
 def calc_T(R, xyz):
@@ -1870,18 +2015,14 @@ T_dict = {
 
 post_backbone_cp = np.hstack(
     [
-        np.linspace(
-            POST_OFFSET, INTERFACE_SHIFT - POST_OFFSET, NUM_CP_PER_BACKBONE
-        ).reshape(-1, 1),
+        np.linspace(POST_OFFSET, INTERFACE_SHIFT - POST_OFFSET, NUM_CP_PER_BACKBONE).reshape(-1, 1),
         np.zeros((NUM_CP_PER_BACKBONE, 1)),
         np.zeros((NUM_CP_PER_BACKBONE, 1)),
     ]
 )
 post_backbone = Backbone(post_backbone_cp, reparameterize=True)
 post_radius = 5
-post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(
-    -1, 1
-)
+post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
 post_cp = np.hstack((POST_RADIUS * np.cos(post_th), POST_RADIUS * np.sin(post_th)))
 post_cs_list = [
     CrossSection(controlpoints=post_cp, position=0.0),
@@ -1897,9 +2038,7 @@ post_ac = AxialComponent(post_backbone, post_cs_list, smooth_with_post=False)
 
 def slice_mesh(mesh, extent, T):
     mesh = mesh.copy()
-    slicer = trimesh.primitives.Box(
-        extents=np.array([extent, extent, extent]), transform=T
-    )
+    slicer = trimesh.primitives.Box(extents=np.array([extent, extent, extent]), transform=T)
     split_mesh, _ = calc_mesh_boolean_and_edges(mesh, slicer, "difference")
 
     return split_mesh

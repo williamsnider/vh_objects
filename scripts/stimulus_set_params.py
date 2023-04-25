@@ -35,6 +35,7 @@ POINT_RADII = np.array([1 * X_WIDTH, 0.5 * X_WIDTH, 0.3 * X_WIDTH])
 POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
 assert POINT_ROUNDOVER_OFFSET < POINT_RADII[-1]
 LEAF_RADII = np.array([1 * X_WIDTH, 1.5 * X_WIDTH, 0.25 * X_WIDTH])
+ROUND_RADIUS = 1.25 * X_WIDTH  # radius of sphere and sheet_round
 
 # Modifying appendages to align better
 SLICER_DEPTH = -1.0 * X_WIDTH
