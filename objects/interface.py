@@ -258,10 +258,10 @@ def load_interface(stl_path, label=None):
             *back_label,
         ]
 
-        scene = trimesh.Scene()
-        scene.add_geometry(all_labels)
-        scene.add_geometry(interface)
-        scene.show()
+        # scene = trimesh.Scene()
+        # scene.add_geometry(all_labels)
+        # scene.add_geometry(interface)
+        # scene.show()
 
         interface_with_label = interface.copy()
         for mesh2 in all_labels:
