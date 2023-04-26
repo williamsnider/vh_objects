@@ -10,13 +10,12 @@ from scipy.spatial.transform import Rotation
 from objects.parameters import (
     FONT_PATH,
     INTERFACE_WIDTH,
-    FONT_OFFSET_WIDTH,
-    FONT_OFFSET_HEIGHT,
     LABEL_DEPTH,
     INTERFACE_DEPTH_FROM_ORIGIN,
     INTERFACE_HEIGHT_ABOVE_ORIGIN,
     INTERFACE_PATH,
     INTERFACE_SHIFT,
+    FONT_HEIGHT_IN_MM,
 )
 
 ########################
@@ -25,10 +24,13 @@ from objects.parameters import (
 
 
 def get_character_outline(char, shift=(0, 0)):
+
+    char_size_pts = int(FONT_HEIGHT_IN_MM * 1000 * 3 // 2)
+
     assert len(char) == 1
     face = Face(str(FONT_PATH))
     face.set_char_size(
-        24 * 64
+        char_size_pts
     )  # If changing, must also change HEIGHT and WIDTH in calc_offsets
     face.load_char(char)
     slot = face.glyph
@@ -48,12 +50,12 @@ def get_character_outline(char, shift=(0, 0)):
         )  # Add first element to end to complete loop
         contour_points = contour_points.astype("float")
 
-        # Scale points to fit onto interface. Interface is 25.4mm in width. We partition that as if we have 6 characters per line (max is 5 in reality).
-        NUM_CHARS_PER_LINE_WITH_ADDITIONAL = 5
-        scale = INTERFACE_WIDTH / (
-            FONT_OFFSET_WIDTH * NUM_CHARS_PER_LINE_WITH_ADDITIONAL
-        )
-        contour_points *= scale
+        # # Scale points to fit onto interface. Interface is 25.4mm in width. We partition that as if we have 6 characters per line (max is 5 in reality).
+        # NUM_CHARS_PER_LINE_WITH_ADDITIONAL = 4
+        # scale = INTERFACE_WIDTH / (
+        #     FONT_OFFSET_WIDTH * NUM_CHARS_PER_LINE_WITH_ADDITIONAL
+        # )
+        # contour_points *= scale
 
         start = end
 
@@ -61,13 +63,28 @@ def get_character_outline(char, shift=(0, 0)):
         if contour_points.shape[0] >= 4:
             contours_list.append(contour_points)
 
-    return contours_list
+    # Scale from pts to mm
+    scaled_list = []
+    for c in contours_list:
+        scaled_list.append(c / 1000)
+    # import matplotlib.pyplot as plt
+
+    # ax = plt.figure().add_subplot()
+    # for c in scaled_list:
+    #     ax.plot(c[:, 0], c[:, 1], "k-*")
+    # ax.set_aspect("equal")
+    # plt.show()
+
+    return scaled_list
 
 
 def calc_offsets(text):
 
     lines = text.split("_")
     num_lines = len(lines)
+
+    FONT_OFFSET_HEIGHT = int(FONT_HEIGHT_IN_MM * 1000)
+    FONT_OFFSET_WIDTH = int(FONT_HEIGHT_IN_MM * 1000 * 9 // 10)
 
     # Calculate height offsets based on number of lines
     height_offsets = np.arange(FONT_OFFSET_HEIGHT * num_lines, 0, -FONT_OFFSET_HEIGHT)
@@ -151,14 +168,29 @@ def load_interface(stl_path, label=None):
 
         # # Top label
         T = np.eye(4)
+        T[:3, :3] = Rotation.from_euler("zyx", np.array([-np.pi / 2, 0, 0])).as_matrix()
         T[:3, 3] = np.array(
             [
                 0,
-                -1.5 * INTERFACE_DEPTH_FROM_ORIGIN,
+                -1 * INTERFACE_DEPTH_FROM_ORIGIN,
                 22.5 + 25.4 / 2 - LABEL_DEPTH,
             ]
         )
         top_label = [mesh.copy().apply_transform(T) for mesh in label_meshes]
+
+        # # Back label
+        T = np.eye(4)
+        T[:3, :3] = Rotation.from_euler(
+            "zyx", np.array([-np.pi / 2, 0, np.pi / 2])
+        ).as_matrix()
+        T[:3, 3] = np.array(
+            [
+                0,
+                -2 * INTERFACE_DEPTH_FROM_ORIGIN + LABEL_DEPTH,
+                15,
+            ]
+        )
+        back_label = [mesh.copy().apply_transform(T) for mesh in label_meshes]
 
         # Left Label down
         T = np.eye(4)
@@ -223,12 +255,13 @@ def load_interface(stl_path, label=None):
             *right_label_down,
             *right_label_up,
             *top_label,
+            *back_label,
         ]
 
-        # scene = trimesh.Scene()
-        # scene.add_geometry(all_labels)
-        # scene.add_geometry(interface)
-        # scene.show()
+        scene = trimesh.Scene()
+        scene.add_geometry(all_labels)
+        scene.add_geometry(interface)
+        scene.show()
 
         interface_with_label = interface.copy()
         for mesh2 in all_labels:
@@ -248,6 +281,6 @@ def load_interface(stl_path, label=None):
 
 
 if __name__ == "__main__":
-    label = "0001"  # Splits lines based on underscores
+    label = "1001"  # Splits lines based on underscores
     interface = load_interface(INTERFACE_PATH, label)
     interface.show()
