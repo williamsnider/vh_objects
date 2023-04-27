@@ -22,7 +22,7 @@ POST_RADIUS = X_WIDTH * 0.99
 POST_OFFSET = 2  # Post and interface
 
 # Saving png and stl
-SAVE_DIR = Path("./sample_shapes/stimulus_set_D/")
+SAVE_DIR = Path("./sample_shapes/stimulus_set_AB/")
 
 # Volumetric and appendage sizes
 APPENDAGE_LENGTH = SEGMENT_LENGTH / 2

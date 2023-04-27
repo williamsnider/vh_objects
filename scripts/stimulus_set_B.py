@@ -558,7 +558,7 @@ count = 0
 
 
 def build_shape(inputs):
-    mesh_list = [mesh_dict[n] for n in inputs[0]]
+    mesh_list = [mesh_dict[n].copy() for n in inputs[0]]
     T_list = [T_dict[n] for n in inputs[1]]
     boolean_list = inputs[2]
     label = "B" + str(inputs[3].zfill(3))
