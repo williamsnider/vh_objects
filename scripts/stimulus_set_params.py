@@ -3,9 +3,9 @@ from pathlib import Path
 
 ### Parameters ###
 NUM_CP_PER_BACKBONE = 5
-SEGMENT_LENGTH = 40
+SEGMENT_LENGTH = 30
 NUM_CS = 11
-X_WIDTH = 4.25  # base radius off which other features are derived.
+X_WIDTH = 3  # base radius off which other features are derived.
 NUM_CP_PER_CROSS_SECTION = 50
 
 # Limb sizes
@@ -31,7 +31,7 @@ NUM_CP_PER_BASE_SHEET = 50
 NUM_CS_PER_SHEET = 11
 NUM_CP_PER_CROSS_SECTION = 50
 VOLUMETRIC_RADII = np.array([1.01 * X_WIDTH, 2.01 * X_WIDTH, 1.01 * X_WIDTH])
-POINT_RADII = np.array([1 * X_WIDTH, 0.5 * X_WIDTH, 0.3 * X_WIDTH])
+POINT_RADII = np.array([1 * X_WIDTH, 0.5 * X_WIDTH, 0.5 * X_WIDTH])
 POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
 assert POINT_ROUNDOVER_OFFSET < POINT_RADII[-1]
 LEAF_RADII = np.array([1 * X_WIDTH, 1.4 * X_WIDTH, 0.25 * X_WIDTH])
@@ -39,4 +39,8 @@ ROUND_RADIUS = 1.25 * X_WIDTH  # radius of sphere and sheet_round
 
 # Modifying appendages to align better
 SLICER_DEPTH = -1.0 * X_WIDTH
-XYZ_OFFSET = 0.25  # Distance from volumetric/cylinder surface for origin of appendage (helps with boolean union)
+XYZ_OFFSET = 0.0  # Distance from volumetric/cylinder surface for origin of appendage (helps with boolean union)
+
+# Use a box at the end of shapes to fair (remove bump)
+BOX_EXTENTS = 3 * np.array([X_WIDTH, X_WIDTH, X_WIDTH])
+BOX_TRANSLATION = np.array([SEGMENT_LENGTH + 3 * X_WIDTH / 4, 0, 0])

@@ -15,6 +15,7 @@ from objects.utilities import (
     angle_between,
     fuse_meshes,
     calc_mesh_boolean_and_edges,
+    angle_between,
 )
 from objects.parameters import INTERFACE_PATH, INTERFACE_SHIFT
 from objects.interface import load_interface
@@ -25,7 +26,6 @@ from scipy.spatial.transform.rotation import Rotation
 from pathlib import Path
 from objects.shaft import Shaft
 from scripts.stimulus_set_params import (
-    NUM_CP_PER_BACKBONE,
     NUM_CP_PER_BASE_SHEET,
     NUM_CP_PER_CROSS_SECTION,
     NUM_CS,
@@ -38,14 +38,14 @@ from scripts.stimulus_set_params import (
     POINT_ROUNDOVER_OFFSET,
     LEAF_RADII,
     APPENDAGE_LENGTH,
-    POST_RADIUS,
-    POST_OFFSET,
     SAVE_DIR,
     XYZ_OFFSET,
     ROUND_RADIUS,
+    BOX_EXTENTS,
+    BOX_TRANSLATION,
 )
 
-FAIRING_DISTANCE = 3
+FAIRING_DISTANCE = 2
 POST_Z_SHIFT = 0
 
 uu = 75
@@ -385,40 +385,47 @@ vec_to_J1_orth = np.cross(vec_to_J1, vec_axial_component)
 vec_to_J2 = np.array([0, np.sin(x_th), np.cos(x_th)])
 vec_to_J2_orth = np.cross(vec_to_J2, vec_axial_component)
 
-J1_pos = volumetric.backbone.r(0.5)
-J2_pos = np.array([SEGMENT_LENGTH - X_WIDTH - 1, 0, 0])
+J1_volu_pos = volumetric.backbone.r(0.33)
+J2_volu_pos = volumetric.backbone.r(0.66)
+J1_thin_pos = volumetric.backbone.r(0.5)
+J2_thin_pos = np.array([SEGMENT_LENGTH - X_WIDTH, 0, 0])
+# J2_pos =
 CO_xyz = np.array([SEGMENT_LENGTH - X_WIDTH / 2, 0, 0])
 
 # Volumetric
 J1_volu_xyz_U = (
-    find_line_mesh_intersection(volumetric.mesh, vec_to_J1, J1_pos)
+    find_line_mesh_intersection(volumetric.mesh, vec_to_J1, J1_volu_pos)
     + XYZ_OFFSET * vec_to_J1
 )
 J1_volu_xyz_D = (
-    find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, J1_pos)
+    find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, J1_volu_pos)
     + -XYZ_OFFSET * vec_to_J1
 )
 J2_volu_xyz_U = (
-    find_line_mesh_intersection(volumetric.mesh, vec_to_J2, J2_pos)
+    find_line_mesh_intersection(volumetric.mesh, vec_to_J2, J2_volu_pos)
     + XYZ_OFFSET * vec_to_J2
 )
 J2_volu_xyz_D = (
-    find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, J2_pos)
+    find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, J2_volu_pos)
     + -XYZ_OFFSET * vec_to_J2
 )
 
 # Thin
 J1_thin_xyz_U = (
-    find_line_mesh_intersection(thin.mesh, vec_to_J1, J1_pos) + XYZ_OFFSET * vec_to_J1
+    find_line_mesh_intersection(thin.mesh, vec_to_J1, J1_thin_pos)
+    + XYZ_OFFSET * vec_to_J1
 )
 J1_thin_xyz_D = (
-    find_line_mesh_intersection(thin.mesh, -vec_to_J1, J1_pos) + -XYZ_OFFSET * vec_to_J1
+    find_line_mesh_intersection(thin.mesh, -vec_to_J1, J1_thin_pos)
+    + -XYZ_OFFSET * vec_to_J1
 )
 J2_thin_xyz_U = (
-    find_line_mesh_intersection(thin.mesh, vec_to_J2, J2_pos) + XYZ_OFFSET * vec_to_J2
+    find_line_mesh_intersection(thin.mesh, vec_to_J2, J2_thin_pos)
+    + XYZ_OFFSET * vec_to_J2
 )
 J2_thin_xyz_D = (
-    find_line_mesh_intersection(thin.mesh, -vec_to_J2, J2_pos) + -XYZ_OFFSET * vec_to_J2
+    find_line_mesh_intersection(thin.mesh, -vec_to_J2, J2_thin_pos)
+    + -XYZ_OFFSET * vec_to_J2
 )
 
 R_F_U = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, y_th, -x_th])).as_matrix()
@@ -453,6 +460,16 @@ R_R = Rotation.from_euler(
     "zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])
 ).as_matrix()
 
+# Volumetric rotations to match curvature of surface
+vec1 = np.array([0, 0, 1])
+vec2 = volumetric.mesh.vertex_normals[
+    (volumetric.mesh.vertices == J1_volu_xyz_U).all(axis=1).argmax()
+]
+angle = angle_between(vec1, vec2)
+
+R_F = Rotation.from_euler("xyz", [0, angle, 0]).as_matrix()
+R_R = Rotation.from_euler("xyz", [0, -angle, 0]).as_matrix()
+
 
 def calc_T(R, xyz):
     T = np.eye(4)
@@ -462,24 +479,24 @@ def calc_T(R, xyz):
 
 
 # J1, direction of curvature (forward, left, right, back), up/down
-T_volu_J1_B_U = calc_T(R_B_U, J1_volu_xyz_U)
-T_volu_J1_B_D = calc_T(R_B_D, J1_volu_xyz_D)
-T_volu_J1_L_U = calc_T(R_L_U, J1_volu_xyz_U)
-T_volu_J1_L_D = calc_T(R_L_D, J1_volu_xyz_D)
-T_volu_J1_F_U = calc_T(R_F_U, J1_volu_xyz_U)
-T_volu_J1_F_D = calc_T(R_F_D, J1_volu_xyz_D)
-T_volu_J1_R_U = calc_T(R_R_U, J1_volu_xyz_U)
-T_volu_J1_R_D = calc_T(R_R_D, J1_volu_xyz_D)
+T_volu_J1_B_U = calc_T(R_B_U @ R_R, J1_volu_xyz_U)
+T_volu_J1_B_D = calc_T(R_B_D @ R_R, J1_volu_xyz_D)
+T_volu_J1_L_U = calc_T(R_L_U @ R_R, J1_volu_xyz_U)
+T_volu_J1_L_D = calc_T(R_L_D @ R_R, J1_volu_xyz_D)
+T_volu_J1_F_U = calc_T(R_F_U @ R_R, J1_volu_xyz_U)
+T_volu_J1_F_D = calc_T(R_F_D @ R_R, J1_volu_xyz_D)
+T_volu_J1_R_U = calc_T(R_R_U @ R_R, J1_volu_xyz_U)
+T_volu_J1_R_D = calc_T(R_R_D @ R_R, J1_volu_xyz_D)
 
 # J2
-T_volu_J2_B_U = calc_T(R_B_U, J2_volu_xyz_U)
-T_volu_J2_B_D = calc_T(R_B_D, J2_volu_xyz_D)
-T_volu_J2_L_U = calc_T(R_L_U, J2_volu_xyz_U)
-T_volu_J2_L_D = calc_T(R_L_D, J2_volu_xyz_D)
-T_volu_J2_F_U = calc_T(R_F_U, J2_volu_xyz_U)
-T_volu_J2_F_D = calc_T(R_F_D, J2_volu_xyz_D)
-T_volu_J2_R_U = calc_T(R_R_U, J2_volu_xyz_U)
-T_volu_J2_R_D = calc_T(R_R_D, J2_volu_xyz_D)
+T_volu_J2_B_U = calc_T(R_B_U @ R_F, J2_volu_xyz_U)
+T_volu_J2_B_D = calc_T(R_B_D @ R_F, J2_volu_xyz_D)
+T_volu_J2_L_U = calc_T(R_L_U @ R_F, J2_volu_xyz_U)
+T_volu_J2_L_D = calc_T(R_L_D @ R_F, J2_volu_xyz_D)
+T_volu_J2_F_U = calc_T(R_F_U @ R_F, J2_volu_xyz_U)
+T_volu_J2_F_D = calc_T(R_F_D @ R_F, J2_volu_xyz_D)
+T_volu_J2_R_U = calc_T(R_R_U @ R_F, J2_volu_xyz_U)
+T_volu_J2_R_D = calc_T(R_R_D @ R_F, J2_volu_xyz_D)
 
 # J1, direction of curvature (forward, left, right, back), up/down
 T_thin_J1_B_U = calc_T(R_B_U, J1_thin_xyz_U)
@@ -568,6 +585,7 @@ def build_shape(inputs):
     T_final = T_dict[inputs[6]]
     fairing_distance = inputs[7]
     post_z_shift = inputs[8]
+    fair_box = inputs[9]
 
     s = Shape(
         mesh_list,
@@ -579,6 +597,7 @@ def build_shape(inputs):
         T_final,
         fairing_distance,
         post_z_shift,
+        fair_box,
     )
     # s.mesh_with_interface.show()
 
@@ -599,6 +618,7 @@ comb = [
     "T_eye",
     FAIRING_DISTANCE,
     POST_Z_SHIFT,
+    None,
 ]
 combs.append(comb)
 count += 1
@@ -661,6 +681,13 @@ for J_app in ["app1", "app2", "app3", "app4"]:
 
                 boolean_list = ["union" for _ in mesh_list]
 
+                # Add fairing box to remove bumps
+                if withJ2 == True and withCO == False:
+                    box = trimesh.primitives.creation.box(extents=BOX_EXTENTS)
+                    box.apply_translation(BOX_TRANSLATION)
+                else:
+                    box = None
+
                 # Assign combination of inputs
                 comb = [
                     mesh_list,
@@ -672,6 +699,7 @@ for J_app in ["app1", "app2", "app3", "app4"]:
                     "T_eye",
                     FAIRING_DISTANCE,
                     POST_Z_SHIFT,
+                    box,
                 ]
 
                 # Do not add duplicates
@@ -694,6 +722,7 @@ comb = [
     "T_eye",
     FAIRING_DISTANCE,
     POST_Z_SHIFT,
+    None,
 ]
 combs.append(comb)
 count += 1
@@ -786,6 +815,14 @@ for J_app in [
                 if withCO == False and CO_app != "app1":
                     continue
 
+                # # Add fairing box to remove bumps
+                # if withJ2 == True and withCO == False:
+                #     box = trimesh.primitives.creation.box(extents=BOX_EXTENTS)
+                #     box.apply_translation(BOX_TRANSLATION)
+                # else:
+                #     box = None
+                box = None
+
                 # Assign combination of inputs
                 comb = [
                     mesh_list,
@@ -797,6 +834,7 @@ for J_app in [
                     "T_eye",
                     FAIRING_DISTANCE,
                     POST_Z_SHIFT,
+                    box,
                 ]
 
                 # Do not add duplicates
@@ -906,6 +944,14 @@ for J_app in [
                         ):
                             continue
 
+                        # Add fairing box to remove bumps
+                        # if withJ2 == True and withCO == False:
+                        #     box = trimesh.primitives.creation.box(extents=BOX_EXTENTS)
+                        #     box.apply_translation(BOX_TRANSLATION)
+                        # else:
+                        #     box = None
+                        box = None
+
                         # Assign combination of inputs
                         comb = [
                             mesh_list,
@@ -917,6 +963,7 @@ for J_app in [
                             "T_eye",
                             FAIRING_DISTANCE,
                             POST_Z_SHIFT,
+                            box,
                         ]
 
                         combs.append(comb)
@@ -1010,6 +1057,14 @@ for J_app in [
                         # if withCO == False and (CO_app != "sheet_round_K0" or CO_ori != "L"):
                         #     continue
 
+                        # # Add fairing box to remove bumps
+                        # if withJ2 == True and withCO == False:
+                        #     box = trimesh.primitives.creation.box(extents=BOX_EXTENTS)
+                        #     box.apply_translation(BOX_TRANSLATION)
+                        # else:
+                        #     box = None
+                        box = None
+
                         # Skip symmetric shape
                         if hox == True and CO_ori == "D":
                             continue
@@ -1025,6 +1080,7 @@ for J_app in [
                             "T_eye",
                             FAIRING_DISTANCE,
                             POST_Z_SHIFT,
+                            box,
                         ]
 
                         combs.append(comb)

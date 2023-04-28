@@ -5,6 +5,7 @@ from objects.cross_section import CrossSection
 from objects.axial_component import AxialComponent
 from objects.utilities import (
     fuse_meshes,
+    fair_mesh,
 )
 from objects.parameters import INTERFACE_PATH, INTERFACE_SHIFT
 from scripts.stimulus_set_params import (
@@ -36,6 +37,7 @@ class Shape:
         T_final=np.eye(4),
         fairing_distance=0,
         post_z_shift=0,
+        fair_box=None,
     ):
         self.mesh_list = mesh_list
         self.T_list = T_list
@@ -46,6 +48,7 @@ class Shape:
         self.save_dir = save_dir
         self.fairing_distance = fairing_distance
         self.post_z_shift = post_z_shift
+        self.fair_box = fair_box
 
         self.combine_meshes()
         self.attach_interface()
@@ -74,6 +77,13 @@ class Shape:
                 meshA, meshB, self.fairing_distance, self.boolean_list[i]
             )
             i += 1
+
+        # Fair region contained in box if needed
+        if self.fair_box != None:
+            neighbors = np.arange(meshA.vertices.shape[0])[
+                self.fair_box.contains(meshA.vertices)
+            ]
+            meshA = fair_mesh(meshA.copy(), neighbors, harmonic_power=2)
 
         # Apply T_final
         self.mesh = meshA.apply_transform(self.T_final)
