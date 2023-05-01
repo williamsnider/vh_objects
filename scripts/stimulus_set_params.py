@@ -3,9 +3,9 @@ from pathlib import Path
 
 ### Parameters ###
 NUM_CP_PER_BACKBONE = 5
-SEGMENT_LENGTH = 30
+SEGMENT_LENGTH = 40
 NUM_CS = 11
-X_WIDTH = 3  # base radius off which other features are derived.
+X_WIDTH = 4.0  # base radius off which other features are derived.
 NUM_CP_PER_CROSS_SECTION = 50
 
 # Limb sizes
@@ -22,7 +22,7 @@ POST_RADIUS = X_WIDTH * 0.99
 POST_OFFSET = 2  # Post and interface
 
 # Saving png and stl
-SAVE_DIR = Path("./sample_shapes/stimulus_set_AB/")
+SAVE_DIR = Path("./sample_shapes/stimulus_set_AB_20/")
 
 # Volumetric and appendage sizes
 APPENDAGE_LENGTH = SEGMENT_LENGTH / 2
@@ -31,7 +31,7 @@ NUM_CP_PER_BASE_SHEET = 50
 NUM_CS_PER_SHEET = 11
 NUM_CP_PER_CROSS_SECTION = 50
 VOLUMETRIC_RADII = np.array([1.01 * X_WIDTH, 2.01 * X_WIDTH, 1.01 * X_WIDTH])
-POINT_RADII = np.array([1 * X_WIDTH, 0.5 * X_WIDTH, 0.5 * X_WIDTH])
+POINT_RADII = np.array([1 * X_WIDTH, 0.75 * X_WIDTH, 0.34 * X_WIDTH])
 POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
 assert POINT_ROUNDOVER_OFFSET < POINT_RADII[-1]
 LEAF_RADII = np.array([1 * X_WIDTH, 1.4 * X_WIDTH, 0.25 * X_WIDTH])
