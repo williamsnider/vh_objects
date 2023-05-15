@@ -9,7 +9,8 @@ X_WIDTH = 3.5  # base radius off which other features are derived.
 NUM_CP_PER_CROSS_SECTION = 50
 
 # Limb sizes
-ac_radii = np.array([0.1 * X_WIDTH, 1 * X_WIDTH, 2 * X_WIDTH])
+TERMINATION_RADIUS = 1  # mm; Smaller result in too sharp a point to be safe
+ac_radii = np.array([TERMINATION_RADIUS, 1 * X_WIDTH, 2 * X_WIDTH])
 ac_theta_dict = {"th0": 0, "th1": np.pi / 2}
 ac_junc_angles = {"ja0": 0, "ja1": np.pi / 4, "ja2": np.pi / 2}
 ac_junc_rotations = {"r0": 0, "r1": np.pi}
@@ -31,8 +32,8 @@ NUM_CP_PER_BASE_SHEET = 50
 NUM_CS_PER_SHEET = 11
 NUM_CP_PER_CROSS_SECTION = 50
 VOLUMETRIC_RADII = np.array([1.01 * X_WIDTH, 2.01 * X_WIDTH, 1.01 * X_WIDTH])
-POINT_RADII = np.array([1 * X_WIDTH, 0.75 * X_WIDTH, 0.34 * X_WIDTH])
-POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 3
+POINT_RADII = np.array([1 * X_WIDTH, 0.75 * X_WIDTH, TERMINATION_RADIUS])
+POINT_ROUNDOVER_OFFSET = SHEET_THICKNESS / 4
 assert POINT_ROUNDOVER_OFFSET < POINT_RADII[-1]
 LEAF_RADII = np.array([1 * X_WIDTH, 1.4 * X_WIDTH, 0.25 * X_WIDTH])
 ROUND_RADIUS = 1.25 * X_WIDTH  # radius of sphere and sheet_round

@@ -4,8 +4,6 @@ import numpy as np
 from multiprocessing import Pool
 from tqdm import tqdm
 from objects.backbone import Backbone
-from objects.cross_section import CrossSection
-from objects.axial_component import AxialComponent
 from objects.shape import Shape
 from objects.utilities import (
     approximate_arc,
@@ -13,17 +11,12 @@ from objects.utilities import (
     make_surface,
     calc_hemisphere_controlpoints,
     angle_between,
-    fuse_meshes,
     calc_mesh_boolean_and_edges,
     angle_between,
 )
-from objects.parameters import INTERFACE_PATH, INTERFACE_SHIFT
-from objects.interface import load_interface
 from scripts.sheets import construct_sheet, bend_sheet, make_base_cp
-from scripts.hemi import calc_sphere_controlpoints
 import trimesh
 from scipy.spatial.transform.rotation import Rotation
-from pathlib import Path
 from objects.shaft import Shaft
 from scripts.stimulus_set_params import (
     NUM_CP_PER_BASE_SHEET,
@@ -58,9 +51,7 @@ vv = 75
 
 def slice_mesh(mesh, extent, T):
     mesh = mesh.copy()
-    slicer = trimesh.primitives.Box(
-        extents=np.array([extent, extent, extent]), transform=T
-    )
+    slicer = trimesh.primitives.Box(extents=np.array([extent, extent, extent]), transform=T)
     split_mesh, _ = calc_mesh_boolean_and_edges(mesh, slicer, "difference")
 
     return split_mesh
@@ -185,9 +176,7 @@ backbone_x_width = Backbone(b_cp, reparameterize=True)
 t = np.linspace(0, 2 * np.pi, NUM_CP_PER_BASE_SHEET, endpoint=False).reshape(-1, 1)
 round_cs_cp = np.hstack([np.zeros(t.shape), np.cos(t), np.sin(t)])
 base_sheet = round_cs_cp * ROUND_RADIUS
-cp = construct_sheet(
-    base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET
-)
+cp = construct_sheet(base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
 surf = make_surface(cp)
 sheet_round_K0 = make_mesh(surf, uu, vv)
 
@@ -287,9 +276,7 @@ sheet_point_K0 = make_mesh(surf, uu, vv)
 
 bent_cp = bend_sheet(sheet_point_cp, b_appendage_K1, point_x[2] - point_x[0])
 surf = make_surface(bent_cp)
-sheet_point_K1 = make_mesh(
-    surf, uu, vv
-)  # TODO: Has artifact, fix after deciding on thickness/size
+sheet_point_K1 = make_mesh(surf, uu, vv)  # TODO: Has artifact, fix after deciding on thickness/size
 sheet_point_K2 = sheet_point_K1.copy()
 sheet_point_K2.apply_transform(T_K2)
 
@@ -392,130 +379,56 @@ J2_thin_pos = np.array([SEGMENT_LENGTH - X_WIDTH, 0, 0])
 CO_xyz = np.array([SEGMENT_LENGTH - X_WIDTH / 2, 0, 0])
 
 # Volumetric
-J1_volu_xyz_U = (
-    find_line_mesh_intersection(volumetric.mesh, vec_to_J1, J1_volu_pos)
-    + XYZ_OFFSET * vec_to_J1
-)
-J1_volu_xyz_D = (
-    find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, J1_volu_pos)
-    + -XYZ_OFFSET * vec_to_J1
-)
-J2_volu_xyz_U = (
-    find_line_mesh_intersection(volumetric.mesh, vec_to_J2, J2_volu_pos)
-    + XYZ_OFFSET * vec_to_J2
-)
-J2_volu_xyz_D = (
-    find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, J2_volu_pos)
-    + -XYZ_OFFSET * vec_to_J2
-)
+J1_volu_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J1, J1_volu_pos) + XYZ_OFFSET * vec_to_J1
+J1_volu_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, J1_volu_pos) + -XYZ_OFFSET * vec_to_J1
+J2_volu_xyz_U = find_line_mesh_intersection(volumetric.mesh, vec_to_J2, J2_volu_pos) + XYZ_OFFSET * vec_to_J2
+J2_volu_xyz_D = find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, J2_volu_pos) + -XYZ_OFFSET * vec_to_J2
 
 # Thin
-J1_thin_xyz_U = (
-    find_line_mesh_intersection(thin.mesh, vec_to_J1, J1_thin_pos)
-    + XYZ_OFFSET * vec_to_J1
-)
-J1_thin_xyz_D = (
-    find_line_mesh_intersection(thin.mesh, -vec_to_J1, J1_thin_pos)
-    + -XYZ_OFFSET * vec_to_J1
-)
-J2_thin_xyz_U = (
-    find_line_mesh_intersection(thin.mesh, vec_to_J2, J2_thin_pos)
-    + XYZ_OFFSET * vec_to_J2
-)
-J2_thin_xyz_D = (
-    find_line_mesh_intersection(thin.mesh, -vec_to_J2, J2_thin_pos)
-    + -XYZ_OFFSET * vec_to_J2
-)
+J1_thin_xyz_U = find_line_mesh_intersection(thin.mesh, vec_to_J1, J1_thin_pos) + XYZ_OFFSET * vec_to_J1
+J1_thin_xyz_D = find_line_mesh_intersection(thin.mesh, -vec_to_J1, J1_thin_pos) + -XYZ_OFFSET * vec_to_J1
+J2_thin_xyz_U = find_line_mesh_intersection(thin.mesh, vec_to_J2, J2_thin_pos) + XYZ_OFFSET * vec_to_J2
+J2_thin_xyz_D = find_line_mesh_intersection(thin.mesh, -vec_to_J2, J2_thin_pos) + -XYZ_OFFSET * vec_to_J2
 
 # Volumetric rotations to match curvature of surface
 vec1 = np.array([0, 0, 1])
-vec2 = volumetric.mesh.vertex_normals[
-    (volumetric.mesh.vertices == J1_volu_xyz_U).all(axis=1).argmax()
-]
+vec2 = volumetric.mesh.vertex_normals[(volumetric.mesh.vertices == J1_volu_xyz_U).all(axis=1).argmax()]
 angle = angle_between(vec1, vec2)
 y_th = angle  # np.pi / 4  # np.pi / 9
 
 # Rotate volumetric J1 appendages to be in line with slope of volume (y_th below)
-R_volu_J1_F_U = Rotation.from_euler(
-    "zyx", np.array([0 * np.pi / 2, -y_th, -x_th])
-).as_matrix()
-R_volu_J1_L_U = Rotation.from_euler(
-    "zyx", np.array([1 * np.pi / 2, -y_th, -x_th])
-).as_matrix()
-R_volu_J1_B_U = Rotation.from_euler(
-    "zyx", np.array([2 * np.pi / 2, -y_th, -x_th])
-).as_matrix()
-R_volu_J1_R_U = Rotation.from_euler(
-    "zyx", np.array([3 * np.pi / 2, -y_th, -x_th])
-).as_matrix()
-R_volu_J1_F_D = Rotation.from_euler(
-    "zyx", np.array([0 * np.pi / 2, -y_th, -x_th + np.pi])
-).as_matrix()
-R_volu_J1_L_D = Rotation.from_euler(
-    "zyx", np.array([3 * np.pi / 2, -y_th, -x_th + np.pi])
-).as_matrix()
-R_volu_J1_B_D = Rotation.from_euler(
-    "zyx", np.array([2 * np.pi / 2, -y_th, -x_th + np.pi])
-).as_matrix()
-R_volu_J1_R_D = Rotation.from_euler(
-    "zyx", np.array([1 * np.pi / 2, -y_th, -x_th + np.pi])
-).as_matrix()
-R_volu_J2_F_U = Rotation.from_euler(
-    "zyx", np.array([0 * np.pi / 2, y_th, -x_th])
-).as_matrix()
-R_volu_J2_L_U = Rotation.from_euler(
-    "zyx", np.array([1 * np.pi / 2, y_th, -x_th])
-).as_matrix()
-R_volu_J2_B_U = Rotation.from_euler(
-    "zyx", np.array([2 * np.pi / 2, y_th, -x_th])
-).as_matrix()
-R_volu_J2_R_U = Rotation.from_euler(
-    "zyx", np.array([3 * np.pi / 2, y_th, -x_th])
-).as_matrix()
-R_volu_J2_F_D = Rotation.from_euler(
-    "zyx", np.array([0 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
-R_volu_J2_L_D = Rotation.from_euler(
-    "zyx", np.array([3 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
-R_volu_J2_B_D = Rotation.from_euler(
-    "zyx", np.array([2 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
-R_volu_J2_R_D = Rotation.from_euler(
-    "zyx", np.array([1 * np.pi / 2, y_th, -x_th + np.pi])
-).as_matrix()
+R_volu_J1_F_U = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, -y_th, -x_th])).as_matrix()
+R_volu_J1_L_U = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, -y_th, -x_th])).as_matrix()
+R_volu_J1_B_U = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, -y_th, -x_th])).as_matrix()
+R_volu_J1_R_U = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, -y_th, -x_th])).as_matrix()
+R_volu_J1_F_D = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, -y_th, -x_th + np.pi])).as_matrix()
+R_volu_J1_L_D = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, -y_th, -x_th + np.pi])).as_matrix()
+R_volu_J1_B_D = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, -y_th, -x_th + np.pi])).as_matrix()
+R_volu_J1_R_D = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, -y_th, -x_th + np.pi])).as_matrix()
+R_volu_J2_F_U = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, y_th, -x_th])).as_matrix()
+R_volu_J2_L_U = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, y_th, -x_th])).as_matrix()
+R_volu_J2_B_U = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, y_th, -x_th])).as_matrix()
+R_volu_J2_R_U = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, y_th, -x_th])).as_matrix()
+R_volu_J2_F_D = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_volu_J2_L_D = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_volu_J2_B_D = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
+R_volu_J2_R_D = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, y_th, -x_th + np.pi])).as_matrix()
 
 R_thin_F_U = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, 0, -x_th])).as_matrix()
 R_thin_L_U = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, 0, -x_th])).as_matrix()
 R_thin_B_U = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, 0, -x_th])).as_matrix()
 R_thin_R_U = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, 0, -x_th])).as_matrix()
 
-R_thin_F_D = Rotation.from_euler(
-    "zyx", np.array([0 * np.pi / 2, 0, -x_th + np.pi])
-).as_matrix()
-R_thin_L_D = Rotation.from_euler(
-    "zyx", np.array([3 * np.pi / 2, 0, -x_th + np.pi])
-).as_matrix()
-R_thin_B_D = Rotation.from_euler(
-    "zyx", np.array([2 * np.pi / 2, 0, -x_th + np.pi])
-).as_matrix()
-R_thin_R_D = Rotation.from_euler(
-    "zyx", np.array([1 * np.pi / 2, 0, -x_th + np.pi])
-).as_matrix()
+R_thin_F_D = Rotation.from_euler("zyx", np.array([0 * np.pi / 2, 0, -x_th + np.pi])).as_matrix()
+R_thin_L_D = Rotation.from_euler("zyx", np.array([3 * np.pi / 2, 0, -x_th + np.pi])).as_matrix()
+R_thin_B_D = Rotation.from_euler("zyx", np.array([2 * np.pi / 2, 0, -x_th + np.pi])).as_matrix()
+R_thin_R_D = Rotation.from_euler("zyx", np.array([1 * np.pi / 2, 0, -x_th + np.pi])).as_matrix()
 
 # Collinear rotations
-R_U = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 0 * np.pi / 2])
-).as_matrix()
-R_L = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 3 * np.pi / 2])
-).as_matrix()
-R_D = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 2 * np.pi / 2])
-).as_matrix()
-R_R = Rotation.from_euler(
-    "zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])
-).as_matrix()
+R_U = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 0 * np.pi / 2])).as_matrix()
+R_L = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 3 * np.pi / 2])).as_matrix()
+R_D = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 2 * np.pi / 2])).as_matrix()
+R_R = Rotation.from_euler("zyx", np.array([np.pi, np.pi / 2, -x_th + 1 * np.pi / 2])).as_matrix()
 
 
 # R_F = Rotation.from_euler("xyz", [0, angle, 0]).as_matrix()
@@ -938,11 +851,7 @@ for J_app in [
                         continue
 
                     # Constraint: J1/J2 + Collinear has 1 curvature profile
-                    if (
-                        (withJ2 == True or withJ1 == True)
-                        and withCO == True
-                        and any(["_K1" in J_app, "_K2" in J_app])
-                    ):
+                    if (withJ2 == True or withJ1 == True) and withCO == True and any(["_K1" in J_app, "_K2" in J_app]):
                         continue
 
                     for hox in [False, True]:
@@ -996,9 +905,7 @@ for J_app in [
                                 boolean_list.append("union")
 
                         # Prevent duplicates for shapes by not looping for CO if not present
-                        if withCO == False and (
-                            CO_app != "sheet_round_K0" or CO_ori != "L"
-                        ):
+                        if withCO == False and (CO_app != "sheet_round_K0" or CO_ori != "L"):
                             continue
 
                         # Add fairing box to remove bumps
@@ -1148,12 +1055,10 @@ for J_app in [
 ########################
 
 
-for comb in combs[617:618]:
-    build_shape(comb)
+# for comb in combs[617:618]:
+#     build_shape(comb)
 
 if __name__ == "__main__":
 
     with Pool() as pool:
-        mapped_values = list(
-            tqdm(pool.imap_unordered(build_shape, combs), total=len(combs))
-        )
+        mapped_values = list(tqdm(pool.imap_unordered(build_shape, combs), total=len(combs)))
