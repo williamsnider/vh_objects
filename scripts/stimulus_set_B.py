@@ -36,13 +36,14 @@ from scripts.stimulus_set_params import (
     ROUND_RADIUS,
     BOX_EXTENTS,
     BOX_TRANSLATION,
+    TERMINATION_RADIUS,
 )
 
 FAIRING_DISTANCE = 2
 POST_Z_SHIFT = 0
 
-uu = 75
-vv = 75
+uu = 50
+vv = 50
 
 ######################################
 ### Base Components and Appendages ###
@@ -99,7 +100,7 @@ app2 = Shaft(
     APPENDAGE_LENGTH,
     1.0 * X_WIDTH,
     1.5 * X_WIDTH,
-    0.1 * X_WIDTH,
+    TERMINATION_RADIUS,
     theta=0,
     lengthtype="one_hemi",
     num_cs=NUM_CS,
@@ -123,7 +124,7 @@ app4 = Shaft(
     APPENDAGE_LENGTH,
     1.0 * X_WIDTH,
     1.0 * X_WIDTH,
-    0.1 * X_WIDTH,
+    TERMINATION_RADIUS,
     theta=0,
     lengthtype="one_hemi",
     num_cs=NUM_CS,
@@ -135,7 +136,7 @@ app_point = Shaft(
     ROUND_RADIUS,
     1.0 * X_WIDTH,
     0.45 * X_WIDTH,
-    0.1 * X_WIDTH,
+    TERMINATION_RADIUS,
     0,
     lengthtype="one_hemi",
     num_cs=NUM_CS,
