@@ -11,10 +11,9 @@ from copy import deepcopy
 
 
 class Backbone:
-    def __init__(
-        self, controlpoints, reparameterize=True, align_center=True, name=None
-    ):
+    """Backbones are the "backbone" along which axial components are constructed. They determine the medial-axis of the axial component."""
 
+    def __init__(self, controlpoints, reparameterize=True, align_center=True, name=None):
         self.controlpoints = controlpoints
         self.num_controlpoints = self.controlpoints.shape[0]
         self.name = name
@@ -36,9 +35,7 @@ class Backbone:
         """Construct the initial B-spline. This is formed by the relatively small number of control points that will give the curve its shape. An open uniform knot vector is used so that the endpoints are the first and last controlpoints. The resulting curved must be reparameterized to be arc length parameterized."""
         knot = open_uniform_knot_vector(self.num_controlpoints, ORDER)
         basis = BSplineBasis(order=ORDER, knots=knot, periodic=-1)
-        self.backbone = Curve(
-            basis=basis, controlpoints=self.controlpoints, rational=False
-        )
+        self.backbone = Curve(basis=basis, controlpoints=self.controlpoints, rational=False)
 
     def reparameterize(self):
         """Create arc length parameterization of the backbone. This is works by sampling many evenly-spaced points along the original backbone and using these as the controlpoints of a new B-spline curve with a uniform knot-vector. This reparameterization is approximate. However, by choosing a large number of sample points, the curves become very close.
@@ -48,13 +45,10 @@ class Backbone:
         #### Choose controlpoints that are evenly spaced
 
         # The arc length (that we want) to each control point
-        target_arc_lengths = np.linspace(
-            0, self.backbone.length(), NUM_INTERPOLATION_POINTS
-        )
+        target_arc_lengths = np.linspace(0, self.backbone.length(), NUM_INTERPOLATION_POINTS)
 
         # Sample many points along the backbone and choose the one that results in the arc length that is closest to our target arc length
-        # This method seems coarse but is way faster than using a function optimizer (e.g. scipy.optimize.minimize), which is also an approximation.
-
+        # This method seems coarse but is much faster than using a function optimizer (e.g. scipy.optimize.minimize), which is also an approximation.
         t = np.linspace(0, 1, NUM_SAMPLES_FOR_REPARAMETERIZATION)
         points = self.backbone(t)
         dists = np.linalg.norm(points[1:] - points[:-1], axis=1)
@@ -68,18 +62,12 @@ class Backbone:
         NUM_EXTRA_CP = 2
         controlpoints_wrapped = np.zeros((NUM_INTERPOLATION_POINTS + NUM_EXTRA_CP, 3))
         controlpoints_wrapped[1:-1] = controlpoints
-        controlpoints_wrapped[[0, -1]] = controlpoints[
-            [0, -1]
-        ]  # Duplicate first and last cp
+        controlpoints_wrapped[[0, -1]] = controlpoints[[0, -1]]  # Duplicate first and last cp
 
         # Construct new backbone
-        knot = np.linspace(
-            0, 1, NUM_INTERPOLATION_POINTS + ORDER + NUM_EXTRA_CP
-        )  # uniform (not open uniform!)
+        knot = np.linspace(0, 1, NUM_INTERPOLATION_POINTS + ORDER + NUM_EXTRA_CP)  # uniform (not open uniform!)
         basis = BSplineBasis(order=ORDER, knots=knot, periodic=-1)
-        backbone = Curve(
-            basis=basis, controlpoints=controlpoints_wrapped, rational=False
-        )
+        backbone = Curve(basis=basis, controlpoints=controlpoints_wrapped, rational=False)
         backbone.reparam()  # Reparameterize between 0 and 1
 
         return backbone
@@ -105,33 +93,17 @@ class Backbone:
         # Negative/positive values close to zero cause inconsistency when taking cross product
         dx = np.round(dx, 8)
 
-        # if type(t) != type(np.array(0)):
-        #     t = np.array(t, dtype="float64")
-
-        # # Copy t to avoid problems when it gets changed
-        # t = t.copy()  # Changing t was causing a bug
-
-        # # Handle array that may contain t == 0 or t == 1
-        # mask_t_0 = t == 0
-        # mask_t_1 = t == 1
-        # t[mask_t_0] = EPSILON
-        # t[mask_t_1] = 1 - EPSILON
-
-        # dx = self.backbone.derivative(t, 1)
-
-        # # Negative/positive values close to zero cause inconsistency when taking cross product
-        # dx = np.round(dx, 8)
         return dx
 
     def r(self, t):
-
+        """Position vector of b-spline backbone."""
         if type(t) != type(np.array(0)):
             t = np.array(t, dtype="float64")
 
         return self.backbone(t)
 
     def T(self, t):
-        """Tangent vector is unit vector in same direction as velocity vector."""
+        """Tangent vector of backbone. Tangent vector is unit vector in same direction as velocity vector."""
 
         if type(t) != type(np.array(0)):
             t = np.array(t, dtype="float64")
@@ -141,16 +113,14 @@ class Backbone:
 
         assert ~(np.isclose(dx_norm, 0))
 
-        # if dx_norm == 0:
-        #     T = np.array([[1, 0, 0]])
-        # else:
         T = dx / dx_norm
         return T
 
     def N(self, t):
         """Normal vector is unit vector that is perpendicular to tangent vector and to [0,0,1].
 
-        I chose [0,0,1] arbitrarily, in any case, it will result in the binormal vector that is perpendicular to the tangent and is pointing "most upward" (has largest Z-component)."""
+        I chose [0,0,1] arbitrarily, in any case, it will result in the binormal vector that is perpendicular to the tangent and is pointing "most upward" (has largest Z-component).
+        """
 
         if type(t) != type(np.array(0)):
             t = np.array(t, dtype="float64")
@@ -168,9 +138,7 @@ class Backbone:
 
         # Check that the two are perpendicular
         self.T(t)
-        assert np.all(
-            np.isclose(np.dot(T, N.T).diagonal(), 0)
-        ), "Tangent and Normal vectors are not perpendicular."
+        assert np.all(np.isclose(np.dot(T, N.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
         return N
 
     def B(self, t):
@@ -185,24 +153,16 @@ class Backbone:
         B = cross / np.linalg.norm(cross, axis=1, keepdims=True)
 
         # Check that the two are perpendicular
-        assert np.all(
-            np.isclose(np.dot(T, N.T).diagonal(), 0)
-        ), "Tangent and Normal vectors are not perpendicular."
-        assert np.all(
-            np.isclose(np.dot(T, B.T).diagonal(), 0)
-        ), "Tangent and Normal vectors are not perpendicular."
-        assert np.all(
-            np.isclose(np.dot(B, N.T).diagonal(), 0)
-        ), "Tangent and Normal vectors are not perpendicular."
+        assert np.all(np.isclose(np.dot(T, N.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
+        assert np.all(np.isclose(np.dot(T, B.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
+        assert np.all(np.isclose(np.dot(B, N.T).diagonal(), 0)), "Tangent and Normal vectors are not perpendicular."
 
         return B
 
     def length(self):
-
         return self.backbone.length()
 
     def copy(self):
-
         return deepcopy(self)
 
     def align_backbone_center(self):
