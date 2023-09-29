@@ -1,14 +1,9 @@
 # General functions used by different classes for objects project
 
-from re import A
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
-import networkx as nx
 import numpy as np
-from numpy.linalg import norm
 from scipy.optimize import minimize, minimize_scalar
-from sympy import Q
 from objects.parameters import ORDER, HARMONIC_POWER
 from splipy import BSplineBasis, Curve, Surface
 import igl
@@ -18,12 +13,13 @@ from scipy.spatial.transform import Rotation
 from compas_cgal.booleans import boolean_union, boolean_difference
 
 
-##########
-# B-Spline Functions
+##########################
+### B-Spline Functions ###
+##########################
 
 
 def open_uniform_knot_vector(num_cps, order):
-
+    """Creates an open uniform knot vector."""
     num_knots = num_cps + order
     knots = np.zeros(num_knots)
     knots[order:-order] = range(1, num_knots - 2 * order + 1)
@@ -74,7 +70,6 @@ def approximate_arc(MAX_ANGLE, arc_length, num_cp):
         cp = [[radius, 0]]
 
         for i in range(num_params):
-
             # Second point - determines angle of spline at first point
             if i == 0:
                 cp.append(
@@ -86,7 +81,6 @@ def approximate_arc(MAX_ANGLE, arc_length, num_cp):
 
             # Remaining points
             else:
-
                 # Constrain point to lie along vector defined by this theta, which distributes the controlpoints more or less evenly across
                 th = MAX_ANGLE / 2 * (i + 1) / num_params
                 cp.append(
@@ -114,7 +108,6 @@ def approximate_arc(MAX_ANGLE, arc_length, num_cp):
         return arc_array
 
     def radius_error(params):
-
         # Make the arc array
         arc_array = make_arc_array(params)
 
@@ -140,27 +133,17 @@ def approximate_arc(MAX_ANGLE, arc_length, num_cp):
 
     # Shift so that the curve begins at the origin
     arc_array[:, 0] -= radius
-    arc_array[:, [0, 1]] = arc_array[
-        :, [1, 0]
-    ]  # Flip x and y-axis so long portion points in +X direction
+    arc_array[:, [0, 1]] = arc_array[:, [1, 0]]  # Flip x and y-axis so long portion points in +X direction
     # arc_array[:, 1] = -arc_array[:, 1]  # Negate y axis so curves upward (towards +Y)
 
     return arc_array
 
 
-# # Calculate arc
-# radius = 1
-# out1 = approximate_arc(np.pi / 2, radius * np.pi / 2)
-# # out1 = make_arc(1)
-# vec_frac = out1[:, 0].reshape(-1, 1, 1)
-
-
-def calc_hemisphere_controlpoints(
-    base_cp, tan_vec, endpoint, poly, x, morph_to_ellipse
-):
+def calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x, morph_to_ellipse):
     """Calculates the controlpoints needed to approximate a hemispherical ending to an axial component.
 
-    This works by calculating a 5-controlpoint arc that will connect a quadratic curve (poly), resulting in a hemisphere shape. This arc serves as the scale (first column) and translation (second column) that are applied to base_cp."""
+    This works by calculating a 5-controlpoint arc that will connect a quadratic curve (poly), resulting in a hemisphere shape. This arc serves as the scale (first column) and translation (second column) that are applied to base_cp.
+    """
 
     ### Calculate the controlpoint arc that approximates a hemisphere ###
     num_cp_to_use = 11
@@ -187,25 +170,9 @@ def calc_hemisphere_controlpoints(
     cp_rot = cp[:, [1, 0]]  # Rotate 45deg
     if x <= 0:
         cp_rot[:, 0] *= -1
-    cp_T = cp_rot - np.array(
-        [cp_rot[-1, 0] - x_shift, 0]
-    )  # Shift to align with end of quadratic
+    cp_T = cp_rot - np.array([cp_rot[-1, 0] - x_shift, 0])  # Shift to align with end of quadratic
 
     scale_ratio = cp_T[:, 1] / y  # Normalize this column by the height of the quadratic
-
-    # # Plot circle
-    # import matplotlib.pyplot as plt
-
-    # ax = plt.figure().add_subplot()
-    # tt = np.linspace(0, 2 * np.pi)
-    # xx = r * np.cos(tt) + a
-    # yy = r*np.sin(tt)
-    # ax.plot(xx,yy,'-k')
-    # ax.plot(x,y,'r*')
-    # ax.plot(cp_T[:,0], cp_T[:,1], "-g")
-    # ax.set_aspect('equal')
-    # plt.show()
-
     ### Apply these transformations to base_cp ###
 
     # Rotate base_cp to be in yz plane
@@ -245,37 +212,18 @@ def calc_hemisphere_controlpoints(
     else:
         out_cp = np.tile(yz_cp, (num_cp_to_use, 1, 1))
 
-    # for i in range(5):
-    #     out_cp[i, :, 0] = i
-    # print("test scale")
-    # scale_ratio = np.ones(scale_ratio.shape)
     cp_scale = out_cp * scale_ratio.reshape(-1, 1, 1)
     cp_scale[:, :, 0] = yz_cp[:, 0]
 
     # Translate base_cp
     vec_rotated = tan_vec @ R
-    cp_shift = (
-        cp_scale + vec_rotated * (cp_T[:, 0].reshape(-1, 1, 1)) - np.array([x, 0, 0])
-    )
+    cp_shift = cp_scale + vec_rotated * (cp_T[:, 0].reshape(-1, 1, 1)) - np.array([x, 0, 0])
     result = (cp_shift) @ R.T + endpoint
 
     from scripts.sheets import plot_arr
 
     # plot_arr(out_cp)
-    assert np.all(
-        np.isclose(result[-1], base_cp)
-    ), "base_cp not aligned with result[-1]"
-
-    # # Plot everything
-    # fig, ax = plt.subplots()
-    # t = np.linspace(0, 1, 100)
-    # vals = np.polyval(poly, t)
-    # ax.plot(t, vals)
-    # # ax.plot(xx, yy, "-k")  # Arc
-    # ax.plot(x, y, "*r")  # Intersection point
-    # # ax.plot(new_cp[:, 0], new_cp[:, 1], "g-")
-    # ax.set_aspect("equal")
-    # plt.show()
+    assert np.all(np.isclose(result[-1], base_cp)), "base_cp not aligned with result[-1]"
 
     return result, a
 
@@ -283,17 +231,15 @@ def calc_hemisphere_controlpoints(
 def find_cp_for_desired_radius(target_radius, num_cp_per_cross_section):
     """Calculates the radius of controlpoints that will result in a B-spline with the target radius.
 
-    B-splines do not pass through the controlpoints, so a larger controlpoint radius is needed to achieve a target B-spline radius."""
+    B-splines do not pass through the controlpoints, so a larger controlpoint radius is needed to achieve a target B-spline radius.
+    """
     ORDER = 3
 
     def make_bspline_curve(cp_r):
-
         # Make controlpoints
         c = np.cos
         s = np.sin
-        th = np.linspace(
-            0, 2 * np.pi, num_cp_per_cross_section, endpoint=False
-        ).reshape(-1, 1)
+        th = np.linspace(0, 2 * np.pi, num_cp_per_cross_section, endpoint=False).reshape(-1, 1)
         cp = np.hstack((cp_r * c(th), cp_r * s(th)))
 
         # Make curve
@@ -311,7 +257,6 @@ def find_cp_for_desired_radius(target_radius, num_cp_per_cross_section):
         return xy
 
     def objective_function(cp_r):
-
         # Make curve
         xy = make_bspline_curve(cp_r)
 
@@ -321,9 +266,7 @@ def find_cp_for_desired_radius(target_radius, num_cp_per_cross_section):
 
         return (avg_radius - target_radius) ** 2
 
-    res = minimize_scalar(
-        objective_function, method="bounded", bounds=(0, target_radius**2)
-    )
+    res = minimize_scalar(objective_function, method="bounded", bounds=(0, target_radius**2))
     if res.success == True:
         return res.x
     else:
@@ -333,7 +276,8 @@ def find_cp_for_desired_radius(target_radius, num_cp_per_cross_section):
 def make_surface(controlpoints):
     """Makes a B-spline surface given an array of controlpoints.
 
-    The array is assumed to have shape M x N x 3. For a cylinder-like axial component, the M dimension is each of the cross sections along the backbone, and the N dimension is the X points that define each 2D cross section."""
+    The array is assumed to have shape M x N x 3. For a cylinder-like axial component, the M dimension is each of the cross sections along the backbone, and the N dimension is the X points that define each 2D cross section.
+    """
 
     # Inputs
     degree = ORDER - 1
@@ -367,6 +311,7 @@ def make_mesh(surface, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V):
 
     ####################
     # Vertices
+
     (us, vs) = surface.start()
     (ue, ve) = surface.end()
     u = np.linspace(us, ue, uu, endpoint=False)
@@ -380,8 +325,8 @@ def make_mesh(surface, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V):
 
     ####################
     # Faces - CCW Winding (for consistent normals)
+
     faces = np.zeros((uu * (vv - 2) * 2, 3), dtype="int")
-    # faces_array = np.zeros((SD * 2, SD - 2, 3), dtype="int")
     base_column = np.zeros((uu * 2, 3), dtype="int")
     base_column[::2, 0] = np.arange(0, uu)
     base_column[1::2, 0] = np.arange(0, uu)
@@ -400,7 +345,6 @@ def make_mesh(surface, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V):
         start = uu * i * 2
         stop = uu * (i + 1) * 2
         faces[start:stop, :] = column
-        # faces_array[:, i, :] = column
 
     # Endpoint faces
     num_verts = verts.shape[0]
@@ -431,9 +375,6 @@ def make_mesh(surface, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V):
     faces = faces
 
     ####################
-    # Skip calculations for face and vertex normals since that should be done after fusing all axial components
-
-    ####################
     # Construct trimesh
     mesh = trimesh.Trimesh(
         vertices=verts,
@@ -444,8 +385,11 @@ def make_mesh(surface, SAMPLING_DENSITY_U, SAMPLING_DENSITY_V):
     return mesh
 
 
-##########
-# Vector functions
+########################
+### Vector functions ###
+########################
+
+
 def unit_vector(vector):
     """Returns the unit vector of the vector."""
     a = vector.ndim - 1
@@ -474,6 +418,7 @@ def angle_between(v1, v2):
 
 
 def calc_R_euler_angles(euler_angles):
+    """Calculates the rotation matrix given the Euler angles."""
     s = np.sin
     c = np.cos
 
@@ -506,9 +451,14 @@ def calc_R_euler_angles(euler_angles):
     return R_euler_angles
 
 
-##########
-# Mesh Functions
+######################
+### Mesh Functions ###
+######################
+
+
 def calc_face_normals(verts, faces):
+    """Calculates the face normals of a mesh."""
+
     p0 = verts[faces[:, 0]]
     p1 = verts[faces[:, 1]]
     p2 = verts[faces[:, 2]]
@@ -526,7 +476,10 @@ def calc_face_normals(verts, faces):
 
 
 def check_and_move_identical_verts(mesh1, mesh2):
-    """Mesh boolean fails often when two vertices on two meshes are identical, so we need to shift one vertex very slightly."""
+    """Moves vertices on two meshes that are coincident.
+
+    Mesh boolean fails often when two vertices on two meshes are identical, so we need to shift one vertex very slightly for the boolean to be successful.
+    """
 
     # Calculate distance between two sets of vertices
     tree = scipy.spatial.KDTree(mesh1.vertices)
@@ -539,9 +492,7 @@ def check_and_move_identical_verts(mesh1, mesh2):
     # Check that this shift was successful
     dd, ii = tree.query(mesh2.vertices, k=1)
     identical_verts = np.isclose(dd, 0)
-    assert (
-        np.any(identical_verts) == False
-    ), "Shifting the identical vertex did not work."
+    assert np.any(identical_verts) == False, "Shifting the identical vertex did not work."
 
     return mesh1, mesh2
 
@@ -549,15 +500,13 @@ def check_and_move_identical_verts(mesh1, mesh2):
 def check_and_move_verts_on_edges(mesh1, mesh2):
     """Mesh boolean fails often when a vertex on mesh1 lies on an edge of mesh2, so we need to shift such vertices slightly.
 
-    Currently this function only identifies colinear vertices and edges and does not check if the vertex is actually between the two points on the edge. That could be implemented by checking if the distance from the vertex to both edge points is less than the distance between the two edge points."""
+    Currently this function only identifies colinear vertices and edges and does not check if the vertex is actually between the two points on the edge. That could be implemented by checking if the distance from the vertex to both edge points is less than the distance between the two edge points.
+    """
 
     def find_colinear_vertices(mesh1, mesh2):
-
         # Cross product reveals whether 3 poitns are
         edges = mesh1.vertices[mesh1.edges]
-        edges_vec = (
-            edges[:, 1, :] - edges[:, 0, :]
-        )  # Vector between two points defining edge
+        edges_vec = edges[:, 1, :] - edges[:, 0, :]  # Vector between two points defining edge
         verts_vec = (
             mesh2.vertices.reshape(-1, 1, 3) - edges[:, 0, :]
         )  # Vector between putative point in between edge and on point defining edge
@@ -566,23 +515,10 @@ def check_and_move_verts_on_edges(mesh1, mesh2):
         EPSILON = 0.01
         colinear_verts = np.any(norm < EPSILON, axis=1)
         return colinear_verts
-        # # Cross product reveals whether 3 points are colinear
-        # edges = mesh1.vertices[mesh1.edges]
-        # edges_vec = edges[:, 1, :] - edges[:, 0, :]  # Vector between two points defining edge
-        # verts_vec = (
-        #     mesh2.vertices.reshape(-1, 1, 3) - edges[:, 0, :]
-        # )  # Vector between putative point in between edge and on point defining edge
-        # epsilon = 0.001
-        # angles = angle_between(verts_vec, edges_vec)
-        # angles_near_0 = np.any(angles < epsilon, axis=1)
-        # angles_near_2pi = np.any(angles > 2 * np.pi - epsilon, axis=1)
-        # colinear_verts = np.logical_or(angles_near_0, angles_near_2pi)
-        # return colinear_verts
 
     none_colinear = False
     count = 0
     while count < 10:
-
         colinear_verts = find_colinear_vertices(mesh1, mesh2)
         mesh2.vertices[colinear_verts] += 1e-2  # Shift these verts
 
@@ -592,18 +528,10 @@ def check_and_move_verts_on_edges(mesh1, mesh2):
 
         # Except loop if successful
         if none_colinear == True:
-            print(
-                "Shifting colinear vertices worked after {count} loops.".format(
-                    count=count
-                )
-            )
+            print("Shifting colinear vertices worked after {count} loops.".format(count=count))
             break
     else:
-        print(
-            "Shifting colinear vertices did not work after {count} loops.".format(
-                count=count
-            )
-        )
+        print("Shifting colinear vertices did not work after {count} loops.".format(count=count))
 
     return mesh1, mesh2
 
@@ -611,7 +539,8 @@ def check_and_move_verts_on_edges(mesh1, mesh2):
 def move_verts_on_broken_faces(union_mesh, mesh1, mesh2):
     """Shifts vertices that are part of the broken faces of a mesh.
 
-    Doing this retroactively (as opposed to shifting all vertices that lie on an edge of the other mesh) is a lot faster."""
+    Doing this retroactively (as opposed to shifting all vertices that lie on an edge of the other mesh) is a lot faster.
+    """
 
     # Identify vertices of broken faces (indexed by union_mesh)
     broken = trimesh.repair.broken_faces(union_mesh, color=[255, 0, 0, 255])
@@ -631,7 +560,6 @@ def move_verts_on_broken_faces(union_mesh, mesh1, mesh2):
 
 
 def calc_mesh_boolean_and_edges(mesh1, mesh2, operation):
-
     # Use compas/CGAL to calculate boolean operation
     mesh_A = [mesh1.vertices.tolist(), mesh1.faces.tolist()]
     mesh_B = [mesh2.vertices.tolist(), mesh2.faces.tolist()]
@@ -661,20 +589,11 @@ def calc_mesh_boolean_and_edges(mesh1, mesh2, operation):
     tree = scipy.spatial.KDTree(mesh.vertices)
     _, edge_verts_indices = tree.query(edge_verts_pts, k=1)
 
-    # XXX: Debug
-    # trimesh.repair.broken_faces(mesh, color=[255, 0, 0, 255])
-    # mesh.show(smooth=False)
-    # pass
-
-    # if mesh.is_watertight:
-    #     print("Mesh is watertight")
-    # else:
-    #     print("Mesh is NOT watertight")
     return mesh, edge_verts_indices
 
 
 def find_neighbors(mesh, group, distance):
-
+    """Finds the indices of vertices that are within a certain distance of a group of vertices."""
     mesh_pts = mesh.vertices.__array__()
     edge_pts = mesh.vertices[group].__array__()
 
@@ -688,14 +607,15 @@ def find_neighbors(mesh, group, distance):
 
 
 def fair_mesh(input_mesh, neighbors, harmonic_power):
+    """Smooths the vertices of a mesh at the specified indices.
+
+    This is useful when combining two meshes, resulting in a smooth transition."""
 
     union_mesh = input_mesh.copy()
     v = union_mesh.vertices.__array__()
     f = union_mesh.faces.__array__().astype("int64")
     num_verts = v.shape[0]
-    b = np.array(list(set(range(num_verts)) - set(neighbors))).astype(
-        "int64"
-    )  # Bounday indices - NOT to be faired
+    b = np.array(list(set(range(num_verts)) - set(neighbors))).astype("int64")  # Bounday indices - NOT to be faired
     bc = v[b]  # XYZ coordinates of the boundary indices
     z = igl.harmonic_weights(v, f, b, bc, harmonic_power)  # Smooths indices at creases
 
@@ -716,7 +636,6 @@ def fuse_meshes(meshA, meshB, fairing_distance, operation, add_verts=None):
     MAX_NUM_FUSES = 2
     fair_attempt = 0
     while fair_attempt < MAX_NUM_FUSES:
-
         # Shift meshB if initial fuse failed
         if fair_attempt > 0:
             print("fair_attempt: {}".format(fair_attempt))
@@ -728,11 +647,8 @@ def fuse_meshes(meshA, meshB, fairing_distance, operation, add_verts=None):
 
         count = 0
         while count < 5:
-
             # Compute boolean
-            union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(
-                mesh1, mesh2, operation
-            )
+            union_mesh, edge_verts_indices = calc_mesh_boolean_and_edges(mesh1, mesh2, operation)
             # Check watertightness; shift vertices slightly if not and repeat loop
             if union_mesh.is_watertight == False:
                 mesh1, mesh2 = move_verts_on_broken_faces(union_mesh, mesh1, mesh2)
@@ -741,20 +657,14 @@ def fuse_meshes(meshA, meshB, fairing_distance, operation, add_verts=None):
 
             count += 1
         else:
-            print(
-                "Mesh boolean failed to form a watertight mesh after {count} loops.".format(
-                    count=count
-                )
-            )
+            print("Mesh boolean failed to form a watertight mesh after {count} loops.".format(count=count))
             scene = trimesh.Scene()
             scene.add_geometry([mesh1, mesh2])
             scene.show()
 
         # union_mesh.show()
         if fairing_distance > 0:
-            edge_neighbors = find_neighbors(
-                union_mesh, edge_verts_indices, distance=fairing_distance
-            )
+            edge_neighbors = find_neighbors(union_mesh, edge_verts_indices, distance=fairing_distance)
 
             # tree = scipy.spatial.KDTree(union_mesh.vertices)
             # add_verts_neighbors_list = tree.query_ball_point(add_verts, r=0)
@@ -788,15 +698,9 @@ def fuse_meshes(meshA, meshB, fairing_distance, operation, add_verts=None):
         else:
             return union_mesh
 
-    # if union_mesh.is_watertight is False:
-    #     print("Mesh will not be faired, as it is not watertight.")
-    #     return union_mesh
-    # else:
-    #     faired_mesh = fair_mesh(union_mesh, neighbors, HARMONIC_POWER)
-    #     return faired_mesh
-
 
 def find_closest_surface_point(backbone_point, N, surface_points):
+    """Finds the closest point on a surface to a given point."""
 
     # Find surface points lying in direction of vector (i.e. correct side of object)
     backbone_to_vertices = surface_points - backbone_point
@@ -811,45 +715,12 @@ def find_closest_surface_point(backbone_point, N, surface_points):
     PB = B - P
     dist = np.linalg.norm(np.cross(PA, PB), axis=1) / np.linalg.norm(AB)
     closest_surface_point = P[dist.argmin()]
-
-    # # XXX: Debug
-    # import matplotlib.pyplot as plt
-    # from mpl_toolkits.mplot3d import Axes3D
-
-    # fig = plt.figure()
-    # ax = plt.axes(projection="3d")
-    # ax.set_xlabel("x")
-    # ax.set_ylabel("y")
-    # ax.set_zlabel("z")
-    # ax.view_init(elev=-90, azim=90)
-
-    # # Plot backbone point
-    # x, y, z = backbone_point.T
-    # ax.plot3D(x, y, z, ".k", markersize=20)
-
-    # # Plot surface
-    # x, y, z = surface_points[::17].T
-    # ax.plot3D(x, y, z, "b.")
-
-    # # Plot closest surface point
-    # x, y, z = closest_surface_point.T
-    # ax.plot3D(np.array([x]), np.array([y]), np.array([z]), "b.", markersize=20)
-
-    # # Plot N
-    # p0 = backbone_point
-    # p1 = p0 + N * 10
-    # x, y, z = np.vstack([p0, p1]).T
-    # ax.plot3D(x, y, z, "g-")
-
-    # plt.show()
     return closest_surface_point
 
 
 def get_deformation_points_along_plane(mesh, N, point):
-
-    lines, face_index = trimesh.intersections.mesh_plane(
-        mesh, N.ravel(), point.ravel(), return_faces=True
-    )
+    """Finds the points on a mesh that lie along a plane defined by a normal vector and a point."""
+    lines, face_index = trimesh.intersections.mesh_plane(mesh, N.ravel(), point.ravel(), return_faces=True)
     pts = lines.mean(axis=1)
     normals = mesh.face_normals[face_index]
 
@@ -857,6 +728,7 @@ def get_deformation_points_along_plane(mesh, N, point):
 
 
 def get_deformation_vertex(mesh, ac, dist_along_backbone, N_rotation=0):
+    """Finds the point on a mesh that lies along the backbone of an axial component."""
 
     r = ac.r(dist_along_backbone)
     T = ac.T(dist_along_backbone)
@@ -908,51 +780,14 @@ def transform_sd_mesh(sd_mesh, origin, ac, pos, theta_backbone, theta_linear_seg
 
     # Rotate goal_TNB about T  (rotation about vector through backbone and surface point)
     R_about_B = Rotation.from_rotvec(theta_linear_segment * goal_T).as_matrix()
-    surface_point = find_closest_surface_point(
-        backbone_point, N_rotated, surface_points
-    )
+    surface_point = find_closest_surface_point(backbone_point, N_rotated, surface_points)
     T = np.eye(4)
     T[:3, :3] = np.linalg.inv(goal_TNB @ R_about_B)
     T[:3, 3] = surface_point
 
-    # T = ac.backbone.T(pos)[0]
-    # N = ac.backbone.N(pos)[0]
-    # B = ac.backbone.B(pos)[0]
-    # R_upright = Rotation.from_rotvec(
-    #     np.pi / 2 * B
-    # ).as_matrix()  # 90deg rotation so that sd_mesh is orthogonal to backbone
-    # R_backbone = Rotation.from_rotvec(-theta_backbone * T).as_matrix()  # Rotation about backbone's tangent vector
-    # R_linear_segment = calc_R_euler_angles(
-    #     [theta_linear_segment, 0, 0]
-    # )  # Rotation about vector through surface point and backbone
-    # N_rotated = N @ R_backbone
-    # surface_point = find_closest_surface_point(backbone_point, N_rotated, surface_points)
-
-    # # Align sd with parent
-    # surface_point = find_closest_surface_point(backbone_point, N_rotated, surface_points)
-    # T = np.eye(4)
-    # T[:3, :3] = R_upright @ R_backbone @ np.linalg.inv(parent_basis)  # @ R_upright  # @ R_linear_segment
-    # T[:3, 3] = surface_point
-
     # Apply transformations
     sd_mesh.apply_translation(-origin)  # Move centroid to origin
     sd_mesh.apply_transform(T)
-    # # Calculate rotation matrices
-    # T = ac.backbone.T(pos)[0]
-    # N = ac.backbone.N(pos)[0]
-    # R_backbone = Rotation.from_rotvec(-theta_backbone * T).as_matrix()  # Rotation about backbone's tangent vector
-    # R_linear_segment = calc_R_euler_angles(
-    #     [theta_linear_segment, 0, 0]
-    # )  # Rotation about vector through surface point and backbone
-    # N_rotated = N @ R_backbone
-    # surface_point = find_closest_surface_point(backbone_point, N_rotated, surface_points)
-    # T = np.eye(4)
-    # T[:3, :3] = parent_basis @ R_backbone @ R_linear_segment
-    # T[:3, 3] = surface_point
-
-    # # Apply transformations
-    # sd_mesh.apply_translation(-origin)  # Move centroid to origin
-    # sd_mesh.apply_transform(T)
 
     return sd_mesh
 
@@ -962,9 +797,7 @@ def calc_mesh_principal_curvatures(mesh):
 
     # TODO: COMPAS implementation probably faster https://compas.dev/compas/latest/api/generated/compas_rhino.geometry.trimesh.trimesh_principal_curvature.html
     RADIUS = 1
-    K = trimesh.curvature.discrete_gaussian_curvature_measure(
-        mesh, mesh.vertices, RADIUS
-    )
+    K = trimesh.curvature.discrete_gaussian_curvature_measure(mesh, mesh.vertices, RADIUS)
     H = trimesh.curvature.discrete_mean_curvature_measure(mesh, mesh.vertices, RADIUS)
 
     # Handle nan's by replacing with 0 (k1 and k2 then both equal guassian curvature H)
@@ -976,9 +809,14 @@ def calc_mesh_principal_curvatures(mesh):
     return k1, k2
 
 
-##########
-# Misc Functions
+######################
+### Misc Functions ###
+######################
+
+
 def flatten(groups):
+    """Flattens a list of lists."""
+
     flattened = []
     for sublist in groups:
         for i in sublist:
@@ -987,14 +825,12 @@ def flatten(groups):
 
 
 def sliding_window_mean(arr, window_size, axis):
+    """Calculates the sliding window mean of an array along a specified axis."""
 
     assert window_size % 2 == 1, "window_size must be odd."
 
-    big_arr = np.zeros(
-        arr.shape + (window_size,)
-    )  # Add extra dimension along which we will average
+    big_arr = np.zeros(arr.shape + (window_size,))  # Add extra dimension along which we will average
     for idx in range(window_size):
-
         shift = (window_size - 1) // 2 - idx
         shifted = np.roll(arr, shift=shift, axis=axis)
         big_arr[..., idx] = shifted  # Ellipsis in python --> get last column. COOL!
@@ -1003,8 +839,9 @@ def sliding_window_mean(arr, window_size, axis):
     return big_arr.mean(axis=-1)  # Average along the axis we added (the last one)
 
 
-##########
-# Plotting helper functions
+#################################
+### Plotting helper functions ###
+#################################
 
 
 def plot_mesh_and_specific_indices(
@@ -1012,6 +849,7 @@ def plot_mesh_and_specific_indices(
     specific_indices,
     spacing=1,
 ):
+    """Plots a mesh and specific indices."""
 
     fig = plt.figure()
     ax = plt.axes(projection="3d")
@@ -1033,6 +871,7 @@ def plot_mesh_and_specific_indices(
 
 
 def plot_controlpoints(ac):
+    """Plots the controlpoints of an axial component."""
 
     # Controlpoints
     cp = ac.controlpoints
