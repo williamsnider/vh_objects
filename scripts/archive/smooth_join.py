@@ -1,6 +1,6 @@
 # Make a backbone that has a smooth junction
 
-from scripts.stimulus_set_B import app1, app2, app3, app4, thin, NUM_CS
+from scripts.stimulus_set_C import app1, app2, app3, app4, thin, NUM_CS
 from scripts.stimulus_set_params import X_WIDTH, SEGMENT_LENGTH
 from scripts.sheets import plot_arr
 from objects.utilities import make_surface, make_mesh, fuse_meshes, fair_mesh
