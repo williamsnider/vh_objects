@@ -99,8 +99,22 @@ class Shape:
         post_backbone = Backbone(post_backbone_cp, reparameterize=True)
         post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
         post_cp = np.hstack((POST_RADIUS * np.cos(post_th), POST_RADIUS * np.sin(post_th)))
-        post_cs_list = [CrossSection(controlpoints=post_cp, position=pos) for pos in [0.0, 0.01, 0.99, 1.0]]
+
+        # Increase cp in y direction to add a fillet to the interface connection
+        post_cp_fillet =np.hstack(((POST_RADIUS+2) * np.cos(post_th), (2+POST_RADIUS) * np.sin(post_th)))
+        # post_cp_fillet = post_cp.copy()
+
+        post_cs_list = [CrossSection(controlpoints=post_cp, position=0.0),
+                        CrossSection(controlpoints=post_cp, position=0.01),
+                        CrossSection(controlpoints=post_cp, position=0.9),
+                        CrossSection(controlpoints=post_cp_fillet, position=0.95),
+                        CrossSection(controlpoints=post_cp_fillet, position=0.99),
+                        CrossSection(controlpoints=post_cp_fillet, position=1.0)]
+        
         post_ac = AxialComponent(post_backbone, post_cs_list, smooth_with_post=False)
+
+        # Scale slightly to ensure boolean union works
+        post_ac.mesh = post_ac.mesh.apply_scale(0.99)
 
         # Shift post in z direction (to improve alignment with shape)
         post_ac.mesh = post_ac.mesh.apply_translation([0, 0, self.post_z_shift])

@@ -94,6 +94,8 @@ def bend_sheet(cp, backbone, max_scale):
     # scale = cp[:, :, 2] / edge_radius
     # scale[scale < 0] = 0
 
+
+
     scale = cp[:, :, 2] / max_scale
     scale[scale < 0] = 0
 

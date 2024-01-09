@@ -5,7 +5,7 @@ from pathlib import Path
 NUM_CP_PER_BACKBONE = 5
 SEGMENT_LENGTH = 35
 NUM_CS = 11
-X_WIDTH = 3.5  # base radius off which other features are derived.
+X_WIDTH = 4 # base radius off which other features are derived.
 NUM_CP_PER_CROSS_SECTION = 50
 
 # Limb sizes
@@ -19,11 +19,11 @@ SPHERE_ALIGNMENT_OFFSET = np.array(
 )  # Instead of perfectly aligning the left and right spheres of limb1 and limb2, shift limb2 slightly, which is necessary for the boolean union to work. Because these shifts are small (<0.25mm), this should be OK.
 
 # Post and interface
-POST_RADIUS = X_WIDTH * 0.99
+POST_RADIUS = X_WIDTH
 POST_OFFSET = 2  # Post and interface
 
 # Saving png and stl
-SAVE_DIR = Path("./sample_shapes/stimulus_set_A/")
+SAVE_DIR = Path("./sample_shapes/")
 
 # Volumetric and appendage sizes
 APPENDAGE_LENGTH = SEGMENT_LENGTH / 2
@@ -45,3 +45,8 @@ XYZ_OFFSET = 0.0  # Distance from volumetric/cylinder surface for origin of appe
 # Use a box at the end of shapes to fair (remove bump)
 BOX_EXTENTS = 3 * np.array([X_WIDTH, X_WIDTH, X_WIDTH])
 BOX_TRANSLATION = np.array([SEGMENT_LENGTH + 3 * X_WIDTH / 4, 0, 0])
+
+# Meshing
+uu = 50
+vv = 50
+

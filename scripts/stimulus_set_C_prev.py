@@ -42,11 +42,9 @@ from scripts.stimulus_set_params import (
     TERMINATION_RADIUS,
 )
 from scripts.stimulus_set_common import mesh_dict, volumetric, thin
-from pathlib import Path
 
 FAIRING_DISTANCE = 2
 POST_Z_SHIFT = 0
-SAVE_DIR = Path(SAVE_DIR, "stimulus_set_C")
 
 
 
@@ -83,7 +81,7 @@ vec_to_J2_orth = np.cross(vec_to_J2, vec_axial_component)
 
 J1_volu_pos = volumetric.backbone.r(1 / 3)
 J2_volu_pos = volumetric.backbone.r(2 / 3)
-J1_thin_pos = volumetric.backbone.r(5/12)
+J1_thin_pos = volumetric.backbone.r(0.5)
 J2_thin_pos = np.array([SEGMENT_LENGTH - X_WIDTH, 0, 0])
 # J2_pos =
 CO_xyz = np.array([SEGMENT_LENGTH - X_WIDTH / 2, 0, 0])
@@ -378,8 +376,8 @@ combs.append(comb)
 count += 1
 
 # J1 and J2 and Collinear
-for J_app in ["app7", "app8", "app9", "app10"]:
-    for CO_app in ["app7", "app8", "app9", "app10"]:
+for J_app in ["app1", "app2", "app3", "app4"]:
+    for CO_app in ["app1", "app2", "app3", "app4"]:
 
         # Iterate through J1 only, J2 only, J1+CO, J2+CO, J1+J2+CO
         for J1_J2_CO in [
@@ -430,7 +428,7 @@ for J_app in ["app7", "app8", "app9", "app10"]:
                         T_list.append(T_J2_hox)
 
                 # Prevent duplicates for shapes by not looping for CO if not present
-                if withCO == False and CO_app != "app7":
+                if withCO == False and CO_app != "app1":
                     continue
 
                 boolean_list = ["union" for _ in mesh_list]
@@ -483,16 +481,16 @@ count += 1
 
 # J1 and J2 and Collinear
 for J_app in [
-    "app7",
-    "app8",
-    "app9",
-    "app10",
+    "app1",
+    "app2",
+    "app3",
+    "app4",
     "app_point_convex",
     "app_point_concave",
     "app_round_convex",
     "app_round_concave",
 ]:
-    for CO_app in ["app7", "app8", "app9", "app10"]:
+    for CO_app in ["app1", "app2", "app3", "app4"]:
 
         # Iterate through J1 only, J2 only, J1+CO, J2+CO, J1+J2+CO
         for J1_J2_CO in [
@@ -566,7 +564,7 @@ for J_app in [
                         boolean_list.append("union")
 
                 # Prevent duplicates for shapes by not looping for CO if not present
-                if withCO == False and CO_app != "app7":
+                if withCO == False and CO_app != "app1":
                     continue
 
                 # # Add fairing box to remove bumps
@@ -854,5 +852,3 @@ if __name__ == "__main__":
         mapped_values = list(
             tqdm(pool.imap_unordered(build_shape, combs), total=len(combs))
         )
-    # for c in combs:
-        # build_shape(c)
