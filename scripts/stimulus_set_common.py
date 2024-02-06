@@ -142,7 +142,7 @@ app1 = Shaft(
     A_APPENDAGE_LENGTH,
     1.0 * A_X_WIDTH,
     1.0 * A_X_WIDTH,
-    1.4 * A_X_WIDTH,
+    1.7 * A_X_WIDTH,
     theta=0,
     lengthtype="one_hemi",
     num_cs=NUM_CS,
@@ -195,7 +195,7 @@ app2_K1.faces = app2_K1.faces[:, [0, 2, 1]]  # Flip faces to fix winding
 app3 = Shaft(
     A_APPENDAGE_LENGTH,
     1.0 * A_X_WIDTH,
-    1.5 * A_X_WIDTH,
+    1.7 * A_X_WIDTH,
     1.0 * A_X_WIDTH,
     theta=0,
     lengthtype="one_hemi",
@@ -247,8 +247,8 @@ app4_K1.faces = app4_K1.faces[:, [0, 2, 1]]  # Flip faces to fix winding
 app5 = Shaft(
     A_APPENDAGE_LENGTH,
     1.0 * A_X_WIDTH,
-    1.5 * A_X_WIDTH,
-    1.5 * A_X_WIDTH,
+    1.7 * A_X_WIDTH,
+    1.7 * A_X_WIDTH,
     theta=0,
     lengthtype="one_hemi",
     num_cs=NUM_CS,

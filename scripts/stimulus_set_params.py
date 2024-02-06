@@ -20,7 +20,7 @@ SPHERE_ALIGNMENT_OFFSET = np.array(
 
 # Post and interface
 POST_RADIUS = X_WIDTH
-POST_OFFSET = 2  # Post and interface
+POST_OFFSET = 0.25  # mm - Post shifted to improve overlap
 
 # Saving png and stl
 SAVE_DIR = Path("./sample_shapes/")

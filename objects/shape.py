@@ -35,7 +35,8 @@ class Shape:
         description,
         save_dir,
         T_final=np.eye(4),
-        fairing_distance=0,
+        mesh_fairing_distance=0,
+        post_fairing_distance=0,
         post_z_shift=0,
         fair_box=None,
     ):
@@ -46,7 +47,8 @@ class Shape:
         self.description = description
         self.T_final = T_final
         self.save_dir = save_dir
-        self.fairing_distance = fairing_distance
+        self.mesh_fairing_distance = mesh_fairing_distance
+        self.post_fairing_distance = post_fairing_distance
         self.post_z_shift = post_z_shift
         self.fair_box = fair_box
 
@@ -70,11 +72,17 @@ class Shape:
             mesh = mesh.copy()
             new_mesh_list.append(mesh.apply_transform(self.T_list[i]))
 
+
+        # import trimesh
+        # scene = trimesh.Scene()
+        # scene.add_geometry(new_mesh_list)
+        # scene.show()
+
         # Fuse meshes
         meshA = new_mesh_list[0]
         i = 1
         for meshB in new_mesh_list[1:]:
-            meshA = fuse_meshes(meshA, meshB, self.fairing_distance, self.boolean_list[i])
+            meshA = fuse_meshes(meshA, meshB, self.mesh_fairing_distance, self.boolean_list[i])
             i += 1
 
         # Fair region contained in box if needed
@@ -88,7 +96,7 @@ class Shape:
     def attach_interface(self):
         """Attach interface and post to the shape."""
 
-        # Attach post
+        # Construct post to connect the interface and shape
         post_backbone_cp = np.hstack(
             [
                 np.linspace(POST_OFFSET, INTERFACE_SHIFT - POST_OFFSET, NUM_CP_PER_BACKBONE).reshape(-1, 1),
@@ -98,36 +106,39 @@ class Shape:
         )
         post_backbone = Backbone(post_backbone_cp, reparameterize=True)
         post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
-        post_cp = np.hstack((POST_RADIUS * np.cos(post_th), POST_RADIUS * np.sin(post_th)))
+        post_cp = np.hstack((np.cos(post_th), np.sin(post_th)))
 
-        # Increase cp in y direction to add a fillet to the interface connection
-        post_cp_fillet =np.hstack(((POST_RADIUS+2) * np.cos(post_th), (2+POST_RADIUS) * np.sin(post_th)))
-        # post_cp_fillet = post_cp.copy()
-
-        post_cs_list = [CrossSection(controlpoints=post_cp, position=0.0),
-                        CrossSection(controlpoints=post_cp, position=0.01),
-                        CrossSection(controlpoints=post_cp, position=0.9),
-                        CrossSection(controlpoints=post_cp_fillet, position=0.95),
-                        CrossSection(controlpoints=post_cp_fillet, position=0.99),
-                        CrossSection(controlpoints=post_cp_fillet, position=1.0)]
-        
+        # Increase the radius of the post towards the interface to add a fillet (reduce stress concentration)
+        post_cs_list = [CrossSection(controlpoints=post_cp*POST_RADIUS, position=0.0),
+                        CrossSection(controlpoints=post_cp*POST_RADIUS, position=0.01),
+                        CrossSection(controlpoints=post_cp*POST_RADIUS, position=0.85),
+                        CrossSection(controlpoints=post_cp*(POST_RADIUS+1), position=0.95),
+                        CrossSection(controlpoints=post_cp*(POST_RADIUS+2), position=0.99),
+                        CrossSection(controlpoints=post_cp*(POST_RADIUS+2), position=1.00),]
+    
         post_ac = AxialComponent(post_backbone, post_cs_list, smooth_with_post=False)
+        post_ac.mesh = post_ac.mesh.apply_scale(0.999)         # Scale slightly to ensure boolean union works
+        post_ac.mesh = post_ac.mesh.apply_translation([0, 0, self.post_z_shift])         # Shift post in z direction (to improve alignment with shape)
 
-        # Scale slightly to ensure boolean union works
-        post_ac.mesh = post_ac.mesh.apply_scale(0.99)
+        # # Show scene
+        # import trimesh
+        # scene = trimesh.Scene()
+        # scene.add_geometry([post_ac.mesh, self.mesh])
+        # scene.show()
 
-        # Shift post in z direction (to improve alignment with shape)
-        post_ac.mesh = post_ac.mesh.apply_translation([0, 0, self.post_z_shift])
-
+        # Fuse post and shape
         meshA = self.mesh.copy()
-        meshA = fuse_meshes(meshA, post_ac.mesh, 2, "union")
+        meshA = fuse_meshes(meshA, post_ac.mesh, self.post_fairing_distance, "union")
 
-        # Attach interface
+
+        # Fuse interface and post+shape
         label = str(self.label).zfill(4)
         interface = load_interface(INTERFACE_PATH, label)
         mesh_with_interface = fuse_meshes(meshA, interface, 0, "union")
 
         self.mesh_with_interface = mesh_with_interface
+        # self.mesh_with_interface.show()
+        pass
 
     def export_stl(self):
         """Export mesh as stl."""

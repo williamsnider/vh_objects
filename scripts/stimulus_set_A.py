@@ -37,7 +37,7 @@ def construct_shapes(inputs):
         junc_rotation_name,
         junc_angle_name,
         count,
-        fairing_distance,
+        mesh_fairing_distance,
         SAVE_DIR,
     ) = inputs
 
@@ -60,8 +60,7 @@ def construct_shapes(inputs):
     else:
         L2 = mesh_dict[L2_name].copy()
 
-        print("Shrinking L2 - this is a hack, need to fix")
-        L2.apply_scale(0.999)
+        L2.apply_scale(0.999) # Shrink L2 slightly to avoid boolean union issues
         L2.visual.vertex_colors = np.array([255, 0, 255, 50])
         L2_T = np.eye(4)
 
@@ -113,7 +112,7 @@ def construct_shapes(inputs):
         #     ).as_matrix()
         
         if "_K1" in L1_name:
-            SHIFT = 7.6
+            SHIFT = 6.75
         else:
             SHIFT = 2.5
         L2_T[:3, 3] = [A_APPENDAGE_LENGTH - SHIFT, 0, 0]
@@ -127,8 +126,15 @@ def construct_shapes(inputs):
     # Transform final shape to align correctly with interface
     T_final = np.eye(4)
 
+
+    # Set fairing distance for shape and post.
+    if L1_name == "app0":
+        post_fairing_distance = 0.25  # Small fairing distance for straight-straight shapes
+    else:
+        post_fairing_distance = 2
+
     boolean_list = ["union" for _ in mesh_list]
-    s  = Shape(mesh_list, T_list, boolean_list, label, description, SAVE_DIR, T_final=T_final, fairing_distance=fairing_distance, post_z_shift=0)
+    s  = Shape(mesh_list, T_list, boolean_list, label, description, SAVE_DIR, T_final=T_final, mesh_fairing_distance=mesh_fairing_distance, post_fairing_distance=post_fairing_distance, post_z_shift=0)
     # s.mesh.show(smooth=False)
     # s.mesh.color = [255, 0, 0, 255]
 
@@ -143,30 +149,31 @@ def construct_shapes(inputs):
 count = 0
 combs = []
 
-# Single limb
-for L1_name in [  "app0",
-    "app0_K1",
-    "app1",
-    "app1_K1",
-    "app2", 
-    "app2_K1",
-    "app3",
-    "app3_K1",
-    "app4",
-    "app4_K1",
-    "app5",
-    "app5_K1",
+# # Single limb
+# for L1_name in [  "app0",
+#     "app0_K1",
+#     "app1",
+#     "app1_K1",
+#     "app2", 
+#     "app2_K1",
+#     "app3",
+#     "app3_K1",
+#     "app4",
+#     "app4_K1",
+#     "app5",
+#     "app5_K1",
 
-]:
-    L2_name = None
-    junc_rotation_name = "r0"
-    junc_angle_name = "ja1"
-    fairing_distance = 0
-    inputs = [L1_name, L2_name, junc_rotation_name, junc_angle_name, count, fairing_distance, SAVE_DIR]
+# ]:
+#     L2_name = None
+#     junc_rotation_name = "r0"
+#     junc_angle_name = "ja1"
+#     mesh_fairing_distance = 0
+#     inputs = [L1_name, L2_name, junc_rotation_name, junc_angle_name, count, mesh_fairing_distance, SAVE_DIR]
     
-    s = construct_shapes(inputs)
-    combs.append(inputs)
-    count += 1
+#     s = construct_shapes(inputs)
+#     combs.append(inputs)
+#     count += 1
+ 
 
 # Double limb 
 for L1_name in ["app0", "app0_K1", "app3", "app3_K1"]:
@@ -188,9 +195,11 @@ for L1_name in ["app0", "app0_K1", "app3", "app3_K1"]:
 
                 # Set fairing distance differently for straight-straight and other shapes
                 if ("_K1" not in L1_name) and ("_K1" not in L2_name) and (junc_angle_name == "ja0"):
-                    fairing_distance = 3#1
+                    mesh_fairing_distance = 1
+                elif (L1_name == "app0") and ("_K1" in L2_name) and (junc_angle_name == "ja0"):
+                    mesh_fairing_distance = 1
                 else:
-                    fairing_distance = 3#3
+                    mesh_fairing_distance = 3#3
 
                 inputs =   [
                         L1_name,
@@ -198,7 +207,7 @@ for L1_name in ["app0", "app0_K1", "app3", "app3_K1"]:
                         junc_rotation_name,
                         junc_angle_name,
                         count,
-                        fairing_distance,
+                        mesh_fairing_distance,
                         SAVE_DIR,
                     ]
                 combs.append(inputs
@@ -215,6 +224,7 @@ if __name__ == "__main__":
     #     )
 
     for i, comb in enumerate(combs[:]):
+
         construct_shapes(comb)
         print("Finished {} of {}".format( str(i).zfill(3), len(combs)))
 ##############################
@@ -228,7 +238,7 @@ if __name__ == "__main__":
 #     junc_rotation_name,
 #     junc_angle_name,
 #     count,
-#     fairing_distance,
+#     mesh_fairing_distance,
 #     SAVE_DIR,
 # ) = inputs
 
@@ -237,10 +247,10 @@ if __name__ == "__main__":
 # junc_rotation_name = "r0"
 # junc_angle_name = "ja1"
 # count = 0
-# fairing_distance = 6
+# mesh_fairing_distance = 6
 # SAVE_DIR = Path("./sample_shapes/stimulus_set_A/")
 
-# inputs = [L1_name, L2_name, junc_rotation_name, junc_angle_name, count, fairing_distance, SAVE_DIR]
+# inputs = [L1_name, L2_name, junc_rotation_name, junc_angle_name, count, mesh_fairing_distance, SAVE_DIR]
 # construct_shapes(inputs)
         
 #         # L2.apply_transform(L2_T)
@@ -280,9 +290,9 @@ if __name__ == "__main__":
 
 #                 # Set fairing distance differently for straight-straight and other shapes
 #                 if "_K1" not in L1_name and "_K1" not in L2_name and junc_angle_name == "ja0":
-#                     fairing_distance = 1
+#                     mesh_fairing_distance = 1
 #                 else:
-#                     fairing_distance = 3
+#                     mesh_fairing_distance = 3
 
 #                 combs.append(
 #                     [
@@ -291,7 +301,7 @@ if __name__ == "__main__":
 #                         junc_rotation_name,
 #                         junc_angle_name,
 #                         count,
-#                         fairing_distance,
+#                         mesh_fairing_distance,
 #                         SAVE_DIR,
 #                     ]
 #                 )
@@ -409,7 +419,7 @@ if __name__ == "__main__":
 # T_final = np.eye(4)
 
 # boolean_list = ["union" for _ in mesh_list]
-# s  = Shape(mesh_list, T_list, boolean_list, label, description, SAVE_DIR, T_final=T_final, fairing_distance=fairing_distance, post_z_shift=0)
+# s  = Shape(mesh_list, T_list, boolean_list, label, description, SAVE_DIR, T_final=T_final, mesh_fairing_distance=mesh_fairing_distance, post_z_shift=0)
 # s.mesh.show(smooth=False)
 # s.mesh.color = [255, 0, 0, 255]
 # # if "_K1" not in L1_name:
@@ -445,7 +455,7 @@ if __name__ == "__main__":
 # #     description,
 # #     SAVE_DIR,
 # #     T_final=T_final,
-# #     fairing_distance=fairing_distance,
+# #     mesh_fairing_distance=mesh_fairing_distance,
 # #     post_z_shift=post_z_shift,
 # # )
 
