@@ -8,3 +8,5 @@ stimulus_set
 *.ipynb
 samples
 *.png
+
+!*Interface_0032 v2.stl

@@ -68,7 +68,7 @@ cs2 = CrossSection(controlpoints = concave_cp*20, position = 0.9)
 # Generate an axial component, which uses the cross sections positioned along the backbone to form a quadratic b-spline surface
 ac = AxialComponent(backbone=backbone, cross_sections=[cs0, cs1, cs2])
 
-# Generate a shape (which can combine multiple axial components and surface deformations)
+# Generate a shape (which can combine multiple axial components)
 s = Shape([ac], label='Test_1234')
 s.mesh.show()
 
