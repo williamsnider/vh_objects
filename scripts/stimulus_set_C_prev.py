@@ -42,12 +42,9 @@ from scripts.stimulus_set_params import (
     TERMINATION_RADIUS,
 )
 from scripts.stimulus_set_common import mesh_dict, volumetric, thin
-from pathlib import Path
 
-MESH_FAIRING_DISTANCE = 2
-POST_FAIRING_DISTANCE = 2
+FAIRING_DISTANCE = 2
 POST_Z_SHIFT = 0
-SAVE_DIR = Path(SAVE_DIR, "stimulus_set_C")
 
 
 
@@ -84,7 +81,7 @@ vec_to_J2_orth = np.cross(vec_to_J2, vec_axial_component)
 
 J1_volu_pos = volumetric.backbone.r(1 / 3)
 J2_volu_pos = volumetric.backbone.r(2 / 3)
-J1_thin_pos = volumetric.backbone.r(5/12)
+J1_thin_pos = volumetric.backbone.r(0.5)
 J2_thin_pos = np.array([SEGMENT_LENGTH - X_WIDTH, 0, 0])
 # J2_pos =
 CO_xyz = np.array([SEGMENT_LENGTH - X_WIDTH / 2, 0, 0])
@@ -94,30 +91,24 @@ J1_volu_xyz_U = (
     find_line_mesh_intersection(volumetric.mesh, vec_to_J1, J1_volu_pos)
     + XYZ_OFFSET * vec_to_J1
 )
-# J1_volu_xyz_D = (
-#     find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, J1_volu_pos)
-#     + -XYZ_OFFSET * vec_to_J1
-# )
-J1_volu_xyz_D = J1_volu_xyz_U * np.array([1,1,-1])
-J2_volu_xyz_U = J1_volu_xyz_U + np.array([2*(SEGMENT_LENGTH/2-J1_volu_xyz_U[0]), 0, 0])
-J2_volu_xyz_D = J2_volu_xyz_U *np.array([1,1,-1])
-# J2_volu_xyz_U = (
-#     find_line_mesh_intersection(volumetric.mesh, vec_to_J2, J2_volu_pos)
-#     + XYZ_OFFSET * vec_to_J2
-# )
-# J2_volu_xyz_D = (
-#     find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, J2_volu_pos)
-#     + -XYZ_OFFSET * vec_to_J2
-# )
+J1_volu_xyz_D = (
+    find_line_mesh_intersection(volumetric.mesh, -vec_to_J1, J1_volu_pos)
+    + -XYZ_OFFSET * vec_to_J1
+)
+J2_volu_xyz_U = (
+    find_line_mesh_intersection(volumetric.mesh, vec_to_J2, J2_volu_pos)
+    + XYZ_OFFSET * vec_to_J2
+)
+J2_volu_xyz_D = (
+    find_line_mesh_intersection(volumetric.mesh, -vec_to_J2, J2_volu_pos)
+    + -XYZ_OFFSET * vec_to_J2
+)
 
 # Thin
 J1_thin_xyz_U = (
     find_line_mesh_intersection(thin.mesh, vec_to_J1, J1_thin_pos)
     + XYZ_OFFSET * vec_to_J1
 )
-# J1_thin_xyz_D = J1_thin_xyz_U * np.array([1,1,-1])
-# J2_thin_xyz_U = J1_thin_xyz_U + np.array([2*(SEGMENT_LENGTH/2-J1_thin_xyz_U[0]), 0, 0])
-# J2_thin_xyz_D = J2_thin_xyz_U * np.array([1,1,-1])
 J1_thin_xyz_D = (
     find_line_mesh_intersection(thin.mesh, -vec_to_J1, J1_thin_pos)
     + -XYZ_OFFSET * vec_to_J1
@@ -280,15 +271,11 @@ T_CO_L = calc_T(R_L, CO_xyz)
 T_CO_D = calc_T(R_D, CO_xyz)
 T_CO_R = calc_T(R_R, CO_xyz)
 
-# T_final shift x to align with post
-T_final = np.eye(4)
-T_final[0,3] = -X_WIDTH
 combs = []
 
 
 T_dict = {
     "T_eye": np.eye(4),
-    "T_final": T_final,
     "T_volu_J1_B_U": T_volu_J1_B_U,
     "T_volu_J1_B_D": T_volu_J1_B_D,
     "T_volu_J1_L_U": T_volu_J1_L_U,
@@ -342,27 +329,22 @@ def build_shape(inputs):
     description = inputs[4]
     save_dir = inputs[5]
     T_final = T_dict[inputs[6]]
-    mesh_fairing_distance = inputs[7]
-    post_fairing_distance = inputs[8]
-    post_z_shift = inputs[9]
-    fair_box = inputs[10]
-
+    fairing_distance = inputs[7]
+    post_z_shift = inputs[8]
+    fair_box = inputs[9]
 
     s = Shape(
-        mesh_list = mesh_list,
-        T_list = T_list,
-        boolean_list = boolean_list,
-        label = label,
-        description = description,
-        save_dir = save_dir,
-        T_final = T_final,
-        mesh_fairing_distance = mesh_fairing_distance,
-        post_fairing_distance = post_fairing_distance, 
-        post_z_shift = post_z_shift,
-        fair_box = fair_box,
+        mesh_list,
+        T_list,
+        boolean_list,
+        label,
+        description,
+        save_dir,
+        T_final,
+        fairing_distance,
+        post_z_shift,
+        fair_box,
     )
-
-
 
     # scene = trimesh.Scene()
     # box = trimesh.primitives.creation.box(np.array([5, 50, 50]))
@@ -385,9 +367,8 @@ comb = [
     str(count),
     "",
     SAVE_DIR,
-    "T_final",
-    MESH_FAIRING_DISTANCE,
-    POST_FAIRING_DISTANCE,
+    "T_eye",
+    FAIRING_DISTANCE,
     POST_Z_SHIFT,
     None,
 ]
@@ -395,8 +376,8 @@ combs.append(comb)
 count += 1
 
 # J1 and J2 and Collinear
-for J_app in ["app7", "app8", "app9", "app10"]:
-    for CO_app in ["app7", "app8", "app9", "app10"]:
+for J_app in ["app1", "app2", "app3", "app4"]:
+    for CO_app in ["app1", "app2", "app3", "app4"]:
 
         # Iterate through J1 only, J2 only, J1+CO, J2+CO, J1+J2+CO
         for J1_J2_CO in [
@@ -447,7 +428,7 @@ for J_app in ["app7", "app8", "app9", "app10"]:
                         T_list.append(T_J2_hox)
 
                 # Prevent duplicates for shapes by not looping for CO if not present
-                if withCO == False and CO_app != "app7":
+                if withCO == False and CO_app != "app1":
                     continue
 
                 boolean_list = ["union" for _ in mesh_list]
@@ -467,9 +448,8 @@ for J_app in ["app7", "app8", "app9", "app10"]:
                     str(count),
                     "",
                     SAVE_DIR,
-                    "T_final",
-                    MESH_FAIRING_DISTANCE,
-                    POST_FAIRING_DISTANCE,
+                    "T_eye",
+                    FAIRING_DISTANCE,
                     POST_Z_SHIFT,
                     box,
                 ]
@@ -491,9 +471,8 @@ comb = [
     str(count),
     "",
     SAVE_DIR,
-    "T_final",
-    MESH_FAIRING_DISTANCE,
-    POST_FAIRING_DISTANCE,
+    "T_eye",
+    FAIRING_DISTANCE,
     POST_Z_SHIFT,
     None,
 ]
@@ -502,16 +481,16 @@ count += 1
 
 # J1 and J2 and Collinear
 for J_app in [
-    "app7",
-    "app8",
-    "app9",
-    "app10",
+    "app1",
+    "app2",
+    "app3",
+    "app4",
     "app_point_convex",
     "app_point_concave",
     "app_round_convex",
     "app_round_concave",
 ]:
-    for CO_app in ["app7", "app8", "app9", "app10"]:
+    for CO_app in ["app1", "app2", "app3", "app4"]:
 
         # Iterate through J1 only, J2 only, J1+CO, J2+CO, J1+J2+CO
         for J1_J2_CO in [
@@ -585,7 +564,7 @@ for J_app in [
                         boolean_list.append("union")
 
                 # Prevent duplicates for shapes by not looping for CO if not present
-                if withCO == False and CO_app != "app7":
+                if withCO == False and CO_app != "app1":
                     continue
 
                 # # Add fairing box to remove bumps
@@ -604,9 +583,8 @@ for J_app in [
                     str(count),
                     "",
                     SAVE_DIR,
-                    "T_final",
-                    MESH_FAIRING_DISTANCE,
-                    POST_FAIRING_DISTANCE,
+                    "T_eye",
+                    FAIRING_DISTANCE,
                     POST_Z_SHIFT,
                     box,
                 ]
@@ -734,9 +712,8 @@ for J_app in [
                             str(count),
                             "",
                             SAVE_DIR,
-                            "T_final",
-                            MESH_FAIRING_DISTANCE,
-                            POST_FAIRING_DISTANCE,
+                            "T_eye",
+                            FAIRING_DISTANCE,
                             POST_Z_SHIFT,
                             box,
                         ]
@@ -852,9 +829,8 @@ for J_app in [
                             str(count),
                             "",
                             SAVE_DIR,
-                            "T_final",
-                            MESH_FAIRING_DISTANCE,
-                            POST_FAIRING_DISTANCE,
+                            "T_eye",
+                            FAIRING_DISTANCE,
                             POST_Z_SHIFT,
                             box,
                         ]
@@ -872,9 +848,7 @@ for J_app in [
 
 if __name__ == "__main__":
 
-    # with Pool() as pool:
-    #     mapped_values = list(
-    #         tqdm(pool.imap_unordered(build_shape, combs), total=len(combs))
-    #     )
-    for c in combs:
-        build_shape(c)
+    with Pool() as pool:
+        mapped_values = list(
+            tqdm(pool.imap_unordered(build_shape, combs), total=len(combs))
+        )

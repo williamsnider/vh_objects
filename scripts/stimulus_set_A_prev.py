@@ -47,6 +47,7 @@ for theta_name in ac_theta_dict.keys():
                     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
                 )
 
+
 ##############################
 ### Limb1 and Limb2 Shapes ###
 ##############################
@@ -250,8 +251,10 @@ for L1_name in [
                 count += 1
 
 
-# for i, comb in enumerate(combs[:]):
-#     construct_shapes(comb)
+for i, comb in enumerate(combs[:]):
+    construct_shapes(comb)
+
+# a = construct_shapes(combs[1])
 
 if __name__ == "__main__":
 

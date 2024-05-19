@@ -4,7 +4,6 @@ from objects.utilities import angle_between
 
 class CrossSection:
     def __init__(self, controlpoints, position, rotation=0, tilt=0, name=None):
-
         # Assign object attributes
         self.controlpoints = controlpoints
         self.position = position
@@ -19,12 +18,11 @@ class CrossSection:
         self.calc_points()
 
     def check_inputs(self):
-
         assert type(self.controlpoints) is np.ndarray, "controlpoints must be input as a numpy array."
 
         assert self.controlpoints.shape[1] == 2, "controlpoints must have 2 dimensions."
 
-        assert np.all(np.sum(self.controlpoints ** 2, axis=1) > 0), "Controlpoints cannot be at origin (0, 0)."
+        assert np.all(np.sum(self.controlpoints**2, axis=1) > 0), "Controlpoints cannot be at origin (0, 0)."
 
         assert self.position >= 0 and self.position <= 1, "position must be within closed interval [0,1]."
 
@@ -33,11 +31,13 @@ class CrossSection:
         assert self.tilt <= np.pi / 2 and self.tilt >= -np.pi / 2, "tilt must be within closed interval [-pi/2, pi/2]."
 
     def calc_points(self):
+        """Execute steps of cross section generation and alignment."""
         self.calc_rotation()
         self.align_controlpoints()
         self.calc_tilt()
 
     def calc_rotation(self):
+        """Calculate the rotation of the cross section."""
 
         # Rotate controlpoints
         cp = self.controlpoints
@@ -47,6 +47,7 @@ class CrossSection:
 
     def align_controlpoints(self):
         """Roll the controlpoints so that the cp closest to <1,0> is first. This prevents weird tears on the surface of the shape."""
+
         # Find angles between vectors to controlpoints and <1,0> (vector to theta=0)
         vec = self.controlpoints / np.linalg.norm(self.controlpoints, axis=1, keepdims=True)
         # angles = np.arccos(vec[:, 0])
@@ -63,6 +64,7 @@ class CrossSection:
         self.controlpoints = cp
 
     def calc_tilt(self):
+        """Calculate the tilt of the cross section."""
 
         # Add z-axis
         num_cp = self.controlpoints.shape[0]

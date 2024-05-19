@@ -31,6 +31,9 @@ def calc_R_to_align_rows_of_vectors(a, b):
 
 
 def calc_curvature_at_vertex(tree, mesh, v_idx, distance):
+    """Calculates the curvature at the vertex of a mesh.
+
+    Returns the principal curvatures and principal directions at the vertex."""
     neighbors = tree.query_ball_point(mesh.vertices[v_idx], distance)
     nonneighbors = np.ones(mesh.vertices.shape[0], dtype="bool")
     nonneighbors[neighbors] = 0
@@ -58,7 +61,6 @@ def calc_curvature_at_vertex(tree, mesh, v_idx, distance):
     b = data[:, 2]
     x, _, _, _ = scipy.linalg.lstsq(A, b)
 
-    # Not sure if this is accurate
     L = x[0]
     M = x[1]
     N = x[2]
@@ -86,7 +88,7 @@ def calc_curvature_at_vertex(tree, mesh, v_idx, distance):
 
 
 def calc_mesh_curvature(mesh, indices, distance):
-
+    """Calculates the curvature at the vertices of a mesh."""
     num_verts = len(indices)
     k1_arr = np.zeros(num_verts)
     k2_arr = np.zeros(num_verts)
@@ -95,7 +97,6 @@ def calc_mesh_curvature(mesh, indices, distance):
     tree = scipy.spatial.cKDTree(mesh.vertices)
 
     for i, v_idx in enumerate(indices):
-
         # # Plot verts with principal directions
         k1, k2, k1_vec, k2_vec = calc_curvature_at_vertex(tree, mesh, v_idx, distance)
         k1_arr[i] = k1
@@ -106,7 +107,7 @@ def calc_mesh_curvature(mesh, indices, distance):
 
 
 def plot_curvature(mesh, indices, k1_vec_arr):
-
+    """Plots the curvature at the vertices of a mesh."""
     # Plotting
     scale = 0.1
     v = mesh.vertices[indices].reshape(-1, 1, 3)
@@ -134,9 +135,7 @@ def plot_curvature(mesh, indices, k1_vec_arr):
 
 
 if __name__ == "__main__":
-
-    # Plot mesh with principal directions
-    # Vertices
+    # Plot mesh with principal directions at vertices of icosphere
     mesh = trimesh.creation.icosphere(4)
     mesh = mesh.apply_scale([1, 3, 5])
     distance = 0.5

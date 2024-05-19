@@ -4,10 +4,16 @@ from scipy.optimize import minimize
 from objects.utilities import make_surface, make_mesh
 from objects.backbone import Backbone
 from copy import deepcopy
-from scipy.spatial.transform import Rotation
+
+# Shaft.py is a modification of the shape generation method from Srinath et al., 2021
+
+########################
+### Helper functions ###
+########################
 
 
 def plot_profile(xx, yy, x, y, lxx, lyy, rxx, ryy):
+    """Plots the profile of the shaft for visualization."""
     ax = plt.figure().add_subplot()
     ax.plot(xx, yy, "-b")
     ax.plot(x, y, "r*")
@@ -18,6 +24,7 @@ def plot_profile(xx, yy, x, y, lxx, lyy, rxx, ryy):
 
 
 def piecewise_func(x, lr, la_s, quad_s, spacing, rr, ra_s, ldist):
+    """Piecewise function that describes the profile of the shaft."""
 
     # Left hemisphere
     if x < ldist:
@@ -31,14 +38,13 @@ def piecewise_func(x, lr, la_s, quad_s, spacing, rr, ra_s, ldist):
 
     # Right hemisphere
     else:
-
         th = np.arccos(np.round((x - ra_s) / rr, 8))  # Round to avoid >1
         assert np.isclose(x, rr * np.cos(th) + ra_s)
         return np.sin(th) * rr
 
 
 def calc_profile_hemi_hemi(spacing, r1, r2, r3, lengthtype="", plot=False):
-
+    """Calculates the profile for a shape with both ends being hemispherical."""
     assert lengthtype in ["one_hemi", "two_hemi"]
 
     # Fit quadratic
@@ -84,7 +90,6 @@ def calc_profile_hemi_hemi(spacing, r1, r2, r3, lengthtype="", plot=False):
 
     if plot == True:
         plot_profile(xx - lxx[0], yy, x - lxx[0], y, lxx - lxx[0], lyy, rxx - lxx[0], ryy)
-    # assert np.isclose(length, rxx[-1] - lxx[0])
 
     # Shift everything so that shapes starts at x=0
     if lengthtype == "two_hemi":
@@ -105,6 +110,7 @@ def calc_profile_hemi_hemi(spacing, r1, r2, r3, lengthtype="", plot=False):
 
 
 def optimize_spacing(*inputs):
+    """Optimize the spacing between the radii to achieve a desired length."""
     spacing, r1, r2, r3, GOAL_LENGTH, lengthtype = inputs
 
     length, _, _, _, _, _, _, _, _, _ = calc_profile_hemi_hemi(spacing, r1, r2, r3, lengthtype, plot=False)
@@ -112,6 +118,8 @@ def optimize_spacing(*inputs):
 
 
 class Shaft:
+    """Shaft objects are used to create the shaft of the appendage. They are a modification of the shape generation method from Srinath et al., 2021."""
+
     def __init__(
         self,
         length,
@@ -142,7 +150,6 @@ class Shaft:
         self.calc_sphere_origins()
 
     def calc_optimal_spacing(self):
-
         # Optimize distance between radii given goal_length
         x0 = self.length / 2
         res = minimize(
@@ -168,7 +175,6 @@ class Shaft:
         return T
 
     def make_shape(self):
-
         x = self.x
         y = self.y
 
@@ -190,7 +196,6 @@ class Shaft:
         base_cs = np.hstack([np.zeros(th.shape), np.cos(th), np.sin(th)])
 
         if self.theta != 0:
-
             # Calculate l portion
             NUM_L_CP = 5
             l_cp = np.hstack(
@@ -230,18 +235,11 @@ class Shaft:
                 ]
             )
 
-        # import matplotlib.pyplot as plt
-
-        # ax = plt.figure().add_subplot()
-        # ax.plot(b_cp[:, 0], b_cp[:, 1])
-        # plt.show()
         self.backbone = Backbone(b_cp, reparameterize=True)
-        # self.backbone = Backbone(arc_cp, reparameterize=True)
 
         # Shift points according to backbone
         cp = np.zeros((len(x), self.num_cp_per_cs, 3))
         for i in range(len(x)):
-
             new_cs = base_cs.copy()
 
             # Scale according to y
@@ -261,23 +259,13 @@ class Shaft:
             # Populate
             cp[i] = T_cs[:, :3]
 
-        # cp[:, :, 0] = x.reshape(-1, 1)
-
-        # # Plot self.backbone
-        # tt = np.linspace(0, 1.0)
-        # pts = self.backbone.r(tt)
-        # import matplotlib.pyplot as plt
-
-        # ax = plt.figure().add_subplot(projection="3d")
-        # ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], "-k")
-        # plt.show()
-
         surf = make_surface(cp)
         mesh = make_mesh(surf, 75, 75)
 
         return mesh, cp
 
     def make_shaft(self):
+        """Constructs the shaft."""
 
         # Calculate profile, which will be used to scale the controlpoints
         _, lr, la_s, lth, quad_s, _, rr, ra_s, rth, ldist = calc_profile_hemi_hemi(
@@ -309,10 +297,12 @@ class Shaft:
         self.mesh = mesh
 
     def calc_sphere_origins(self):
+        """Calculate the origins of the spheres at the ends of the shaft."""
         self.l_sphere_origin = (self.backbone.r(0.0) + self.backbone.T(0.0) * self.l_sphere_radius).ravel()
         self.r_sphere_origin = (self.backbone.r(1.0) + -self.backbone.T(1.0) * self.r_sphere_radius).ravel()
 
     def apply_transform(self, T):
+        """Apply a transformation to the shaft."""
         self.mesh = self.mesh.apply_transform(T)
         self.cp = (np.dstack([self.cp, np.ones((*self.cp.shape[:2], 1))]) @ T)[:, :, :3]
         self.l_sphere_origin = (np.concatenate([self.l_sphere_origin, np.array([1])]) @ T.T)[:3]
@@ -322,8 +312,8 @@ class Shaft:
         return deepcopy(self)
 
 
+# Testing
 if __name__ == "__main__":
-
     APPENDAGE_LENGTH = 40
     X_WIDTH = 4.25
     AC_RADII = np.array([0.1, 1, 2]) * X_WIDTH

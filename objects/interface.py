@@ -4,15 +4,13 @@ import numpy as np
 from freetype import Face
 import trimesh
 from shapely import geometry
-from objects.utilities import calc_R_euler_angles, fuse_meshes
-from pathlib import Path
+from objects.utilities import fuse_meshes
 from scipy.spatial.transform import Rotation
 from objects.parameters import (
     FONT_PATH,
     INTERFACE_WIDTH,
     LABEL_DEPTH,
     INTERFACE_DEPTH_FROM_ORIGIN,
-    INTERFACE_HEIGHT_ABOVE_ORIGIN,
     INTERFACE_PATH,
     INTERFACE_SHIFT,
     FONT_HEIGHT_IN_MM,
@@ -24,14 +22,12 @@ from objects.parameters import (
 
 
 def get_character_outline(char, shift=(0, 0)):
-
+    """Get the outline of a text character. Returns a list of contours, where each contour is a list of points."""
     char_size_pts = int(FONT_HEIGHT_IN_MM * 1000 * 3 // 2)
 
     assert len(char) == 1
     face = Face(str(FONT_PATH))
-    face.set_char_size(
-        char_size_pts
-    )  # If changing, must also change HEIGHT and WIDTH in calc_offsets
+    face.set_char_size(char_size_pts)  # If changing, must also change HEIGHT and WIDTH in calc_offsets
     face.load_char(char)
     slot = face.glyph
     outline = slot.outline
@@ -45,17 +41,8 @@ def get_character_outline(char, shift=(0, 0)):
     for c in contours:
         end = c + 1
         contour_points = outline_points[start:end]
-        contour_points = np.vstack(
-            [contour_points, contour_points[0]]
-        )  # Add first element to end to complete loop
+        contour_points = np.vstack([contour_points, contour_points[0]])  # Add first element to end to complete loop
         contour_points = contour_points.astype("float")
-
-        # # Scale points to fit onto interface. Interface is 25.4mm in width. We partition that as if we have 6 characters per line (max is 5 in reality).
-        # NUM_CHARS_PER_LINE_WITH_ADDITIONAL = 4
-        # scale = INTERFACE_WIDTH / (
-        #     FONT_OFFSET_WIDTH * NUM_CHARS_PER_LINE_WITH_ADDITIONAL
-        # )
-        # contour_points *= scale
 
         start = end
 
@@ -67,18 +54,12 @@ def get_character_outline(char, shift=(0, 0)):
     scaled_list = []
     for c in contours_list:
         scaled_list.append(c / 1000)
-    # import matplotlib.pyplot as plt
-
-    # ax = plt.figure().add_subplot()
-    # for c in scaled_list:
-    #     ax.plot(c[:, 0], c[:, 1], "k-*")
-    # ax.set_aspect("equal")
-    # plt.show()
 
     return scaled_list
 
 
 def calc_offsets(text):
+    """Calculate offsets for centering lines/characters."""
 
     lines = text.split("_")
     num_lines = len(lines)
@@ -117,6 +98,7 @@ def calc_offsets(text):
 
 
 def text_to_mesh(text, extrusion_height):
+    """Converts text to a trimesh."""
 
     # Extract characters and calculate offsets for centering lines/characters
     chars, offsets = calc_offsets(text)
@@ -124,10 +106,8 @@ def text_to_mesh(text, extrusion_height):
     # Gather outlines of characters
     text_list = []
     for line_num, line in enumerate(chars):
-
         assert len(line) <= 4, "No more than 4 characters allowed per line."
         for char_num, char in enumerate(line):
-
             offset = offsets[line_num][char_num]
             contours_list = get_character_outline(char, shift=offset)
             exterior = contours_list[0]
@@ -144,8 +124,6 @@ def text_to_mesh(text, extrusion_height):
     for exterior, interior in text_list:
         polygons.append(geometry.Polygon(shell=exterior, holes=interior))
 
-    import trimesh
-
     meshes = []
     for poly in polygons:
         meshes.append(
@@ -156,11 +134,9 @@ def text_to_mesh(text, extrusion_height):
 
 
 def load_interface(stl_path, label=None):
-
-    """Label uses underscores to split into different lines"""
+    """Loads the interface and adds the label."""
     interface = trimesh.load_mesh(stl_path)
-
-    Z_shift = -17.5
+    Z_shift = -17.5  # mm
 
     if label != None:
         # Generate mesh of label
@@ -178,11 +154,9 @@ def load_interface(stl_path, label=None):
         )
         top_label = [mesh.copy().apply_transform(T) for mesh in label_meshes]
 
-        # # Back label
+        # Back label
         T = np.eye(4)
-        T[:3, :3] = Rotation.from_euler(
-            "zyx", np.array([-np.pi / 2, 0, np.pi / 2])
-        ).as_matrix()
+        T[:3, :3] = Rotation.from_euler("zyx", np.array([-np.pi / 2, 0, np.pi / 2])).as_matrix()
         T[:3, 3] = np.array(
             [
                 0,
@@ -194,9 +168,7 @@ def load_interface(stl_path, label=None):
 
         # Left Label down
         T = np.eye(4)
-        R = Rotation.from_euler(
-            "zyx", np.array([-np.pi / 2, -np.pi / 2, 0])
-        ).as_matrix()
+        R = Rotation.from_euler("zyx", np.array([-np.pi / 2, -np.pi / 2, 0])).as_matrix()
         T[:3, :3] = R
         T[:3, 3] = np.array(
             [
@@ -209,9 +181,7 @@ def load_interface(stl_path, label=None):
 
         # Left Label up
         T = np.eye(4)
-        R = Rotation.from_euler(
-            "zyx", np.array([-np.pi / 2, -np.pi / 2, 0])
-        ).as_matrix()
+        R = Rotation.from_euler("zyx", np.array([-np.pi / 2, -np.pi / 2, 0])).as_matrix()
         T[:3, :3] = R
         T[:3, 3] = np.array(
             [
@@ -258,16 +228,9 @@ def load_interface(stl_path, label=None):
             *back_label,
         ]
 
-        # scene = trimesh.Scene()
-        # scene.add_geometry(all_labels)
-        # scene.add_geometry(interface)
-        # scene.show()
-
         interface_with_label = interface.copy()
         for mesh2 in all_labels:
-            interface_with_label = fuse_meshes(
-                interface_with_label, mesh2, fairing_distance=0, operation="difference"
-            )
+            interface_with_label = fuse_meshes(interface_with_label, mesh2, fairing_distance=0, operation="difference")
         interface = interface_with_label
 
     # Align with shape
@@ -281,6 +244,7 @@ def load_interface(stl_path, label=None):
 
 
 if __name__ == "__main__":
-    label = "1001"  # Splits lines based on underscores
+    # Test label
+    label = "1001"
     interface = load_interface(INTERFACE_PATH, label)
     interface.show()

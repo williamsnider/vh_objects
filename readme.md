@@ -85,7 +85,7 @@ s.mesh_with_interface.show()
 git clone https://github.com/williamsnider/vh_objects.git
 cd objects
 
-# Install objects
+# Install vh_objects
 conda create --name objects_venv python=3.7
 conda activate objects_venv
 pip install -e .
