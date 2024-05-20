@@ -53,7 +53,7 @@ class Shape:
         self.fair_box = fair_box
 
         self.combine_meshes()
-        self.attach_interface()
+        # self.attach_interface()
         self.export_stl()
 
         T = np.eye(4)
@@ -134,9 +134,9 @@ class Shape:
         # Fuse interface and post+shape
         label = str(self.label).zfill(4)
         interface = load_interface(INTERFACE_PATH, label)
-        mesh_with_interface = fuse_meshes(meshA, interface, 0, "union")
+        # mesh_with_interface = fuse_meshes(meshA, interface, 0, "union")
 
-        self.mesh_with_interface = mesh_with_interface
+        # self.mesh_with_interface = mesh_with_interface
         # self.mesh_with_interface.show()
         pass
 
@@ -151,7 +151,7 @@ class Shape:
 
         # Export
         filename = Path(SAVE_DIR, self.label).with_suffix(".stl")
-        self.mesh_with_interface.export(filename)
+        # self.mesh_with_interface.export(filename)
 
     def save_mesh_as_png(
         self,
@@ -180,16 +180,16 @@ class Shape:
         # Compose scene
         scene = pyrender.Scene(ambient_light=[0.1, 0.5, 0.3], bg_color=[1, 1, 1])
 
-        # Add mesh to scene
-        if rotation is not None:
-            mesh_pose = rotation
-        else:
-            mesh_pose = np.eye(4)
-        if interface == True:
-            mesh = pyrender.Mesh.from_trimesh(self.mesh_with_interface, smooth=False)
-        else:
-            mesh = pyrender.Mesh.from_trimesh(self.mesh, smooth=False)
-        scene.add(mesh, pose=mesh_pose)
+        # # Add mesh to scene
+        # if rotation is not None:
+        #     mesh_pose = rotation
+        # else:
+        #     mesh_pose = np.eye(4)
+        # if interface == True:
+        #     mesh = pyrender.Mesh.from_trimesh(self.mesh_with_interface, smooth=False)
+        # else:
+        #     mesh = pyrender.Mesh.from_trimesh(self.mesh, smooth=False)
+        # scene.add(mesh, pose=mesh_pose)
 
         # Camera pose explained:
         # +X axis is towards the right of the screen
