@@ -6,6 +6,7 @@ import numpy as np
 
 
 # Linear segment
+from pathlib import Path
 import copy
 import numpy as np
 from multiprocessing import Pool
@@ -105,6 +106,8 @@ def clip_along_axis(cp, axis, thickness):
 NUM_CS = 5
 NUM_CP_PER_CROSS_SECTION = 10
 
+export_dir = "scripts/samples/"
+shape_count = 0
 ##################
 ### Components ###
 ##################
@@ -113,8 +116,10 @@ c_dict = {}
 
 # Base cylinder
 base_cylinder_radius = 20
-base_cylinder_height = 0.5
+base_cylinder_height = 5
 base_cylinder = trimesh.creation.cylinder(radius=base_cylinder_radius, height=base_cylinder_height, sections=20)
+base_cylinder.apply_translation([0, 0, -base_cylinder_height])
+c_dict["base_cylinder"] = base_cylinder
 
 # Capsule
 capsule_diameter = 5
@@ -130,6 +135,26 @@ capsule_K0 = Shaft(
     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
 )
 
+# Tranform to be pointing upwards
+T_point_z = np.eye(4)
+T_point_z[:3, :3] = Rotation.from_euler("xyz", np.array([0, -np.pi / 2, 0])).as_matrix()
+
+thickness = 4
+
+# Capsule_K0 flattened
+capsule_K0_F1_cp = capsule_K0.cp.copy()
+capsule_K0_F1_cp[:, :, 2] = np.clip(capsule_K0_F1_cp[:, :, 2], -thickness / 2, thickness / 2)
+capsule_K0_F1_surf = make_surface(capsule_K0_F1_cp)
+capsule_K0_F1_mesh = make_mesh(capsule_K0_F1_surf, uu, vv)
+capsule_K0_F1_mesh.apply_transform(T_point_z)
+
+# Capsule_K0 flattened
+capsule_K0_F2_cp = capsule_K0.cp.copy()
+capsule_K0_F2_cp[:, :, 1] = np.clip(capsule_K0_F2_cp[:, :, 1], -thickness / 2, thickness / 2)
+capsule_K0_F2_surf = make_surface(capsule_K0_F2_cp)
+capsule_K0_F2_mesh = make_mesh(capsule_K0_F2_surf, uu, vv)
+capsule_K0_F2_mesh.apply_transform(T_point_z)
+
 # TODO: Fix the capsule length
 print("TODO: Fix the capsule length.")
 capsule_K1_length = capsule_length * 1.7
@@ -144,17 +169,17 @@ capsule_K1 = Shaft(
     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
 )
 
-# Tranform to be pointing upwards
-T_point_z = np.eye(4)
-T_point_z[:3, :3] = Rotation.from_euler("xyz", np.array([0, -np.pi / 2, 0])).as_matrix()
+
 capsule_K0.mesh.apply_transform(T_point_z)
 capsule_K1.mesh.apply_transform(T_point_z)
 
 c_dict["capsule_K0"] = capsule_K0.mesh
+c_dict["capsule_K0_F1"] = capsule_K0_F1_mesh
+c_dict["capsule_K0_F2"] = capsule_K0_F2_mesh
 c_dict["capsule_K1"] = capsule_K1.mesh
 
+
 # Capsule_K1 flattened
-thickness = 4
 capsule_K1_F1_cp = capsule_K1.cp.copy()
 capsule_K1_F1_cp = clip_along_axis(capsule_K1_F1_cp, 0, thickness)
 capsule_K1_F1_surf = make_surface(capsule_K1_F1_cp)
@@ -182,149 +207,265 @@ scene.show(smooth=False)
 
 s_components = []
 
-mesh_fairing_distance = 2
-mesh_name = "capsule_K1_F2"
-
-# Claw4
+mesh_fairing_distance = 0.25
 from trimesh.transformations import rotation_matrix as rotvec2T
 
-num_meshes = 4
-mesh_names = [mesh_name] * num_meshes
-mesh_list = []
-for i in range(num_meshes):
-    mesh = copy.deepcopy(c_dict[mesh_names[i]])
-    mesh.apply_scale(1 + 0.001 * i)
-    mesh_list.append(mesh)
-T_list = [rotvec2T(np.linspace(0, 2 * np.pi, num_meshes, endpoint=False)[i], [0, 0, 1]) for i in range(num_meshes)]
-op_list = ["union"] * num_meshes
-description = "claw"
-label = "D000"
+# for mesh_name in ["capsule_K1", "capsule_K1_F1", "capsule_K1_F2"]:
 
-claw4_0 = [mesh_list[:1], T_list[:1], op_list[:1], label, description, "test", np.eye(4), mesh_fairing_distance]
-claw4_01 = [mesh_list[:2], T_list[:2], op_list[:2], label, description, "test", np.eye(4), mesh_fairing_distance]
-claw4_02 = [mesh_list[::2], T_list[::2], op_list[::2], label, description, "test", np.eye(4), mesh_fairing_distance]
-claw4_012 = [mesh_list[:3], T_list[:3], op_list[:3], label, description, "test", np.eye(4), mesh_fairing_distance]
-claw4_0123 = [mesh_list, T_list, op_list, label, description, "test", np.eye(4), mesh_fairing_distance]
+#     # Spikes
+#     for num_meshes in [6, 8]:
 
-# Claw3
-num_meshes = 3
-mesh_names = [mesh_name] * num_meshes
-mesh_list = []
-for i in range(num_meshes):
-    mesh = copy.deepcopy(c_dict[mesh_names[i]])
-    mesh.apply_scale(1 + 0.001 * i)
-    mesh_list.append(mesh)
-T_list = [rotvec2T(np.linspace(0, 2 * np.pi, num_meshes, endpoint=False)[i], [0, 0, 1]) for i in range(num_meshes)]
-op_list = ["union"] * num_meshes
-description = "claw"
-label = "D001"
+#         if num_meshes == 6:
+#             idx_list = ["0", "01", "012", "04", "0145", "012345"]
+#             offset = np.pi / 3
+#         elif num_meshes == 8:
+#             idx_list = ["01", "02", "012", "0123", "0145", "0246", "012456", "01234567"]
+#             offset = np.pi
+#         else:
+#             raise ValueError("num_meshes must be 6 or 8")
 
-claw3_01 = [mesh_list[:2], T_list[:2], op_list[:2], label, description, "test", np.eye(4), mesh_fairing_distance]
-claw3_012 = [mesh_list, T_list, op_list, label, description, "test", np.eye(4), mesh_fairing_distance]
+#         mesh_names = [mesh_name] * num_meshes
+#         mesh_list = [base_cylinder]
+#         T_list = [np.eye(4)]
+#         for i in range(num_meshes):
+#             mesh = copy.deepcopy(c_dict[mesh_names[i]])
+#             mesh.apply_scale(1 + 0.001 * i)
+#             mesh_list.append(mesh)
 
-# Spikes4
-num_meshes = 4
-mesh_names = [mesh_name] * num_meshes
-mesh_list = []
-for i in range(num_meshes):
-    mesh = copy.deepcopy(c_dict[mesh_names[i]])
-    mesh.apply_scale(1 + 0.001 * i)
-    mesh_list.append(mesh)
-T_list = [
-    rotvec2T(np.linspace(0, 2 * np.pi, num_meshes, endpoint=False)[i], [0, 0, 1]) @ rotvec2T(np.pi / 2, [1, 0, 0])
-    for i in range(num_meshes)
-]
-op_list = ["union"] * num_meshes
-description = "spikes"
-label = "D002"
+#             if i < (num_meshes // 2):
+#                 T = rotvec2T(np.linspace(0, 2 * np.pi, num_meshes // 2, endpoint=False)[i], [0, 0, 1])
 
-spikes_4_0 = [mesh_list[:1], T_list[:1], op_list[:1], label, description, "test", np.eye(4), mesh_fairing_distance]
-spikes4_01 = [mesh_list[:2], T_list[:2], op_list[:2], label, description, "test", np.eye(4), mesh_fairing_distance]
-spikes4_02 = [mesh_list[::2], T_list[::2], op_list[::2], label, description, "test", np.eye(4), mesh_fairing_distance]
-spikes4_012 = [mesh_list[:3], T_list[:3], op_list[:3], label, description, "test", np.eye(4), mesh_fairing_distance]
-spikes4_0123 = [mesh_list, T_list, op_list, label, description, "test", np.eye(4), mesh_fairing_distance]
+#             else:
+#                 T1 = rotvec2T(
+#                     np.linspace(0, 2 * np.pi, num_meshes // 2, endpoint=False)[i - num_meshes // 2] + offset, [0, 0, 1]
+#                 )
+#                 T2 = rotvec2T(np.pi, [1, 0, 0])
+#                 T = T1 @ T2
+#                 T[2, 3] += (capsule_length - capsule_diameter) * 2
 
-# Spikes 3
-num_meshes = 3
-mesh_names = [mesh_name] * num_meshes
-mesh_list = []
-for i in range(num_meshes):
-    mesh = copy.deepcopy(c_dict[mesh_names[i]])
-    mesh.apply_scale(1 + 0.001 * i)
-    mesh_list.append(mesh)
-T_list = [
-    rotvec2T(np.linspace(0, 2 * np.pi, num_meshes, endpoint=False)[i], [0, 0, 1]) @ rotvec2T(np.pi / 2, [1, 0, 0])
-    for i in range(num_meshes)
-]
-op_list = ["union"] * num_meshes
-description = "spikes"
-label = "D003"
+#             T_list.append(T)
 
-spikes3_01 = [mesh_list[:2], T_list[:2], op_list[:2], label, description, "test", np.eye(4), mesh_fairing_distance]
-spikes3_012 = [mesh_list, T_list, op_list, label, description, "test", np.eye(4), mesh_fairing_distance]
+#         op_list = ["union"] * len(mesh_list)
+#         description = "claw"
+#         label = "D006"
 
-for claw in [spikes3_01, spikes3_012, spikes_4_0]:
-    s = Shape(*claw)
-    s.mesh.show(smooth=False)
+#         for idx_string in idx_list:
 
+#             idx = [int(i) for i in idx_string]
+#             mesh_list_sub = [mesh_list[0]]
+#             T_list_sub = [T_list[0]]
+#             op_list_sub = [op_list[0]]
+#             for i in idx:
+#                 mesh_list_sub.append(mesh_list[i + 1])
+#                 T_list_sub.append(T_list[i + 1])
+#                 op_list_sub.append(op_list[i + 1])
 
-# # scene = trimesh.Scene(base_cylinder)
+#             claw6 = [
+#                 mesh_list_sub,
+#                 T_list_sub,
+#                 op_list_sub,
+#                 label,
+#                 description,
+#                 "test",
+#                 np.eye(4),
+#                 mesh_fairing_distance,
+#             ]
+#             s = Shape(*claw6)
+#             s.mesh.export(Path(export_dir, str(shape_count).zfill(4) + ".stl"))
+#             shape_count += 1
 
-# # # Claw stimulus
-# # mesh_list = []
-# # num_meshes = 3
-# # for i in range(num_meshes):
+#             # s.mesh.show(smooth=False)
 
-# #     mesh = copy.deepcopy(capsule_K1.mesh)
+#     # Claw 8
+#     for num_meshes in [6, 8]:
 
-# #     # Rotate about z-axis
-# #     T = trimesh.transformations.rotation_matrix(np.linspace(0, 2 * np.pi, 3, endpoint=False)[i], [0, 0, 1])
-# #     mesh.apply_transform(T)
-# #     mesh.apply_scale(1 + 0.001 * i)
+#         if num_meshes == 6:
+#             idx_list = ["0", "01", "012", "04", "0145", "012345"]
+#             offset = np.pi / 3
+#         elif num_meshes == 8:
+#             idx_list = ["01", "02", "012", "0123", "0145", "0246", "012456", "01234567"]
+#             offset = np.pi
+#         else:
+#             raise ValueError("num_meshes must be 6 or 8")
 
-# #     mesh_list.append(mesh)
+#         mesh_names = [mesh_name] * num_meshes
+#         mesh_list = [base_cylinder]
+#         T_list = [np.eye(4)]
+#         for i in range(num_meshes):
+#             mesh = copy.deepcopy(c_dict[mesh_names[i]])
+#             mesh.apply_scale(1 + 0.001 * i)
+#             mesh_list.append(mesh)
 
-# # Leaf
-# b_cp = approximate_arc(np.pi / 2, APPENDAGE_LENGTH, 5)
-# b_cp = b_cp[:, [1, 2, 0]]  # Reorder
-# b_cp[:, 0] *= -1  # Flip direction across yz axis
-# b_appendage_K1 = Backbone(b_cp, reparameterize=True)
+#             if i < (num_meshes // 2):
+#                 T1 = rotvec2T(np.linspace(0, 2 * np.pi, num_meshes // 2, endpoint=False)[i], [0, 0, 1])
+#                 T2 = rotvec2T(np.pi / 2, [1, 0, 0])
+#                 T = T1 @ T2
+#                 T[2, 3] += 0
 
-# # Flatten along z-axis
+#             else:
+#                 if num_meshes == 8:
+#                     offset = np.pi
+#                 elif num_meshes == 6:
+#                     offset = np.pi / 3
+#                 else:
+#                     raise ValueError("num_meshes must be 6 or 8")
+#                 T1 = rotvec2T(
+#                     np.linspace(0, 2 * np.pi, num_meshes // 2, endpoint=False)[i - num_meshes // 2] + offset, [0, 0, 1]
+#                 )
+#                 T2 = rotvec2T(3 * np.pi / 2, [1, 0, 0])
+#                 T = T1 @ T2
+#                 T[2, 3] += (capsule_length - capsule_diameter) * 2
 
-# # All z-values above thickness/2 are set to thickness/2
-# leaf_K0_cp = capsule_K0.cp.copy()
-# leaf_K0_cp[:, :, 2] = np.clip(leaf_K0_cp[:, :, 2], -thickness / 2, thickness / 2)
-# leaf_K0_surf = make_surface(leaf_K0_cp)
-# leaf_K0_mesh = make_mesh(leaf_K0_surf, uu, vv)
-# leaf_K0_mesh.show(smooth=False)
+#             T_list.append(T)
 
-# # Flatten along bend
-# leaf_K1_cp = capsule_K1.cp.copy()
+#         op_list = ["union"] * len(mesh_list)
+#         description = "claw"
+#         label = "D006"
 
-# cs_num = 7
+#         for idx_string in idx_list:
 
+#             idx = [int(i) for i in idx_string]
+#             mesh_list_sub = [mesh_list[0]]
+#             T_list_sub = [T_list[0]]
+#             op_list_sub = [op_list[0]]
+#             for i in idx:
+#                 mesh_list_sub.append(mesh_list[i + 1])
+#                 T_list_sub.append(T_list[i + 1])
+#                 op_list_sub.append(op_list[i + 1])
 
-# plot_cp(cp_new)
+#             claw6 = [
+#                 mesh_list_sub,
+#                 T_list_sub,
+#                 op_list_sub,
+#                 label,
+#                 description,
+#                 "test",
+#                 np.eye(4),
+#                 mesh_fairing_distance,
+#             ]
+#             s = Shape(*claw6)
+#             s.mesh.export(Path(export_dir, str(shape_count).zfill(4) + ".stl"))
+#             shape_count += 1
 
+################
+### Straight ###
+################
+shape_count = 500
+for mesh_name in ["capsule_K0", "capsule_K0_F1", "capsule_K0_F2"]:
 
-# # Transform to xy plane
-# cs_cp = leaf_K1_cp[cs_num]
-# centerpoint = np.mean(cs_cp, axis=0)
-# vecT = centerpoint - np.array([0, 0, 0])
-# vecT /= np.linalg.norm(vecT)
-# vecN = np.cross(vecT, np.array([0, 0, 1]))
-# vecN /= np.linalg.norm(vecN)
-# vecB = np.cross(vecT, vecN)
-# vecB /= np.linalg.norm(vecB)
-# T = np.eye(4)
-# T[:3, 0] = vecN
-# T[:3, 1] = vecT
-# T[:3, 2] = vecB
-# T[:3, 3] = centerpoint
-# T_inv = np.linalg.inv(T)
-# cs_cp_h = np.hstack([cs_cp, np.ones((cs_cp.shape[0], 1))])
-# cs_cp_h_xy = np.dot(T_inv, cs_cp_h.T).T[:, :3]
+    # Orthogonal
+    mesh_names = ["base_cylinder"]
+    mesh_names.extend([mesh_name] * 6)
+    T_list = [np.eye(4)]
 
+    # Component 1
+    T = np.eye(4)
+    T_list.append(T)
 
-# scene.show()
+    # Component 2
+    T = np.eye(4)
+    T[2, 3] += capsule_length - capsule_diameter / 2  # shift up
+    T_list.append(T)
+
+    # Components 3,4,5,6 (rotations about Z-axis)
+    for i in range(4):
+        T1 = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 0, 1])
+        T2 = rotvec2T(np.pi / 2, [1, 0, 0])
+        T = T1 @ T2
+        T[2, 3] += capsule_length - capsule_diameter / 2
+        T_list.append(T)
+
+    mesh_list = []
+    for i in range(len(mesh_names)):
+        mesh_copy = copy.deepcopy(c_dict[mesh_names[i]])
+        mesh_copy.apply_scale(1 + 0.001 * i)
+        mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
+        mesh_list.append(mesh_copy)
+
+    op_list = ["union"] * len(mesh_list)
+    description = "straight"
+    label = "D006"
+
+    idx_list = ["0", "02", "023", "024", "0234", "02345", "01", "012", "0123", "0124", "01234", "012345"]
+    for idx_string in idx_list:
+
+        idx = [int(i) for i in idx_string]
+        mesh_list_sub = [mesh_list[0]]
+        T_list_sub = [T_list[0]]
+        op_list_sub = [op_list[0]]
+        for i in idx:
+            mesh_list_sub.append(mesh_list[i + 1])
+            T_list_sub.append(T_list[i + 1])
+            op_list_sub.append(op_list[i + 1])
+
+        claw6 = [
+            mesh_list_sub,
+            T_list_sub,
+            op_list_sub,
+            label,
+            description,
+            "test",
+            np.eye(4),
+            mesh_fairing_distance,
+        ]
+        s = Shape(*claw6)
+        # s.mesh.show(smooth=False)
+
+        s.mesh.export(Path(export_dir, str(shape_count).zfill(4) + ".stl"))
+        shape_count += 1
+
+    # 45up 90around
+    mesh_names = ["base_cylinder"]
+    mesh_names.extend([mesh_name] * 5)
+    T_list = [np.eye(4)]
+
+    # Component 1
+    T = np.eye(4)
+    T_list.append(T)
+
+    # Components 2,3,4,5 (90deg rotations about z-axis, 45deg rotation about x-axis)
+    for i in range(4):
+        T1 = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 0, 1])
+        T2 = rotvec2T(np.pi / 4, [1, 0, 0])
+        T = T1 @ T2
+        T[2, 3] += capsule_length - capsule_diameter / 2
+        T_list.append(T)
+
+    mesh_list = []
+    for i in range(len(mesh_names)):
+        mesh_copy = copy.deepcopy(c_dict[mesh_names[i]])
+        mesh_copy.apply_scale(1 + 0.001 * i)
+        mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
+        mesh_list.append(mesh_copy)
+
+    op_list = ["union"] * len(mesh_list)
+    description = "straight"
+    label = "D006"
+
+    idx_list = ["0", "01", "012", "013", "0123", "01234"]
+    for idx_string in idx_list:
+
+        idx = [int(i) for i in idx_string]
+        mesh_list_sub = [mesh_list[0]]
+        T_list_sub = [T_list[0]]
+        op_list_sub = [op_list[0]]
+        for i in idx:
+            mesh_list_sub.append(mesh_list[i + 1])
+            T_list_sub.append(T_list[i + 1])
+            op_list_sub.append(op_list[i + 1])
+
+        claw6 = [
+            mesh_list_sub,
+            T_list_sub,
+            op_list_sub,
+            label,
+            description,
+            "test",
+            np.eye(4),
+            mesh_fairing_distance,
+        ]
+        s = Shape(*claw6)
+        # s.mesh.show(smooth=False)
+
+        s.mesh.export(Path(export_dir, str(shape_count).zfill(4) + ".stl"))
+        shape_count += 1
