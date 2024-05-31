@@ -59,6 +59,13 @@ def plot_cp(cp):
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_zlabel("z")
+
+    # Set axis limits
+    ax_min = np.min(cp)
+    ax_max = np.max(cp)
+    ax.set_xlim(ax_min, ax_max)
+    ax.set_ylim(ax_min, ax_max)
+    ax.set_zlim(ax_min, ax_max)
     plt.show()
 
 
@@ -102,9 +109,6 @@ def clip_along_axis(cp, axis, thickness):
         cp_clipped[cs_num, :, :] = cs_cp_n
     return cp_clipped
 
-
-NUM_CS = 5
-NUM_CP_PER_CROSS_SECTION = 10
 
 export_dir = "scripts/samples/"
 shape_count = 0
