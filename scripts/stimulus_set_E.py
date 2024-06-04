@@ -9,6 +9,22 @@ import copy
 #################
 ### Utilities ###
 #################
+# Plot all components
+def plot_components(comp_dict):
+    scene = trimesh.Scene()
+    x_trans = 0
+    gap = 3
+    for key in comp_dict:
+
+        # Translate mesh so that they don't overlap
+        mesh_copy = copy.deepcopy(comp_dict[key])
+        mesh_copy.apply_translation([-mesh_copy.bounds[0][0] + x_trans, 0, 0])  # Align left side to origin
+        scene.add_geometry(mesh_copy)
+        x_trans = mesh_copy.bounds[1][0] + gap
+
+    scene.show(smooth=False)
+
+
 def clip_along_axis(cp, axis, thickness):
 
     cp_clipped = np.zeros(cp.shape)
@@ -93,6 +109,13 @@ CAPSULE_K1_LENGTH = CAPSULE_LENGTH * 1.7
 T_point_z = np.eye(4)
 T_point_z[:3, :3] = Rotation.from_euler("xyz", np.array([0, -np.pi / 2, 0])).as_matrix()
 
+# Base cylinder
+base_cylinder_radius = 20
+base_cylinder_height = 5
+base_cylinder = trimesh.creation.cylinder(radius=base_cylinder_radius, height=base_cylinder_height, sections=20)
+base_cylinder.apply_translation([0, 0, -base_cylinder_height])
+comp_dict["base_cylinder"] = base_cylinder
+
 
 # capsule_K0
 capsule_K0 = Shaft(
@@ -152,111 +175,6 @@ capsule_K1_F2_surf = make_surface(capsule_K1_F2_cp)
 capsule_K1_F2_mesh = make_mesh(capsule_K1_F2_surf, uu, vv)
 capsule_K1_F2_mesh.apply_transform(T_point_z)
 comp_dict["capsule_K1_F2"] = capsule_K1_F2_mesh
-
-# Capsule_K1 flattened and curved in cross sectional plane
-# capsule_K1_F2_K_cp = capsule_K1_F1_cp.copy()
-# num_cs = capsule_K1_F2_cp.shape[0]
-
-# # bend cs
-# full_bend_angle = -np.pi / 2
-# bend_angle_by_cs = np.hstack(
-#     [
-#         np.linspace(0, full_bend_angle, num=NUM_CS),
-#         np.ones(NUM_CS) * full_bend_angle,
-#         np.linspace(full_bend_angle, 0, num=NUM_CS),
-#     ]
-# )
-# for cs_num in range(1, num_cs - 1):
-#     cs_cp = capsule_K1_F2_K_cp[cs_num, :, :]
-
-#     # transform to xy plane
-#     cs_cp_centerpoint = np.mean(cs_cp, axis=0)
-#     cs_cp = cs_cp - cs_cp_centerpoint
-#     vec1 = np.array([0, 0, 1])
-#     vec2 = cs_cp[0] - cs_cp[NUM_CP_PER_CROSS_SECTION // 2]
-#     vec3 = np.cross(vec1, vec2)
-#     vec3 = vec3 / np.linalg.norm(vec3)
-#     vec2 = np.cross(vec3, vec1)
-#     vec2 = vec2 / np.linalg.norm(vec2)
-#     R_curr = np.vstack([vec1, vec2, vec3])
-#     R_goal = np.eye(3)
-#     R = np.dot(R_goal, np.linalg.inv(R_curr))
-#     cs_cp_t = np.dot(cs_cp, R)
-
-#     bend_angle = bend_angle_by_cs[cs_num]
-#     bend_length = cs_cp_t[:, 0].max() - cs_cp_t[:, 0].min()
-#     bend_radius = bend_length / bend_angle
-
-#     num_cs_cp = cs_cp.shape[0]
-#     right_pairs = np.vstack([np.arange(num_cs_cp / 4 + 1), np.arange(num_cs_cp / 2, num_cs_cp / 4 - 1, -1)])
-#     left_pairs = np.vstack(
-#         [
-#             np.arange(NUM_CP_PER_CROSS_SECTION - 1, num_cs_cp / 4 * 3 - 1, -1),
-#             np.arange(num_cs_cp / 2 + 1, num_cs_cp / 4 * 3 + 1),
-#         ]
-#     )
-#     pair_indices = np.hstack([right_pairs, left_pairs]).astype("int")
-
-#     cs_cp_t_bend = np.zeros_like(cs_cp_t)
-
-#     for pair_idx in pair_indices.T:
-#         pair = cs_cp_t[pair_idx, :]
-#         pair_center = np.mean(pair, axis=0)
-#         dist_pair_to_cs_center = np.linalg.norm(pair_center) * np.sign(pair_center[0])
-#         arc_length = dist_pair_to_cs_center
-#         pair_angle = arc_length / bend_radius
-#         pair_new_center = np.array(
-#             [bend_radius * np.sin(pair_angle), bend_radius * np.cos(pair_angle) - bend_radius, 0]
-#         )
-#         from scipy.spatial.transform import Rotation
-
-#         Rz = Rotation.from_euler("z", pair_angle).as_matrix()
-#         pair_at_center = pair - pair_center
-#         pair_t = pair_at_center @ Rz + pair_new_center
-
-#         cs_cp_t_bend[pair_idx, :] = pair_t
-
-#     t = np.linspace(bend_angle / -2, bend_angle / 2, 100)
-#     x = bend_radius * np.sin(t)
-#     y = bend_radius * np.cos(t) - bend_radius
-#     z = np.zeros_like(x)
-
-#     cs_cp_new = cs_cp_t_bend @ R.T
-#     cs_cp_new += cs_cp_centerpoint
-#     capsule_K1_F2_K_cp[cs_num, :, :] = cs_cp_new
-#     # plot_cp(capsule_K1_F2_K_cp)
-
-
-# plot_cp(capsule_K1_F2_K_cp)
-
-# # Make mesh
-# capsule_K1_F2_K_surf = make_surface(capsule_K1_F2_K_cp)
-# capsule_K1_F2_K_mesh = make_mesh(capsule_K1_F2_K_surf, uu, vv)
-# capsule_K1_F2_K_mesh.apply_transform(T_point_z)
-# comp_dict["capsule_K1_F2_K"] = capsule_K1_F2_K_mesh
-# comp_dict["capsule_K1_F2_K"].show(smooth=False)
-
-# import matplotlib.pyplot as plt
-
-# ax = plt.axes(projection="3d")
-# ax.plot(cs_cp_t[:, 0], cs_cp_t[:, 1], cs_cp_t[:, 2], "b-*")
-# ax.plot(x, y, z, "r")
-# ax.plot(cs_cp_t_bend[:, 0], cs_cp_t_bend[:, 1], cs_cp_t_bend[:, 2], "g-*")
-# axmin = np.min(cs_cp_t)
-# axmax = np.max(cs_cp_t)
-# ax.set_xlabel("x")
-# ax.set_ylabel("y")
-# ax.set_zlabel("z")
-
-# ax.set_xlim(axmin, axmax)
-# ax.set_ylim(axmin, axmax)
-# ax.set_zlim(axmin, axmax)
-
-# plt.show()
-
-# plot_cp(cs_cp_t.reshape(1, -1, 3))
-
-# plot_cp(capsule_K1_F2_K_cp)
 
 
 # Make rounded, flat, bent cross section
@@ -322,24 +240,24 @@ num_cp_per_cs = 10
 cp = construct_rounded_cs(bend_angle, thickness, width, num_cp_per_cs)
 
 # arc_array = approximate_arc(np.pi, np.pi*thickness/2,5)
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
-ax = plt.axes(projection="3d")
-# ax.plot(top[:, 0], top[:, 1], top[:, 2], "b-*")
-# ax.plot(bottom[:, 0], bottom[:, 1], bottom[:, 2], "r-*")
-# ax.plot(right[:, 0], right[:, 1], right[:, 2], "g-*")
-# ax.plot(left[:, 0], left[:, 1], left[:, 2], "y-*")
-ax.plot(cp[:, 0], cp[:, 1], cp[:, 2], "k-*")
-# ax.plot(arc_array[:, 0], arc_array[:, 1], arc_array[:, 2], "r-*")
-ax.set_xlabel("x")
-ax.set_ylabel("y")
-ax.set_zlabel("z")
-axmin = np.min(cp)
-axmax = np.max(cp)
-ax.set_xlim(axmin, axmax)
-ax.set_ylim(axmin, axmax)
-ax.set_zlim(axmin, axmax)
-plt.show()
+# ax = plt.axes(projection="3d")
+# # ax.plot(top[:, 0], top[:, 1], top[:, 2], "b-*")
+# # ax.plot(bottom[:, 0], bottom[:, 1], bottom[:, 2], "r-*")
+# # ax.plot(right[:, 0], right[:, 1], right[:, 2], "g-*")
+# # ax.plot(left[:, 0], left[:, 1], left[:, 2], "y-*")
+# ax.plot(cp[:, 0], cp[:, 1], cp[:, 2], "k-*")
+# # ax.plot(arc_array[:, 0], arc_array[:, 1], arc_array[:, 2], "r-*")
+# ax.set_xlabel("x")
+# ax.set_ylabel("y")
+# ax.set_zlabel("z")
+# axmin = np.min(cp)
+# axmax = np.max(cp)
+# ax.set_xlim(axmin, axmax)
+# ax.set_ylim(axmin, axmax)
+# ax.set_zlim(axmin, axmax)
+# plt.show()
 
 from objects.utilities import approximate_arc
 
@@ -400,31 +318,5 @@ for i in range(len(x)):
 surf = make_surface(cp_new)
 mesh = make_mesh(surf, 75, 75)
 
-# mesh = mesh.apply_transform(T_point_z)
+mesh = mesh.apply_transform(T_point_z)
 comp_dict["capsule_K1_F2_K"] = mesh
-
-# Plot all components
-scene = trimesh.Scene()
-# x_trans = 0
-# gap = 3
-# for key in comp_dict:
-
-#     # Translate mesh so that they don't overlap
-#     mesh_copy = copy.deepcopy(comp_dict[key])
-#     mesh_copy.apply_translation([-mesh_copy.bounds[0][0] + x_trans, 0, 0])  # Align left side to origin
-#     scene.add_geometry(mesh_copy)
-#     x_trans = mesh_copy.bounds[1][0] + gap
-
-
-# Plot points in scene
-pts = cp_new.reshape(-1, 3)
-# pts = np.hstack([pts, np.ones([len(pts), 1])])
-# pts = pts @ T_point_z
-# # pts = pts[:, :3]
-scene.add_geometry(comp_dict["capsule_K1_F2_K"])
-scene.add_geometry(trimesh.points.PointCloud(pts))
-
-scene.show(smooth=False)
-
-comp_dict["capsule_K1_F2_K"].extents
-comp_dict["capsule_K0"].extents
