@@ -101,7 +101,7 @@ comp_dict["torso_dumbbell_K0"] = torso_dumbbell_K0.mesh
 
 # dumbbell K1
 torso_dumbbell_K1 = Shaft(
-    torso_length,
+    1.25 * torso_length,
     dumbbell_r1,
     dumbbell_r2,
     dumbbell_r3,
@@ -153,7 +153,6 @@ sf_sphere_difference.visual.face_colors = color_difference
 comp_dict["sf_sphere_difference"] = sf_sphere_difference
 
 
-# # plot_components(comp_dict)
 from scripts.stimulus_set_common import construct_sheet
 from objects.utilities import make_surface, make_mesh
 
@@ -168,7 +167,59 @@ comp_dict["sf_round_flat_union"].visual.face_colors = color_union
 comp_dict["sf_round_flat_difference"] = sf_round_flat.copy()
 comp_dict["sf_round_flat_difference"].visual.face_colors = color_difference
 
-plot_components(comp_dict)
+# capsule_flat
+# sf_capsule_K0 = Shaft(
+#     2 * sf_radius,
+#     1.0 * sf_radius,
+#     1.0 * sf_radius,
+#     1.0 * sf_radius,
+#     theta=0,
+#     lengthtype="one_hemi",
+#     num_cs=NUM_CS,
+#     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+# )
+
+from scripts.stimulus_set_E import clip_along_axis, construct_cp_from_cs_func, construct_rounded_cs
+
+sf_capsule_base_shaft_K0 = Shaft(
+    2 * sf_radius,
+    1.0 * sf_radius,
+    1.0 * sf_radius,
+    1.0 * sf_radius,
+    theta=0,
+    lengthtype="one_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
+
+sf_capsule_K0_F1_cp = construct_cp_from_cs_func(
+    construct_rounded_cs, sf_capsule_base_shaft_K0, NUM_CS, FLATTENED_THICKNESS, sf_radius, 0
+)
+sf_capsule_K0_F1_surf = make_surface(sf_capsule_K0_F1_cp)
+sf_capsule_K0_F1_mesh = make_mesh(sf_capsule_K0_F1_surf, uu, vv)
+sf_capsule_K0_F1_mesh.apply_transform(T_point_z)
+comp_dict["sf_capsule_K0_F1"] = sf_capsule_K0_F1_mesh
+
+sf_capsule_base_shaft_K1 = Shaft(
+    3 * sf_radius,
+    1.0 * sf_radius,
+    1.0 * sf_radius,
+    1.0 * sf_radius,
+    theta=np.pi / 4,
+    lengthtype="one_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
+sf_capsule_K1_F1_cp = construct_cp_from_cs_func(
+    construct_rounded_cs, sf_capsule_base_shaft_K1, NUM_CS, FLATTENED_THICKNESS, sf_radius, 0
+)
+sf_capsule_K1_F1_surf = make_surface(sf_capsule_K1_F1_cp)
+sf_capsule_K1_F1_mesh = make_mesh(sf_capsule_K1_F1_surf, uu, vv)
+sf_capsule_K1_F1_mesh.apply_transform(T_point_z)
+comp_dict["sf_capsule_K1_F1"] = sf_capsule_K1_F1_mesh
+
+
+# plot_components(comp_dict)
 # # Sphere flattened and faired
 # # sf_sphere_union.visual.face_colors = color_union
 # sf_sphere_flat = sf_sphere_union.copy()
