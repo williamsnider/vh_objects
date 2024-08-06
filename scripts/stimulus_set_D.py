@@ -18,32 +18,15 @@ from objects.utilities import (
     make_surface,
     calc_mesh_boolean_and_edges,
 )
-from scripts.sheets import construct_sheet, bend_sheet, make_base_cp, plot_arr
+
+# from scripts.sheets import construct_sheet, bend_sheet, make_base_cp, plot_arr
 import trimesh
 from scipy.spatial.transform.rotation import Rotation
 from objects.shaft import Shaft
-from scripts.stimulus_set_params import (
-    NUM_CP_PER_BASE_SHEET,
-    NUM_CP_PER_CROSS_SECTION,
-    NUM_CS,
-    NUM_CS_PER_SHEET,
-    SEGMENT_LENGTH,
-    X_WIDTH,
-    VOLUMETRIC_RADII,
-    SHEET_THICKNESS,
-    POINT_RADII,
-    POINT_ROUNDOVER_OFFSET,
-    LEAF_RADII,
-    APPENDAGE_LENGTH,
-    SAVE_DIR,
-    XYZ_OFFSET,
-    ROUND_RADIUS,
-    BOX_EXTENTS,
-    BOX_TRANSLATION,
-    TERMINATION_RADIUS,
-    uu,
-    vv,
-)
+
+
+uu = 50
+vv = 50
 
 
 def plot_cp(cp):

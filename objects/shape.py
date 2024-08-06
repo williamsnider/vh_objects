@@ -52,6 +52,7 @@ class Shape:
         self.post_z_shift = post_z_shift
         self.fair_box = fair_box
 
+        print("Test before combine")
         self.combine_meshes()
         # self.attach_interface()
         self.export_stl()
@@ -60,7 +61,7 @@ class Shape:
         T[:3, :3] = Rotation.from_euler("xyz", np.array([-np.pi / 2, 0, 0])).as_matrix()
         self.save_mesh_as_png(
             rotation=T,
-            interface=True,
+            interface=False,
         )
 
     def combine_meshes(self):
@@ -71,7 +72,6 @@ class Shape:
         for i, mesh in enumerate(self.mesh_list):
             mesh = mesh.copy()
             new_mesh_list.append(mesh.apply_transform(self.T_list[i]))
-
 
         # import trimesh
         # scene = trimesh.Scene()
@@ -109,16 +109,20 @@ class Shape:
         post_cp = np.hstack((np.cos(post_th), np.sin(post_th)))
 
         # Increase the radius of the post towards the interface to add a fillet (reduce stress concentration)
-        post_cs_list = [CrossSection(controlpoints=post_cp*POST_RADIUS, position=0.0),
-                        CrossSection(controlpoints=post_cp*POST_RADIUS, position=0.01),
-                        CrossSection(controlpoints=post_cp*POST_RADIUS, position=0.85),
-                        CrossSection(controlpoints=post_cp*(POST_RADIUS+1), position=0.95),
-                        CrossSection(controlpoints=post_cp*(POST_RADIUS+2), position=0.99),
-                        CrossSection(controlpoints=post_cp*(POST_RADIUS+2), position=1.00),]
-    
+        post_cs_list = [
+            CrossSection(controlpoints=post_cp * POST_RADIUS, position=0.0),
+            CrossSection(controlpoints=post_cp * POST_RADIUS, position=0.01),
+            CrossSection(controlpoints=post_cp * POST_RADIUS, position=0.85),
+            CrossSection(controlpoints=post_cp * (POST_RADIUS + 1), position=0.95),
+            CrossSection(controlpoints=post_cp * (POST_RADIUS + 2), position=0.99),
+            CrossSection(controlpoints=post_cp * (POST_RADIUS + 2), position=1.00),
+        ]
+
         post_ac = AxialComponent(post_backbone, post_cs_list, smooth_with_post=False)
-        post_ac.mesh = post_ac.mesh.apply_scale(0.999)         # Scale slightly to ensure boolean union works
-        post_ac.mesh = post_ac.mesh.apply_translation([0, 0, self.post_z_shift])         # Shift post in z direction (to improve alignment with shape)
+        post_ac.mesh = post_ac.mesh.apply_scale(0.999)  # Scale slightly to ensure boolean union works
+        post_ac.mesh = post_ac.mesh.apply_translation(
+            [0, 0, self.post_z_shift]
+        )  # Shift post in z direction (to improve alignment with shape)
 
         # # Show scene
         # import trimesh
@@ -130,10 +134,9 @@ class Shape:
         meshA = self.mesh.copy()
         meshA = fuse_meshes(meshA, post_ac.mesh, self.post_fairing_distance, "union")
 
-
         # Fuse interface and post+shape
         label = str(self.label).zfill(4)
-        interface = load_interface(INTERFACE_PATH, label)
+        # interface = load_interface(INTERFACE_PATH, label)
         # mesh_with_interface = fuse_meshes(meshA, interface, 0, "union")
 
         # self.mesh_with_interface = mesh_with_interface
