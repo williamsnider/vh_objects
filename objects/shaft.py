@@ -131,6 +131,7 @@ class Shaft:
         num_cs,
         num_cp_per_cs,
         truncate_hemi1=False,
+        base_cs=None,
     ):
         self.length = length
         self.r1 = r1
@@ -333,29 +334,3 @@ if __name__ == "__main__":
 
     plot_arr(shaft1.cp)
     shaft1.mesh.show()
-
-    # shaft2 = Shaft(25, 2, 4, 2, np.pi / 2, "two_hemi", 11, 50)
-    # shaft2.mesh.visual.vertex_colors = np.array([255, 0, 255, 75])
-
-    # # Shift to origin
-    # T = np.eye(4)
-    # T[:3, 3] = -shaft2.l_sphere_origin
-    # shaft2.apply_transform(T)
-
-    # # Shift to align with shaft1
-    # T = shaft1.get_T(1.0)
-    # T[:3, 3] = shaft1.r_sphere_origin
-    # shaft2.apply_transform(T)
-
-    # import trimesh
-
-    # l = trimesh.primitives.creation.icosphere()
-    # l.apply_translation(shaft2.l_sphere_origin)
-    # r = trimesh.primitives.creation.icosphere()
-    # r.apply_translation(shaft1.r_sphere_origin)
-
-    # scene = trimesh.Scene()
-    # scene.add_geometry([shaft1.mesh, shaft2.mesh, r, l])
-    # scene.show()
-
-    # shaft.mesh.show()
