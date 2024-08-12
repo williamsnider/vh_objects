@@ -83,13 +83,42 @@ s.mesh_with_interface.show()
 ```bash
 # Set up directory
 git clone https://github.com/williamsnider/vh_objects.git
-cd objects
+cd vh_objects
 
-# Install vh_objects
-conda create --name objects_venv python=3.7
-conda activate objects_venv
+# # Install vh_objects
+# conda create --name vh_objects_venv python=3.7
+# conda activate vh_objects_venv
+# pip install -e .
+
+# # Install other packages from conda (compas easily installable via conda)
+# # conda install -c conda-forge matplotlib trimesh rtree compas compas_cgal igl shapely opencv ipython ipykernel ipympl pytest --yes
+
+# conda install -c conda-forge compas compas_cgal igl shapely trimesh matplotlib  ipython pytest
+
+# conda install ipython pytest  scipy 
+# pip install matplotlib opencv-python
+
+
+
+
+# conda create --name vh_objects_venv
+# conda activate vh_objects
+# conda install -c conda-forge compas compas_cgal igl
+# pip install -e .
+# conda install -c conda-forge shapely trimesh matplotlib ipython pytest
+
+
+conda create --name vh_objects_venv -c conda-forge python=3.9 compas compas_cgal igl shapely trimesh matplotlib ipython pytest
+conda activate vh_objects_venv
 pip install -e .
+# Received ImportError: libscip.so.9.0: cannot open shared object file: No such file or directory, so installed SCIP from source https://scipopt.org/index.php#download
 
-# Install other packages from conda (compas easily installable via conda)
-conda install -c conda-forge matplotlib trimesh rtree compas compas_cgal igl shapely opencv ipython ipykernel ipympl black pytest --yes
+# Added location of libscip.so.9.0 to LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
+# Downgraded pyglet to be compatible with trimesh viewer
+pip install pyglet==1.5
+
 ```
+
+
