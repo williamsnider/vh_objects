@@ -1,20 +1,20 @@
 import copy
 import numpy as np
-from objects.backbone import Backbone
-from objects.cross_section import CrossSection
-from objects.axial_component import AxialComponent
-from objects.utilities import (
+from vh_objects.backbone import Backbone
+from vh_objects.cross_section import CrossSection
+from vh_objects.axial_component import AxialComponent
+from vh_objects.utilities import (
     fuse_meshes,
     fair_mesh,
 )
-from objects.parameters import INTERFACE_PATH, INTERFACE_SHIFT
-from scripts.stimulus_set_params import (
+from vh_objects.parameters import INTERFACE_PATH, INTERFACE_SHIFT
+from scripts.archive_new.stimulus_set_params import (
     POST_OFFSET,
     NUM_CP_PER_CROSS_SECTION,
     NUM_CP_PER_BACKBONE,
     POST_RADIUS,
 )
-from objects.interface import load_interface
+from vh_objects.interface import load_interface
 from scipy.spatial.transform.rotation import Rotation
 from pathlib import Path
 import scipy

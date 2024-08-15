@@ -1,7 +1,7 @@
 # Construct sheets needed in experiment
 import numpy as np
-from objects.utilities import make_mesh, make_surface, approximate_arc, angle_between
-from objects.backbone import Backbone
+from vh_objects.utilities import make_mesh, make_surface, approximate_arc, angle_between
+from vh_objects.backbone import Backbone
 
 
 def plot_arr(cp):
@@ -9,17 +9,34 @@ def plot_arr(cp):
 
     ax = plt.figure().add_subplot(projection="3d")
     arr = cp
-    for i in range(arr.shape[0]):
-        ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "b-*")
+
+    if arr.ndim == 2:
+        ax.plot(arr[:, 0], arr[:, 1], arr[:, 2], "b-*")
+        xs = arr[:, 0].ravel()
+        ys = arr[:, 1].ravel()
+        zs = arr[:, 2].ravel()
+    elif arr.ndim == 3:
+        for i in range(arr.shape[0]):
+            ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2], "b-*")
+        xs = arr[:, :, 0].ravel()
+        ys = arr[:, :, 1].ravel()
+        zs = arr[:, :, 2].ravel()
+
+    # Set scale
+    x_mid = (xs.max() + xs.min()) / 2
+    y_mid = (ys.max() + ys.min()) / 2
+    z_mid = (zs.max() + zs.min()) / 2
+    x_range = xs.max() - xs.min()
+    y_range = ys.max() - ys.min()
+    z_range = zs.max() - zs.min()
+
+    dim = max(x_range, y_range, z_range)
+
     # for i in range(arr.shape[1]):
     #     ax.plot(arr[:, i, 0], arr[:, i, 1], arr[:, i, 2], "g-")
-    # Set scale
-    xs = arr[:, :, 0].ravel()
-    ys = arr[:, :, 1].ravel()
-    zs = arr[:, :, 2].ravel()
-    ax.set_box_aspect(
-        (np.ptp(xs), np.ptp(ys), np.ptp(zs))
-    )  # aspect ratio is 1:1:1 in data space
+    ax.set_xlim([x_mid - dim / 2, x_mid + dim / 2])
+    ax.set_ylim([y_mid - dim / 2, y_mid + dim / 2])
+    ax.set_zlim([z_mid - dim / 2, z_mid + dim / 2])
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_zlabel("z")
@@ -40,6 +57,11 @@ def construct_sheet(base_sheet, sheet_thickness, num_cs):
     vecB = arr - np.roll(arr, 1, axis=0)
     vecB = vecB / np.linalg.norm(vecB, axis=1, keepdims=True)
     vecBisect = vecA + vecB
+
+    # Handle straight sides - bisecting vector is zero
+    vecBisect[np.all(vecBisect == 0, axis=1)] = arr[np.all(vecBisect == 0, axis=1)]  # Axis from (0,0) to point
+
+    # Normalize bisecting vector
     vecBisect = vecBisect / np.linalg.norm(vecBisect, axis=1, keepdims=True)
     vecC = arr / np.linalg.norm(arr, axis=1, keepdims=True)
     dotproduct = np.sum(vecBisect * vecC, axis=1)
@@ -81,7 +103,7 @@ def construct_sheet(base_sheet, sheet_thickness, num_cs):
     return cp
 
 
-def bend_sheet(cp, backbone, max_scale):
+def bend_sheet(cp, backbone, max_scale, K_perpendicular=0):
 
     assert np.all(np.isclose(backbone.r(0.0), np.array([0.0, 0.0, 0.0])))
     assert np.isclose(backbone.r(0.0)[0, 1], 0)  # Must lie in yz-plane
@@ -93,8 +115,6 @@ def bend_sheet(cp, backbone, max_scale):
     # ).max()  # TODO: Only works for spherical
     # scale = cp[:, :, 2] / edge_radius
     # scale[scale < 0] = 0
-
-
 
     scale = cp[:, :, 2] / max_scale
     scale[scale < 0] = 0
@@ -124,13 +144,25 @@ def bend_sheet(cp, backbone, max_scale):
                     dist_from_end = (point_scale - 1.0) * max_scale
                 else:
                     dist_from_end = 0.0
-                new_point = (
-                    backbone.r(pos)
-                    - backbone.B(pos) * dist_to_yz_plane
-                    + backbone.T(pos) * dist_from_end
+
+                new_point = backbone.r(pos) - backbone.B(pos) * dist_to_yz_plane + backbone.T(pos) * dist_from_end
+
+                # Bend along perpendicular axis
+                dist_to_xz_plane = point_xyz[1]
+                if K_perpendicular == 0:
+                    theta = 0
+                else:
+                    theta = dist_to_xz_plane * K_perpendicular
+
+                new_point += (
+                    backbone.B(pos) * np.sin(theta) * dist_to_xz_plane
+                    + backbone.N(pos) * np.cos(theta) * dist_to_xz_plane
                 )
 
-                new_point[0, 1] = point_xyz[1]  # Keep original y value
+                if i == 7 and j == 7:
+                    print("here")
+
+                # new_point[0, 1] = point_xyz[1]  # Keep original y value
                 new_cp[i, j] = new_point
 
     return new_cp

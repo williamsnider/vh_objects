@@ -6,7 +6,7 @@ from multiprocessing import Pool
 from tqdm import tqdm
 from scripts.stimulus_set_common import mesh_dict
 from pathlib import Path
-from scripts.stimulus_set_params import (
+from scripts.archive_new.stimulus_set_params import (
     SEGMENT_LENGTH,
     NUM_CS,
     X_WIDTH,

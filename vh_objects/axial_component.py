@@ -1,7 +1,7 @@
 import numpy as np
 from splipy import BSplineBasis, Surface
-from objects.parameters import SAMPLING_DENSITY_U, SAMPLING_DENSITY_V
-from objects.utilities import calc_hemisphere_controlpoints, make_surface, make_mesh
+from vh_objects.parameters import SAMPLING_DENSITY_U, SAMPLING_DENSITY_V
+from vh_objects.utilities import calc_hemisphere_controlpoints, make_surface, make_mesh
 
 
 class AxialComponent:

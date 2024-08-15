@@ -4,13 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import minimize, minimize_scalar
-from objects.parameters import ORDER, HARMONIC_POWER
+from vh_objects.parameters import ORDER, HARMONIC_POWER
 from splipy import BSplineBasis, Curve, Surface
 import igl
 import trimesh
 import scipy
 from scipy.spatial.transform import Rotation
-from compas_cgal.booleans import boolean_union, boolean_difference
+from compas_cgal.booleans import booleans
 
 
 ##########################
@@ -561,18 +561,21 @@ def move_verts_on_broken_faces(union_mesh, mesh1, mesh2):
 
 def calc_mesh_boolean_and_edges(mesh1, mesh2, operation):
     # Use compas/CGAL to calculate boolean operation
-    mesh_A = [mesh1.vertices.tolist(), mesh1.faces.tolist()]
+    VA = mesh1.vertices.__array__()
+    FA = mesh1.faces.__array__().astype('int32')
+    VB = mesh2.vertices.__array__()
+    FB = mesh2.faces.__array__().astype('int32')
     mesh_B = [mesh2.vertices.tolist(), mesh2.faces.tolist()]
     if operation == "union":
-        mesh_C = boolean_union(mesh_A, mesh_B)
+        mesh_C = booleans.boolean_union(VA, FA, VB, FB)
     elif operation == "difference":
-        mesh_C = boolean_difference(mesh_A, mesh_B)
+        mesh_C = booleans.boolean_difference(VA, FA, VB, FB)
     else:
         raise NotImplementedError("Boolean operation must be 'union' or 'difference'.")
 
     # Get edges - vertices that were in neither initial mesh
-    set_A = set([tuple(l) for l in mesh_A[0]])
-    set_B = set([tuple(l) for l in mesh_B[0]])
+    set_A = set([tuple(l) for l in VA])
+    set_B = set([tuple(l) for l in VB])
     set_C = set([tuple(l) for l in mesh_C[0]])
     new_verts = (set_C - set_A) - set_B
     edge_verts_pts = np.zeros((len(new_verts), 3))

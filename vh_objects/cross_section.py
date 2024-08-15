@@ -1,5 +1,5 @@
 import numpy as np
-from objects.utilities import angle_between
+from vh_objects.utilities import angle_between
 
 
 class CrossSection:

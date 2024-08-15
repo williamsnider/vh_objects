@@ -1,6 +1,6 @@
 import numpy as np
 from objects.backbone import Backbone
-from scripts.stimulus_set_params import (
+from scripts.archive_new.stimulus_set_params import (
     SEGMENT_LENGTH,
     X_WIDTH,
     NUM_CP_PER_BACKBONE,

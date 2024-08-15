@@ -21,7 +21,7 @@ from scripts.sheets import construct_sheet, bend_sheet, make_base_cp
 import trimesh
 from scipy.spatial.transform.rotation import Rotation
 from objects.shaft import Shaft
-from scripts.stimulus_set_params import (
+from scripts.archive_new.stimulus_set_params import (
     NUM_CP_PER_BASE_SHEET,
     NUM_CP_PER_CROSS_SECTION,
     NUM_CS,

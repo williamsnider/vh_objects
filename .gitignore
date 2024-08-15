@@ -9,5 +9,7 @@ stimulus_set
 samples
 *.png
 
+sample_shapes*/
+
 !*Interface_0032 v2.stl
 

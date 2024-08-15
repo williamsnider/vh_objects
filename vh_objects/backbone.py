@@ -1,11 +1,11 @@
 from splipy import Curve, BSplineBasis
-from objects.parameters import (
+from vh_objects.parameters import (
     NUM_SAMPLES_FOR_REPARAMETERIZATION,
     ORDER,
     NUM_INTERPOLATION_POINTS,
     EPSILON,
 )
-from objects.utilities import open_uniform_knot_vector
+from vh_objects.utilities import open_uniform_knot_vector
 import numpy as np
 from copy import deepcopy
 

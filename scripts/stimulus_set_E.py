@@ -1,325 +1,756 @@
-from objects.shaft import Shaft
 import numpy as np
-from objects.utilities import make_surface, make_mesh
-import trimesh
+from vh_objects.utilities import make_mesh, make_surface
+from scripts.sheets import construct_sheet, bend_sheet, make_base_cp, plot_arr
+from vh_objects.backbone import Backbone
+from vh_objects.utilities import approximate_arc
+from vh_objects.shape import Shape
 from scipy.spatial.transform import Rotation
+import trimesh
+from scripts.stim_set_common import (
+    create_scene,
+    load_cap,
+    UU,
+    VV,
+    K_PERPENDICULAR,
+    SHEET_THICKNESS,
+    num_edge_cp,
+    base_round_cp,
+    top_round_cp,
+    NUM_CS_PER_SHEET,
+    export_shape,
+)
 import copy
+from trimesh.transformations import rotation_matrix as rotvec2T
+from pathlib import Path
 
 
-#################
-### Utilities ###
-#################
-# Plot all components
-def plot_components(comp_dict):
-    scene = trimesh.Scene()
-    x_trans = 0
-    gap = 3
-    for key in comp_dict:
+def center_xy(mesh):
+    mesh_copy = copy.deepcopy(mesh)
 
-        # Translate mesh so that they don't overlap
-        mesh_copy = copy.deepcopy(comp_dict[key])
-        mesh_copy.apply_translation([-mesh_copy.bounds[0][0] + x_trans, 0, 0])  # Align left side to origin
-        scene.add_geometry(mesh_copy)
-        x_trans = mesh_copy.bounds[1][0] + gap
+    bounds = mesh_copy.bounds
 
-    scene.show(smooth=False)
+    # Center XY
+    center = (bounds[0] + bounds[1]) / 2
+
+    # Align to xy plane
+    mesh_copy.apply_translation(-np.array([center[0], center[1], bounds[0, 2]]))
+
+    return mesh_copy
 
 
-def clip_along_axis(cp, axis, thickness):
+##################
+### TO DO LIST ###
+##################
 
-    cp_clipped = np.zeros(cp.shape)
+# Have better control of roundovers so that the resulting sheet is an exact length
+# Fuse shapes all at once (have the fairing process work on several, not one at a time)
 
-    for cs_num in range(cp.shape[0]):
+##################
+### Parameters ###
+##################
+mesh_fairing_distance = 1
+K_PERPENDICULAR_SMALL = 1 / 25
 
-        # Skip ends
-        if cs_num == 0 or cs_num == cp.shape[0] - 1:
-            cp_clipped[cs_num] = cp[cs_num]
+T_K2 = np.eye(4)
+T_K2[:3, :3] = Rotation.from_rotvec(np.pi * np.array([0, 0, 1])).as_matrix()
+
+
+# Have bent sheet pointing upwards
+T_K1 = np.eye(4)
+R = Rotation.from_rotvec(-np.pi / 4 * np.array([0, 1, 0])).as_matrix()
+T_K1[:3, :3] = R
+
+# Ellipse sheet
+ellipse_length = 25
+ellipse_x = np.linspace(0, 1, 3) * (ellipse_length)
+ellipse_y = np.array([20, 20, 20])
+ellipse_poly = np.polyfit(ellipse_x, ellipse_y, 2)
+ellipse_cp = make_base_cp(ellipse_poly, ellipse_x, num_edge_cp, base_round_cp, top_round_cp)
+mean_xyz = ellipse_cp.mean(axis=0)
+ellipse_cp = ellipse_cp - mean_xyz  # Shift to origin for scaling
+cp = construct_sheet(ellipse_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
+cp[:, :, 2] -= cp[:, :, 2].min()  # Maybe a better way to do this
+surf = make_surface(cp)
+sheet_ellipse_K0 = make_mesh(surf, UU, VV)
+sheet_ellipse_K0 = center_xy(sheet_ellipse_K0)
+
+# Ellipse with positive perpendicular curvature
+ellipse_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(0.0001, ellipse_height, 5)  # TODO: Fix this - veery ugly
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K0 = Backbone(b_cp, reparameterize=True)
+
+bent_cp = bend_sheet(cp, b_appendage_K0, ellipse_height, K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_ellipse_K0p = make_mesh(surf, UU, VV)
+sheet_ellipse_K0p = center_xy(sheet_ellipse_K0p)
+
+ellipse_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(np.pi / 2, ellipse_height, 5)
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K1 = Backbone(b_cp, reparameterize=True)
+
+# Bent ellipse
+bent_cp = bend_sheet(cp, b_appendage_K1, ellipse_height, 0)
+surf = make_surface(bent_cp)
+sheet_ellipse_K1 = make_mesh(surf, UU, VV)
+sheet_ellipse_K1.apply_transform(T_K1)
+sheet_ellipse_K1 = center_xy(sheet_ellipse_K1)
+
+# Bent ellipse with positive perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, ellipse_height, K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_ellipse_K1p = make_mesh(surf, UU, VV)
+sheet_ellipse_K1p.apply_transform(T_K1)
+sheet_ellipse_K1p = center_xy(sheet_ellipse_K1p)
+
+
+# Bent ellipse with negative perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, ellipse_height, -K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_ellipse_K1n = make_mesh(surf, UU, VV)
+sheet_ellipse_K1n.apply_transform(T_K1)
+sheet_ellipse_K1n = center_xy(sheet_ellipse_K1n)
+
+
+# Teardrop
+teardrop_length = 35
+teardrop_x = np.linspace(0, 1, 3) * (teardrop_length)
+teardrop_y = np.array([20, 15, 1])
+teardrop_poly = np.polyfit(teardrop_x, teardrop_y, 2)
+teardrop_cp = make_base_cp(teardrop_poly, teardrop_x, num_edge_cp, base_round_cp, top_round_cp)
+mean_xyz = teardrop_cp.mean(axis=0)
+teardrop_cp = teardrop_cp - mean_xyz  # Shift to origin for scaling
+cp = construct_sheet(teardrop_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
+cp[:, :, 2] -= cp[:, :, 2].min()  # Maybe a better way to do this
+surf = make_surface(cp)
+sheet_teardrop_K0 = make_mesh(surf, UU, VV)
+sheet_teardrop_K0 = center_xy(sheet_teardrop_K0)
+
+# Teardrop with positive perpendicular curvature
+teardrop_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(0.0001, teardrop_height, 5)  # TODO: Fix this - veery ugly
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K0 = Backbone(b_cp, reparameterize=True)
+
+bent_cp = bend_sheet(cp, b_appendage_K0, teardrop_height, K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_teardrop_K0p = make_mesh(surf, UU, VV)
+sheet_teardrop_K0p = center_xy(sheet_teardrop_K0p)
+
+teardrop_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(np.pi / 2, teardrop_height, 5)
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K1 = Backbone(b_cp, reparameterize=True)
+
+# Bent teardrop
+bent_cp = bend_sheet(cp, b_appendage_K1, teardrop_height, 0)
+surf = make_surface(bent_cp)
+sheet_teardrop_K1 = make_mesh(surf, UU, VV)
+sheet_teardrop_K1.apply_transform(T_K1)
+sheet_teardrop_K1 = center_xy(sheet_teardrop_K1)
+
+# Bent teardrop with positive perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, teardrop_height, K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_teardrop_K1p = make_mesh(surf, UU, VV)
+sheet_teardrop_K1p.apply_transform(T_K1)
+sheet_teardrop_K1p = center_xy(sheet_teardrop_K1p)
+
+# Bent teardrop with negative perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, teardrop_height, -K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_teardrop_K1n = make_mesh(surf, UU, VV)
+sheet_teardrop_K1n.apply_transform(T_K1)
+sheet_teardrop_K1n = center_xy(sheet_teardrop_K1n)
+
+# Flip teardrops
+T_FLIP = np.eye(4)
+T_FLIP[:3, :3] = Rotation.from_rotvec(np.pi * np.array([1, 0, 0])).as_matrix()
+sheet_teardropf_K0 = sheet_teardrop_K0.copy()
+sheet_teardropf_K0.apply_transform(T_FLIP)
+sheet_teardropf_K0.apply_translation([0, 0, -sheet_teardropf_K0.bounds[0, 2]])
+sheet_teardropf_K0 = center_xy(sheet_teardropf_K0)
+sheet_teardropf_K0p = sheet_teardrop_K0p.copy()
+sheet_teardropf_K0p.apply_transform(T_FLIP)
+sheet_teardropf_K0p.apply_translation([0, 0, -sheet_teardropf_K0p.bounds[0, 2]])
+sheet_teardropf_K0p = center_xy(sheet_teardropf_K0p)
+sheet_teardropf_K1 = sheet_teardrop_K1.copy()
+sheet_teardropf_K1.apply_transform(T_FLIP)
+sheet_teardropf_K1.apply_translation([0, 0, -sheet_teardropf_K1.bounds[0, 2]])
+sheet_teardropf_K1 = center_xy(sheet_teardropf_K1)
+sheet_teardropf_K1p = sheet_teardrop_K1p.copy()
+sheet_teardropf_K1p.apply_transform(T_FLIP)
+sheet_teardropf_K1p.apply_translation([0, 0, -sheet_teardropf_K1p.bounds[0, 2]])
+sheet_teardropf_K1p = center_xy(sheet_teardropf_K1p)
+sheet_teardropf_K1n = sheet_teardrop_K1n.copy()
+sheet_teardropf_K1n.apply_transform(T_FLIP)
+sheet_teardropf_K1n.apply_translation([0, 0, -sheet_teardropf_K1n.bounds[0, 2]])
+sheet_teardropf_K1n = center_xy(sheet_teardropf_K1n)
+
+# Rectangular Sheet
+rect_cp = ellipse_cp.copy()
+rect_cp[:, 2] /= 1.25
+rect_cp[:top_round_cp, 2] = rect_cp[:, 2].min()
+rect_cp[top_round_cp + num_edge_cp : top_round_cp + num_edge_cp + top_round_cp, 2] = rect_cp[:, 2].max()
+rect_cp[top_round_cp : top_round_cp + num_edge_cp, 2] = np.linspace(
+    rect_cp[:, 2].min(), rect_cp[:, 2].max(), num_edge_cp
+)
+rect_cp[top_round_cp + num_edge_cp + top_round_cp :, 2] = np.linspace(
+    rect_cp[:, 2].max(), rect_cp[:, 2].min(), num_edge_cp
+)
+mean_xyz = rect_cp.mean(axis=0)
+rect_cp = rect_cp - mean_xyz  # Shift to origin for scaling
+cp = construct_sheet(rect_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
+cp[:, :, 2] -= cp[:, :, 2].min()  # Maybe a better way to do this
+surf = make_surface(cp)
+sheet_rect_K0 = make_mesh(surf, UU, VV)
+sheet_rect_K0 = center_xy(sheet_rect_K0)
+
+# Rectangular with positive perpendicular curvature
+rect_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(0.0001, rect_height, 5)  # TODO: Fix this - veery ugly
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K0 = Backbone(b_cp, reparameterize=True)
+
+bent_cp = bend_sheet(cp, b_appendage_K0, rect_height, K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_rect_K0p = make_mesh(surf, UU, VV)
+sheet_rect_K0p = center_xy(sheet_rect_K0p)
+
+rect_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(np.pi / 2, rect_height, 5)
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K1 = Backbone(b_cp, reparameterize=True)
+
+
+# Bent rectangular
+bent_cp = bend_sheet(cp, b_appendage_K1, rect_height, 0)
+surf = make_surface(bent_cp)
+sheet_rect_K1 = make_mesh(surf, UU, VV)
+sheet_rect_K1.apply_transform(T_K1)
+sheet_rect_K1 = center_xy(sheet_rect_K1)
+
+# Bent rectangular with positive perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, rect_height, K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_rect_K1p = make_mesh(surf, UU, VV)
+sheet_rect_K1p.apply_transform(T_K1)
+sheet_rect_K1p = center_xy(sheet_rect_K1p)
+
+# Bent rectangular with negative perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, rect_height, -K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_rect_K1n = make_mesh(surf, UU, VV)
+sheet_rect_K1n.apply_transform(T_K1)
+sheet_rect_K1n = center_xy(sheet_rect_K1n)
+
+# Circle
+circle_radius = 20
+circle_theta = np.linspace(0, 2 * np.pi, 12, endpoint=False)
+circle_x = circle_radius * np.cos(circle_theta)
+circle_y = circle_radius * np.sin(circle_theta)
+circle_cp = np.vstack([np.zeros_like(circle_x), circle_x, circle_y]).T
+mean_xyz = circle_cp.mean(axis=0)
+circle_cp = circle_cp - mean_xyz  # Shift to origin for scaling
+cp = construct_sheet(circle_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
+cp[:, :, 2] -= cp[:, :, 2].min()  # Maybe a better way to do this
+surf = make_surface(cp)
+sheet_circle_K0 = make_mesh(surf, UU, VV)
+sheet_circle_K0 = center_xy(sheet_circle_K0)
+
+# Circle with positive perpendicular curvature
+circle_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(0.0001, circle_height, 5)  # TODO: Fix this - veery ugly
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K0 = Backbone(b_cp, reparameterize=True)
+
+bent_cp = bend_sheet(cp, b_appendage_K0, circle_height, K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_circle_K0p = make_mesh(surf, UU, VV)
+sheet_circle_K0p = center_xy(sheet_circle_K0p)
+
+circle_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(np.pi / 2, circle_height, 5)
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K1 = Backbone(b_cp, reparameterize=True)
+
+# Bent circle
+bent_cp = bend_sheet(cp, b_appendage_K1, circle_height, 0)
+surf = make_surface(bent_cp)
+sheet_circle_K1 = make_mesh(surf, UU, VV)
+sheet_circle_K1.apply_transform(T_K1)
+sheet_circle_K1 = center_xy(sheet_circle_K1)
+
+# Bent circle with positive perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, circle_height, K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_circle_K1p = make_mesh(surf, UU, VV)
+sheet_circle_K1p.apply_transform(T_K1)
+sheet_circle_K1p = center_xy(sheet_circle_K1p)
+
+# Bent circle with negative perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, circle_height, -K_PERPENDICULAR)
+surf = make_surface(bent_cp)
+sheet_circle_K1n = make_mesh(surf, UU, VV)
+sheet_circle_K1n.apply_transform(T_K1)
+sheet_circle_K1n = center_xy(sheet_circle_K1n)
+
+# Small Ellipse
+small_ellipse_length = 20
+small_ellipse_x = np.linspace(0, 1, 3) * (small_ellipse_length)
+small_ellipse_y = np.array([7.5, 7.5, 7.5])
+small_ellipse_poly = np.polyfit(small_ellipse_x, small_ellipse_y, 2)
+small_ellipse_cp = make_base_cp(small_ellipse_poly, small_ellipse_x, num_edge_cp, base_round_cp, top_round_cp)
+mean_xyz = small_ellipse_cp.mean(axis=0)
+small_ellipse_cp = small_ellipse_cp - mean_xyz  # Shift to origin for scaling
+cp = construct_sheet(small_ellipse_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
+cp[:, :, 2] -= cp[:, :, 2].min()  # Maybe a better way to do this
+surf = make_surface(cp)
+sheet_small_ellipse_K0 = make_mesh(surf, UU, VV)
+sheet_small_ellipse_K0 = center_xy(sheet_small_ellipse_K0)
+
+# Small Ellipse with positive perpendicular curvature
+small_ellipse_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(0.0001, small_ellipse_height, 5)  # TODO: Fix this - veery ugly
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K0 = Backbone(b_cp, reparameterize=True)
+
+bent_cp = bend_sheet(cp, b_appendage_K0, small_ellipse_height, K_PERPENDICULAR_SMALL)
+surf = make_surface(bent_cp)
+sheet_small_ellipse_K0p = make_mesh(surf, UU, VV)
+sheet_small_ellipse_K0p = center_xy(sheet_small_ellipse_K0p)
+
+small_ellipse_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(np.pi / 2, small_ellipse_height, 5)
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K1 = Backbone(b_cp, reparameterize=True)
+
+# Bent small ellipse
+bent_cp = bend_sheet(cp, b_appendage_K1, small_ellipse_height, 0)
+surf = make_surface(bent_cp)
+sheet_small_ellipse_K1 = make_mesh(surf, UU, VV)
+sheet_small_ellipse_K1.apply_transform(T_K1)
+sheet_small_ellipse_K1 = center_xy(sheet_small_ellipse_K1)
+
+# Bent small ellipse with positive perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, small_ellipse_height, K_PERPENDICULAR_SMALL)
+surf = make_surface(bent_cp)
+sheet_small_ellipse_K1p = make_mesh(surf, UU, VV)
+sheet_small_ellipse_K1p.apply_transform(T_K1)
+sheet_small_ellipse_K1p = center_xy(sheet_small_ellipse_K1p)
+
+# Bent small ellipse with negative perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, small_ellipse_height, -K_PERPENDICULAR_SMALL)
+surf = make_surface(bent_cp)
+sheet_small_ellipse_K1n = make_mesh(surf, UU, VV)
+sheet_small_ellipse_K1n.apply_transform(T_K1)
+sheet_small_ellipse_K1n = center_xy(sheet_small_ellipse_K1n)
+
+
+# Small teardrop
+small_teardrop_length = 22
+small_teardrop_x = np.linspace(0, 1, 3) * (small_teardrop_length)
+small_teardrop_y = np.array([7.5, 5, 1])
+small_teardrop_poly = np.polyfit(small_teardrop_x, small_teardrop_y, 2)
+small_teardrop_cp = make_base_cp(small_teardrop_poly, small_teardrop_x, num_edge_cp, base_round_cp, top_round_cp)
+mean_xyz = small_teardrop_cp.mean(axis=0)
+small_teardrop_cp = small_teardrop_cp - mean_xyz  # Shift to origin for scaling
+cp = construct_sheet(small_teardrop_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
+cp[:, :, 2] -= cp[:, :, 2].min()  # Maybe a better way to do this
+surf = make_surface(cp)
+sheet_small_teardrop_K0 = make_mesh(surf, UU, VV)
+
+# Small teardrop with positive perpendicular curvature
+small_teardrop_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(0.0001, small_teardrop_height, 5)  # TODO: Fix this - veery ugly
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K0 = Backbone(b_cp, reparameterize=True)
+
+bent_cp = bend_sheet(cp, b_appendage_K0, small_teardrop_height, K_PERPENDICULAR_SMALL)
+surf = make_surface(bent_cp)
+sheet_small_teardrop_K0p = make_mesh(surf, UU, VV)
+
+small_teardrop_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(np.pi / 2, small_teardrop_height, 5)
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K1 = Backbone(b_cp, reparameterize=True)
+
+# Bent small teardrop
+bent_cp = bend_sheet(cp, b_appendage_K1, small_teardrop_height, 0)
+surf = make_surface(bent_cp)
+sheet_small_teardrop_K1 = make_mesh(surf, UU, VV)
+sheet_small_teardrop_K1.apply_transform(T_K1)
+
+# Bent small teardrop with positive perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, small_teardrop_height, K_PERPENDICULAR_SMALL)
+surf = make_surface(bent_cp)
+sheet_small_teardrop_K1p = make_mesh(surf, UU, VV)
+sheet_small_teardrop_K1p.apply_transform(T_K1)
+
+# Bent small teardrop with negative perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, small_teardrop_height, -K_PERPENDICULAR_SMALL)
+surf = make_surface(bent_cp)
+sheet_small_teardrop_K1n = make_mesh(surf, UU, VV)
+sheet_small_teardrop_K1n.apply_transform(T_K1)
+
+
+# Small teardropf
+sheet_small_teardropf_K0 = sheet_small_teardrop_K0.copy()
+sheet_small_teardropf_K0.apply_transform(T_FLIP)
+sheet_small_teardropf_K0.apply_translation([0, 0, -sheet_small_teardropf_K0.bounds[0, 2]])
+sheet_small_teardropf_K0 = center_xy(sheet_small_teardropf_K0)
+sheet_small_teardropf_K0p = sheet_small_teardrop_K0p.copy()
+sheet_small_teardropf_K0p.apply_transform(T_FLIP)
+sheet_small_teardropf_K0p.apply_translation([0, 0, -sheet_small_teardropf_K0p.bounds[0, 2]])
+sheet_small_teardropf_K0p = center_xy(sheet_small_teardropf_K0p)
+sheet_small_teardropf_K1 = sheet_small_teardrop_K1.copy()
+sheet_small_teardropf_K1.apply_transform(T_FLIP)
+sheet_small_teardropf_K1.apply_translation([0, 0, -sheet_small_teardropf_K1.bounds[0, 2]])
+sheet_small_teardropf_K1 = center_xy(sheet_small_teardropf_K1)
+sheet_small_teardropf_K1p = sheet_small_teardrop_K1p.copy()
+sheet_small_teardropf_K1p.apply_transform(T_FLIP)
+sheet_small_teardropf_K1p.apply_translation([0, 0, -sheet_small_teardropf_K1p.bounds[0, 2]])
+sheet_small_teardropf_K1p = center_xy(sheet_small_teardropf_K1p)
+sheet_small_teardropf_K1n = sheet_small_teardrop_K1n.copy()
+sheet_small_teardropf_K1n.apply_transform(T_FLIP)
+sheet_small_teardropf_K1n.apply_translation([0, 0, -sheet_small_teardropf_K1n.bounds[0, 2]])
+sheet_small_teardropf_K1n = center_xy(sheet_small_teardropf_K1n)
+
+
+# small rect
+small_rect_cp = small_ellipse_cp.copy()
+small_rect_cp[:, 2] /= 1.25
+small_rect_cp[:top_round_cp, 2] = small_rect_cp[:, 2].min()
+small_rect_cp[top_round_cp + num_edge_cp : top_round_cp + num_edge_cp + top_round_cp, 2] = small_rect_cp[:, 2].max()
+small_rect_cp[top_round_cp : top_round_cp + num_edge_cp, 2] = np.linspace(
+    small_rect_cp[:, 2].min(), small_rect_cp[:, 2].max(), num_edge_cp
+)
+small_rect_cp[top_round_cp + num_edge_cp + top_round_cp :, 2] = np.linspace(
+    small_rect_cp[:, 2].max(), small_rect_cp[:, 2].min(), num_edge_cp
+)
+mean_xyz = small_rect_cp.mean(axis=0)
+small_rect_cp = small_rect_cp - mean_xyz  # Shift to origin for scaling
+cp = construct_sheet(small_rect_cp, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
+cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
+cp[:, :, 2] -= cp[:, :, 2].min()  # Maybe a better way to do this
+surf = make_surface(cp)
+sheet_small_rect_K0 = make_mesh(surf, UU, VV)
+sheet_small_rect_K0 = center_xy(sheet_small_rect_K0)
+
+# Small rect with positive perpendicular curvature
+small_rect_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(0.0001, small_rect_height, 5)  # TODO: Fix this - veery ugly
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+
+b_appendage_K0 = Backbone(b_cp, reparameterize=True)
+
+bent_cp = bend_sheet(cp, b_appendage_K0, small_rect_height, K_PERPENDICULAR_SMALL)
+surf = make_surface(bent_cp)
+sheet_small_rect_K0p = make_mesh(surf, UU, VV)
+sheet_small_rect_K0p = center_xy(sheet_small_rect_K0p)
+
+small_rect_height = cp[:, :, 2].max() - cp[:, :, 2].min()
+b_cp = approximate_arc(np.pi / 2, small_rect_height, 5)
+b_cp = b_cp[:, [1, 2, 0]]  # Reorder
+b_cp[:, 0] *= -1  # Flip direction across yz axis
+b_appendage_K1 = Backbone(b_cp, reparameterize=True)
+
+# Bent small rect
+bent_cp = bend_sheet(cp, b_appendage_K1, small_rect_height, 0)
+surf = make_surface(bent_cp)
+sheet_small_rect_K1 = make_mesh(surf, UU, VV)
+sheet_small_rect_K1.apply_transform(T_K1)
+sheet_small_rect_K1 = center_xy(sheet_small_rect_K1)
+
+# Bent small rect with positive perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, small_rect_height, K_PERPENDICULAR_SMALL)
+surf = make_surface(bent_cp)
+sheet_small_rect_K1p = make_mesh(surf, UU, VV)
+sheet_small_rect_K1p.apply_transform(T_K1)
+sheet_small_rect_K1p = center_xy(sheet_small_rect_K1p)
+
+# Bent small rect with negative perpendicular curvature
+bent_cp = bend_sheet(cp, b_appendage_K1, small_rect_height, -K_PERPENDICULAR_SMALL)
+surf = make_surface(bent_cp)
+sheet_small_rect_K1n = make_mesh(surf, UU, VV)
+sheet_small_rect_K1n.apply_transform(T_K1)
+sheet_small_rect_K1n = center_xy(sheet_small_rect_K1n)
+
+
+# Create dictionary
+mesh_dict = {
+    "cap": load_cap(),
+    "sheet_ellipse_K0": sheet_ellipse_K0,
+    "sheet_ellipse_K0p": sheet_ellipse_K0p,
+    "sheet_ellipse_K1": sheet_ellipse_K1,
+    "sheet_ellipse_K1p": sheet_ellipse_K1p,
+    "sheet_ellipse_K1n": sheet_ellipse_K1n,
+    "sheet_teardrop_K0": sheet_teardrop_K0,
+    "sheet_teardrop_K0p": sheet_teardrop_K0p,
+    "sheet_teardrop_K1": sheet_teardrop_K1,
+    "sheet_teardrop_K1p": sheet_teardrop_K1p,
+    "sheet_teardrop_K1n": sheet_teardrop_K1n,
+    "sheet_teardropf_K0": sheet_teardropf_K0,
+    "sheet_teardropf_K0p": sheet_teardropf_K0p,
+    "sheet_teardropf_K1": sheet_teardropf_K1,
+    "sheet_teardropf_K1p": sheet_teardropf_K1p,
+    "sheet_teardropf_K1n": sheet_teardropf_K1n,
+    "sheet_rect_K0": sheet_rect_K0,
+    "sheet_rect_K0p": sheet_rect_K0p,
+    "sheet_rect_K1": sheet_rect_K1,
+    "sheet_rect_K1p": sheet_rect_K1p,
+    "sheet_rect_K1n": sheet_rect_K1n,
+    "sheet_circle_K0": sheet_circle_K0,
+    "sheet_circle_K0p": sheet_circle_K0p,
+    "sheet_circle_K1": sheet_circle_K1,
+    "sheet_circle_K1p": sheet_circle_K1p,
+    "sheet_circle_K1n": sheet_circle_K1n,
+    "small_ellipse_K0": sheet_small_ellipse_K0,
+    "small_ellipse_K0p": sheet_small_ellipse_K0p,
+    "small_ellipse_K1": sheet_small_ellipse_K1,
+    "small_ellipse_K1p": sheet_small_ellipse_K1p,
+    "small_ellipse_K1n": sheet_small_ellipse_K1n,
+    "small_teardrop_K0": sheet_small_teardrop_K0,
+    "small_teardrop_K0p": sheet_small_teardrop_K0p,
+    "small_teardrop_K1": sheet_small_teardrop_K1,
+    "small_teardrop_K1p": sheet_small_teardrop_K1p,
+    "small_teardrop_K1n": sheet_small_teardrop_K1n,
+    "small_teardropf_K0": sheet_small_teardropf_K0,
+    "small_teardropf_K0p": sheet_small_teardropf_K0p,
+    "small_teardropf_K1": sheet_small_teardropf_K1,
+    "small_teardropf_K1p": sheet_small_teardropf_K1p,
+    "small_teardropf_K1n": sheet_small_teardropf_K1n,
+    "small_rect_K0": sheet_small_rect_K0,
+    "small_rect_K0p": sheet_small_rect_K0p,
+    "small_rect_K1": sheet_small_rect_K1,
+    "small_rect_K1p": sheet_small_rect_K1p,
+    "small_rect_K1n": sheet_small_rect_K1n,
+}
+
+# create_scene(mesh_dict)
+s_list = []
+
+####################
+### LARGE SHEETS ###
+####################
+
+large_sheets = [
+    "sheet_ellipse_K0",
+    "sheet_ellipse_K0p",
+    "sheet_ellipse_K1",
+    "sheet_ellipse_K1p",
+    "sheet_ellipse_K1n",
+    "sheet_teardrop_K0",
+    "sheet_teardrop_K0p",
+    "sheet_teardrop_K1",
+    "sheet_teardrop_K1p",
+    "sheet_teardrop_K1n",
+    "sheet_teardropf_K0",
+    "sheet_teardropf_K0p",
+    "sheet_teardropf_K1",
+    "sheet_teardropf_K1p",
+    "sheet_teardropf_K1n",
+    "sheet_rect_K0",
+    "sheet_rect_K0p",
+    "sheet_rect_K1",
+    "sheet_rect_K1p",
+    "sheet_rect_K1n",
+]
+
+for mesh_name in large_sheets:
+    mesh_names = [mesh_name]
+    centroid = mesh_dict[mesh_names[0]].centroid
+
+    mesh_list = [mesh_dict[mesh_name].copy() for mesh_name in mesh_names]
+    for m in mesh_list:
+        m.apply_translation(-centroid)  # So that rotations occur about centroid
+
+    th = 0
+    T = rotvec2T(th, [0, 1, 0])
+    T[2, 3] = centroid[2] - 5
+    T_list = [T]
+
+    op_list = ["union"] * len(mesh_list)
+    description = "straight"
+    label = "D006"
+
+    # Add in cap
+    mesh_list.append(mesh_dict["cap"])
+    T = np.eye(4)
+    T[2, 3] = -3
+    T_list.append(T)
+    op_list.append("union")
+
+    claw6 = [
+        mesh_list,
+        T_list,
+        op_list,
+        label,
+        description,
+        "test",
+        np.eye(4),
+        mesh_fairing_distance,
+    ]
+
+    s = Shape(*claw6)
+    s_list.append(s)
+
+    # s.mesh.show(smooth=False)
+
+###################################
+### SMALL SHEETS WITH ROTATIONS ###
+###################################
+
+small_sheets = [
+    "sheet_circle_K0",
+    "sheet_circle_K0p",
+    "sheet_circle_K1",
+    "sheet_circle_K1p",
+    "sheet_circle_K1n",
+    "small_ellipse_K0",
+    "small_ellipse_K0p",
+    "small_ellipse_K1",
+    "small_ellipse_K1p",
+    "small_ellipse_K1n",
+    "small_teardrop_K0",
+    "small_teardrop_K0p",
+    "small_teardrop_K1",
+    "small_teardrop_K1p",
+    "small_teardrop_K1n",
+    "small_teardropf_K0",
+    "small_teardropf_K0p",
+    "small_teardropf_K1",
+    "small_teardropf_K1p",
+    "small_teardropf_K1n",
+    "small_rect_K0",
+    "small_rect_K0p",
+    "small_rect_K1",
+    "small_rect_K1p",
+    "small_rect_K1n",
+]
+
+
+for mesh_name in small_sheets:
+    mesh_names = [mesh_name]
+    centroid = mesh_dict[mesh_names[0]].centroid
+
+    # Straight up
+    for i in range(5):
+
+        # Skip redundant thetas for flat
+        if "K0" in mesh_name and "K0p" not in mesh_name and "K0n" not in mesh_name and i > 2:
             continue
 
-        # Calculate local coordinate system
-        cs_cp = cp[cs_num, :, :]
-        P0 = np.mean(cs_cp, axis=0)
-        P1 = cs_cp[0]
-        P2 = cs_cp[1]
-        vecT = P1 - P0
-        vecT /= np.linalg.norm(vecT)
-        vecN = np.cross(vecT, (P2 - P0) / np.linalg.norm(P2 - P0))
-        vecN /= np.linalg.norm(vecN)
-        vecB = np.cross(vecT, vecN)
+        mesh_list = [mesh_dict[mesh_name].copy() for mesh_name in mesh_names]
+        for m in mesh_list:
+            m.apply_translation(-centroid)  # So that rotations occur about centroid
 
-        # Translate to origin
-        cs_cp_t = cs_cp - P0
+        th = np.linspace(-np.pi / 2, np.pi / 2, 5)[i]
+        T = rotvec2T(th, [0, 1, 0])
+        T[2, 3] = centroid[2] - 5
+        T_list = [T]
 
-        # Rotate to align with xz plane
-        Ra = np.hstack([vecT.reshape(3, 1), vecN.reshape(3, 1), vecB.reshape(3, 1)])
-        goal = np.eye(3)
-        R = np.dot(goal, np.linalg.inv(Ra))
-        cs_cp_R = np.dot(R, cs_cp_t.T).T
+        op_list = ["union"] * len(mesh_list)
+        description = "straight"
+        label = "D006"
 
-        # Shrink along axis
-        cs_cp_R[:, axis] = np.clip(cs_cp_R[:, axis], -thickness / 2, thickness / 2)
-
-        # Undo transformations
-        cs_cp_n = np.dot(R.T, cs_cp_R.T).T
-        cs_cp_n += P0
-        cp_clipped[cs_num, :, :] = cs_cp_n
-    return cp_clipped
-
-
-def plot_cp(cp):
-
-    import matplotlib.pyplot as plt
-
-    fig = plt.figure()
-    ax = fig.add_subplot(projection="3d")
-    for i in range(cp.shape[0]):
-        ax.plot(cp[i, :, 0], cp[i, :, 1], cp[i, :, 2], "b-*")
-
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("z")
-
-    # Set axis limits
-    ax_min = np.min(cp)
-    ax_max = np.max(cp)
-    ax.set_xlim(ax_min, ax_max)
-    ax.set_ylim(ax_min, ax_max)
-    ax.set_zlim(ax_min, ax_max)
-    plt.show()
-
-
-# Make rounded, flat, bent cross section
-def construct_rounded_cs(bend_angle, thickness, full_width, num_cp_per_cs):
-
-    width = full_width - thickness  # Width of the flat part, accounts for hemispherical edges
-    th = np.linspace(0, np.pi, num_cp_per_cs).reshape(-1, 1)
-    if bend_angle == 0:
-        top = np.hstack(
-            [
-                np.linspace(-width / 2, width / 2, num_cp_per_cs).reshape(-1, 1),
-                thickness / 2 * np.ones((num_cp_per_cs, 1)),
-                np.zeros((num_cp_per_cs, 1)),
-            ]
-        )
-        bottom = np.hstack(
-            [
-                np.linspace(-width / 2, width / 2, num_cp_per_cs).reshape(-1, 1),
-                -thickness / 2 * np.ones((num_cp_per_cs, 1)),
-                np.zeros((num_cp_per_cs, 1)),
-            ]
-        )
-        right = np.hstack([thickness / 2 * np.sin(th), thickness / 2 * np.cos(th), np.zeros_like(th)])
-        left = np.hstack([-thickness / 2 * np.sin(th), -thickness / 2 * np.cos(th), np.zeros_like(th)])
-        right += np.array([width / 2, 0, 0])
-        left += np.array([-width / 2, 0, 0])
-
-    else:
-        center_radius = CAPSULE_RADIUS / bend_angle
-
-        t = np.linspace(-bend_angle / 2, bend_angle / 2, num_cp_per_cs).reshape(-1, 1)
-
-        top = np.hstack(
-            [
-                (center_radius + thickness / 2) * np.sin(t),
-                (center_radius + thickness / 2) * np.cos(t) - center_radius,
-                np.zeros_like(t),
-            ]
-        )
-        bottom = np.hstack(
-            [
-                (center_radius - thickness / 2) * np.sin(t),
-                (center_radius - thickness / 2) * np.cos(t) - center_radius,
-                np.zeros_like(t),
-            ]
-        )
-        right = np.hstack([thickness / 2 * np.sin(th), thickness / 2 * np.cos(th), np.zeros_like(th)])
-        left = np.hstack([-thickness / 2 * np.sin(th), -thickness / 2 * np.cos(th), np.zeros_like(th)])
-        Tz = Rotation.from_euler("z", bend_angle / 2).as_matrix()
-        right = right @ Tz
-        right += np.array([center_radius * np.sin(t[-1])[0], center_radius * np.cos(t[-1])[0] - center_radius, 0])
-        left = left @ Tz.T
-        left += np.array([center_radius * np.sin(t[0])[0], center_radius * np.cos(t[0])[0] - center_radius, 0])
-
-    cp = np.vstack([top[1:-1], right, bottom[-2:0:-1], left])
-    return cp
-
-
-def construct_cp_from_cs_func(cs_func, base_shaft, NUM_CS, thickness, width, MAX_BEND):
-    # bend_angle = np.pi / 2
-    # thickness = FLATTENED_THICKNESS
-    # cp = cs_func(bend_angle, thickness, width, num_cp_per_cs)
-
-    NUM_MIDDLE_CS = NUM_CS * 3
-    num_cp_per_cs = 10
-    width = CAPSULE_RADIUS * 2
-
-    cp_new = np.zeros((2 * NUM_CS + NUM_MIDDLE_CS, (num_cp_per_cs - 1) * 4, 3))
-    b = base_shaft.backbone
-    x = np.concatenate(
-        [
-            base_shaft.x[:NUM_CS],
-            np.linspace(base_shaft.x[NUM_CS], base_shaft.x[-NUM_CS - 1], NUM_MIDDLE_CS),
-            base_shaft.x[-NUM_CS:],
-        ]
-    )
-    y = np.concatenate([base_shaft.y[:NUM_CS], np.ones(NUM_MIDDLE_CS), base_shaft.y[-NUM_CS:]])
-    # y = base_shaft.y
-    y = y / max(y)
-    y[NUM_CS : NUM_CS + NUM_MIDDLE_CS] = 1
-
-    bend_angles = np.concatenate(
-        [np.linspace(0, MAX_BEND, num=NUM_CS), np.ones(NUM_MIDDLE_CS) * MAX_BEND, np.linspace(MAX_BEND, 0, num=NUM_CS)]
-    )
-    bend_angles[[1, -2]] = 0
-    for i in range(len(x)):
-
-        bend_angle = bend_angles[i]
-        cp = cs_func(bend_angle, thickness, width, num_cp_per_cs)
-        cp = cp[:, [2, 1, 0]]
-        Tx = Rotation.from_euler("x", np.pi).as_matrix()
-        cp = cp @ Tx
-
-        base_cs = cp.copy()
-
-        new_cs = base_cs.copy()
-
-        # Scale according to y
-        new_cs *= y[i]
-
-        # Shift according to x
-        pos = np.round((x[i] - x[0]) / (x[-1] - x[0]), 8)
-        assert 0.0 <= pos <= 1.0
+        # Add in cap
+        mesh_list.append(mesh_dict["cap"])
         T = np.eye(4)
-        T[:3, 0] = b.T(pos).reshape(-1)
-        T[:3, 1] = b.N(pos).reshape(-1)
-        T[:3, 2] = b.B(pos).reshape(-1)
-        T[:3, 3] = b.r(pos).reshape(-1)
+        T[2, 3] = -3
+        T_list.append(T)
+        op_list.append("union")
 
-        # Homogenous coordinates
-        homo_cs = np.hstack([new_cs, np.ones((new_cs.shape[0], 1))])
+        if i != 2:
+            post = trimesh.creation.cylinder(radius=5.5, height=centroid[2] - 5 + 4, sections=7)
+            post.apply_translation([0, 0, -post.bounds[0, 2] - 3.5])
+            mesh_list.append(post)
+            T_list.append(np.eye(4))
+            op_list.append("union")
 
-        # Transform
-        T_cs = homo_cs @ T.T
+        claw6 = [
+            mesh_list,
+            T_list,
+            op_list,
+            label,
+            description,
+            "test",
+            np.eye(4),
+            mesh_fairing_distance,
+        ]
 
-        # Populate
-        cp_new[i] = T_cs[:, :3]
+        s = Shape(*claw6)
+        s_list.append(s)
+        # s.mesh.show(smooth=False)
 
-    return cp_new
+    for i in range(1, 3):
 
+        # Skip circle because symmetric
+        if "circle_K0" in mesh_name:
+            continue
 
-#######################
-### Make components ###
-#######################
+        mesh_list = [mesh_dict[mesh_name].copy() for mesh_name in mesh_names]
+        for m in mesh_list:
+            m.apply_translation(-centroid)  # So that rotations occur about centroid
 
-comp_dict = {}
+        th = np.linspace(0, np.pi / 2, 3)[i]
+        T = rotvec2T(th, [1, 0, 0])
+        T[2, 3] = centroid[2] - 5
+        T_list = [T]
 
-# inputs
-CAPSULE_RADIUS = 5
-CAPSULE_LENGTH = 20
-FLATTENED_THICKNESS = 4
-NUM_CS = 5
-NUM_CP_PER_CROSS_SECTION = 20
-uu = 50
-vv = 50
-K1_THETA = np.pi / 2
-CAPSULE_K1_LENGTH = CAPSULE_LENGTH * 1.7
+        op_list = ["union"] * len(mesh_list)
+        description = "straight"
+        label = "D006"
 
-# Tranform to be pointing upwards
-T_point_z = np.eye(4)
-T_point_z[:3, :3] = Rotation.from_euler("xyz", np.array([0, -np.pi / 2, 0])).as_matrix()
+        # Add in cap
+        mesh_list.append(mesh_dict["cap"])
+        T = np.eye(4)
+        T[2, 3] = -3
+        T_list.append(T)
+        op_list.append("union")
 
-# Base cylinder
-base_cylinder_radius = 20
-base_cylinder_height = 5
-base_cylinder = trimesh.creation.cylinder(radius=base_cylinder_radius, height=base_cylinder_height, sections=20)
-base_cylinder.apply_translation([0, 0, -base_cylinder_height])
-comp_dict["base_cylinder"] = base_cylinder
+        post = trimesh.creation.cylinder(radius=5.5, height=centroid[2] - 6, sections=7)
+        post.apply_translation([0, 0, -post.bounds[0, 2] - 3.5])
+        mesh_list.append(post)
+        T_list.append(np.eye(4))
+        op_list.append("union")
 
+        claw6 = [
+            mesh_list,
+            T_list,
+            op_list,
+            label,
+            description,
+            "test",
+            np.eye(4),
+            mesh_fairing_distance,
+        ]
 
-# capsule_K0
-capsule_K0 = Shaft(
-    CAPSULE_LENGTH,
-    1.0 * CAPSULE_RADIUS,
-    1.0 * CAPSULE_RADIUS,
-    1.0 * CAPSULE_RADIUS,
-    theta=0,
-    lengthtype="one_hemi",
-    num_cs=NUM_CS,
-    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
-)
-capsule_K0.mesh.apply_transform(T_point_z)
-comp_dict["capsule_K0"] = capsule_K0.mesh
-
-# Capsule_K0 flattened
-capsule_K0_F1_cp = construct_cp_from_cs_func(
-    construct_rounded_cs, capsule_K0, NUM_CS, FLATTENED_THICKNESS, 2 * CAPSULE_RADIUS, 0
-)
-capsule_K0_F1_surf = make_surface(capsule_K0_F1_cp)
-capsule_K0_F1_mesh = make_mesh(capsule_K0_F1_surf, uu, vv)
-capsule_K0_F1_mesh.apply_transform(T_point_z)
-comp_dict["capsule_K0_F1"] = capsule_K0_F1_mesh
-
-# # Capsule_K0 flattened
-# capsule_K0_F1_cp = capsule_K0.cp.copy()
-# capsule_K0_F1_cp[:, :, 2] = np.clip(capsule_K0_F1_cp[:, :, 2], -FLATTENED_THICKNESS / 2, FLATTENED_THICKNESS / 2)
-# capsule_K0_F1_surf = make_surface(capsule_K0_F1_cp)
-# capsule_K0_F1_mesh = make_mesh(capsule_K0_F1_surf, uu, vv)
-# capsule_K0_F1_mesh.apply_transform(T_point_z)
-# comp_dict["capsule_K0_F1"] = capsule_K0_F1_mesh
-
-# # Capsule_K0 flattened and rotated
-# T_rot = np.eye(4)
-# T_rot[:3, :3] = Rotation.from_euler("xyz", np.array([0, 0, np.pi / 2])).as_matrix()
-# capsule_K0_F2_mesh = capsule_K0_F1_mesh.copy()
-# capsule_K0_F2_mesh.apply_transform(T_rot)
-# comp_dict["capsule_K0_F2"] = capsule_K0_F2_mesh
-
-# Capsule_K1
-capsule_K1 = Shaft(
-    CAPSULE_K1_LENGTH,
-    1.0 * CAPSULE_RADIUS,
-    1.0 * CAPSULE_RADIUS,
-    1.0 * CAPSULE_RADIUS,
-    theta=K1_THETA,
-    lengthtype="one_hemi",
-    num_cs=NUM_CS,
-    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
-)
-capsule_K1.mesh.apply_transform(T_point_z)
-comp_dict["capsule_K1"] = capsule_K1.mesh
-
-# Capsule K1 flattened
-capsule_K1_F1_cp = construct_cp_from_cs_func(
-    construct_rounded_cs, capsule_K1, NUM_CS, FLATTENED_THICKNESS, 2 * CAPSULE_RADIUS, 0
-)
-capsule_K1_F1_surf = make_surface(capsule_K1_F1_cp)
-capsule_K1_F1_mesh = make_mesh(capsule_K1_F1_surf, uu, vv)
-capsule_K1_F1_mesh.apply_transform(T_point_z)
-comp_dict["capsule_K1_F1"] = capsule_K1_F1_mesh
+        s = Shape(*claw6)
+        s_list.append(s)
+        # s.mesh.show(smooth=False)
 
 
-# # Capsule_K1 flattened
-# capsule_K1_F1_cp = capsule_K1.cp.copy()
-# capsule_K1_F1_cp = clip_along_axis(capsule_K1_F1_cp, 0, FLATTENED_THICKNESS)
-# capsule_K1_F1_surf = make_surface(capsule_K1_F1_cp)
-# capsule_K1_F1_mesh = make_mesh(capsule_K1_F1_surf, uu, vv)
-# capsule_K1_F1_mesh.apply_transform(T_point_z)
-# comp_dict["capsule_K1_F1"] = capsule_K1_F1_mesh
-
-# # Capsule_K1 flattened
-# capsule_K1_F2_cp = capsule_K1.cp.copy()
-# capsule_K1_F2_cp = clip_along_axis(capsule_K1_F2_cp, 2, FLATTENED_THICKNESS)
-# capsule_K1_F2_surf = make_surface(capsule_K1_F2_cp)
-# capsule_K1_F2_mesh = make_mesh(capsule_K1_F2_surf, uu, vv)
-# capsule_K1_F2_mesh.apply_transform(T_point_z)
-# comp_dict["capsule_K1_F2"] = capsule_K1_F2_mesh
-
-
-capsule_K1_F2_K_cp = construct_cp_from_cs_func(
-    construct_rounded_cs, capsule_K1, NUM_CS, FLATTENED_THICKNESS, 2 * CAPSULE_RADIUS, np.pi / 2
-)
-capsule_K1_F2_K_surf = make_surface(capsule_K1_F2_K_cp)
-capsule_K1_F2_K = make_mesh(capsule_K1_F2_K_surf, 75, 75)
-
-capsule_K1_F2_K = capsule_K1_F2_K.apply_transform(T_point_z)
-comp_dict["capsule_K1_F2_K"] = capsule_K1_F2_K
+save_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/sheet")
+for i, s in enumerate(s_list):
+    export_shape(s, save_dir, f"sheet_{str(i).zfill(3)}")

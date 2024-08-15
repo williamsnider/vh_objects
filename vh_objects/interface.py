@@ -4,9 +4,9 @@ import numpy as np
 from freetype import Face
 import trimesh
 from shapely import geometry
-from objects.utilities import fuse_meshes
+from vh_objects.utilities import fuse_meshes
 from scipy.spatial.transform import Rotation
-from objects.parameters import (
+from vh_objects.parameters import (
     FONT_PATH,
     INTERFACE_WIDTH,
     LABEL_DEPTH,

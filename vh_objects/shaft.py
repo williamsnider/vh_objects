@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
-from objects.utilities import make_surface, make_mesh
-from objects.backbone import Backbone
+from vh_objects.utilities import make_surface, make_mesh
+from vh_objects.backbone import Backbone
 from copy import deepcopy
 
 # Shaft.py is a modification of the shape generation method from Srinath et al., 2021
@@ -132,6 +132,7 @@ class Shaft:
         num_cp_per_cs,
         truncate_hemi1=False,
         base_cs=None,
+        base_cs_ellipse_factors=[1, 1],
     ):
         self.length = length
         self.r1 = r1
@@ -142,6 +143,7 @@ class Shaft:
         self.num_cs = num_cs
         self.num_cp_per_cs = num_cp_per_cs
         self.truncacte_hemi1 = truncate_hemi1
+        self.base_cs_ellipse_factors = base_cs_ellipse_factors
 
         success = self.calc_optimal_spacing()
         if success == False:
@@ -195,6 +197,9 @@ class Shaft:
         # Base cross section
         th = np.linspace(0, 2 * np.pi, self.num_cp_per_cs, endpoint=False).reshape(-1, 1)
         base_cs = np.hstack([np.zeros(th.shape), np.cos(th), np.sin(th)])
+
+        # Scale to make ellipse
+        base_cs *= np.array([1, self.base_cs_ellipse_factors[0], self.base_cs_ellipse_factors[1]])
 
         if self.theta != 0:
             # Calculate l portion
@@ -261,7 +266,7 @@ class Shaft:
             cp[i] = T_cs[:, :3]
 
         surf = make_surface(cp)
-        mesh = make_mesh(surf, 75, 75)
+        mesh = make_mesh(surf, 100, 100)
 
         return mesh, cp
 

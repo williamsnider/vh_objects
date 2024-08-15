@@ -1,5 +1,5 @@
 from pathlib import Path
-from scripts.stimulus_set_params import SAVE_DIR
+from scripts.archive_new.stimulus_set_params import SAVE_DIR
 import trimesh
 import numpy as np
 from tqdm import tqdm

@@ -6,9 +6,9 @@ import copy
 import numpy as np
 from multiprocessing import Pool
 from tqdm import tqdm
-from objects.backbone import Backbone
-from objects.shape import Shape
-from objects.utilities import (
+from vh_objects.backbone import Backbone
+from vh_objects.shape import Shape
+from vh_objects.utilities import (
     approximate_arc,
     make_mesh,
     make_surface,
@@ -20,8 +20,8 @@ from objects.utilities import (
 from scripts.sheets import construct_sheet, bend_sheet, make_base_cp, plot_arr
 import trimesh
 from scipy.spatial.transform.rotation import Rotation
-from objects.shaft import Shaft
-from scripts.stimulus_set_params import (
+from vh_objects.shaft import Shaft
+from scripts.archive_new.stimulus_set_params import (
     NUM_CP_PER_BASE_SHEET,
     NUM_CP_PER_CROSS_SECTION,
     NUM_CS,
@@ -51,9 +51,7 @@ from scripts.stimulus_set_params import (
 
 def slice_mesh(mesh, extent, T):
     mesh = mesh.copy()
-    slicer = trimesh.primitives.Box(
-        extents=np.array([extent, extent, extent]), transform=T
-    )
+    slicer = trimesh.primitives.Box(extents=np.array([extent, extent, extent]), transform=T)
     split_mesh, _ = calc_mesh_boolean_and_edges(mesh, slicer, "difference")
 
     return split_mesh
@@ -86,7 +84,6 @@ T_point_z = np.eye(4)
 T_point_z[:3, :3] = Rotation.from_euler("xyz", np.array([0, -np.pi / 2, 0])).as_matrix()
 
 
-
 def plot_cp_and_backbone(cp, backbone):
     import matplotlib.pyplot as plt
 
@@ -106,25 +103,25 @@ def plot_cp_and_backbone(cp, backbone):
     xs = np.concatenate([arr[:, :, 0].ravel(), bx.ravel()])
     ys = np.concatenate([arr[:, :, 1].ravel(), by.ravel()])
     zs = np.concatenate([arr[:, :, 2].ravel(), bz.ravel()])
-    ax.set_box_aspect(
-        (np.ptp(xs), np.ptp(ys), np.ptp(zs))
-    )  # aspect ratio is 1:1:1 in data space
+    ax.set_box_aspect((np.ptp(xs), np.ptp(ys), np.ptp(zs)))  # aspect ratio is 1:1:1 in data space
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_zlabel("z")
     plt.show()
 
-APP_ANGLE = np.pi/2
+
+APP_ANGLE = np.pi / 2
+
 
 def bend_app(app, app_length):
     app_K1_b_length = app_length - app.rdist
-    app_K1_b_cp  = approximate_arc(APP_ANGLE, app_K1_b_length, 5)
+    app_K1_b_cp = approximate_arc(APP_ANGLE, app_K1_b_length, 5)
     app_K1_b_cp = app_K1_b_cp[:, [1, 2, 0]]  # Reorder
     app_K1_b_cp[:, 0] *= -1  # Flip direction across yz axis
     app_K1_b = Backbone(app_K1_b_cp, reparameterize=True)
 
     cp = app.cp.copy()
-    cp[:,:,2] *= -1
+    cp[:, :, 2] *= -1
     bent_cp = bend_sheet(cp, app_K1_b, app_K1_b_length)
     surf = make_surface(bent_cp)
     app_K1 = make_mesh(surf, uu, vv)
@@ -133,10 +130,19 @@ def bend_app(app, app_length):
 
 
 A_APPENDAGE_LENGTH = APPENDAGE_LENGTH * 1.75
-A_X_WIDTH = X_WIDTH 
-app0 = Shaft(A_APPENDAGE_LENGTH, 1.0 * A_X_WIDTH, 1.0 * A_X_WIDTH, 1.0*A_X_WIDTH, theta=0, lengthtype="one_hemi", num_cs=NUM_CS, num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,)
+A_X_WIDTH = X_WIDTH
+app0 = Shaft(
+    A_APPENDAGE_LENGTH,
+    1.0 * A_X_WIDTH,
+    1.0 * A_X_WIDTH,
+    1.0 * A_X_WIDTH,
+    theta=0,
+    lengthtype="one_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
 app0.apply_transform(T_point_z)
-app0_K1 = bend_app(app0,A_APPENDAGE_LENGTH)
+app0_K1 = bend_app(app0, A_APPENDAGE_LENGTH)
 
 app1 = Shaft(
     A_APPENDAGE_LENGTH,
@@ -152,13 +158,13 @@ app1.apply_transform(T_point_z)
 
 # Bend
 app1_K1_b_length = A_APPENDAGE_LENGTH - app1.rdist
-app1_K1_b_cp  = approximate_arc(APP_ANGLE, app1_K1_b_length, 5)
+app1_K1_b_cp = approximate_arc(APP_ANGLE, app1_K1_b_length, 5)
 app1_K1_b_cp = app1_K1_b_cp[:, [1, 2, 0]]  # Reorder
 app1_K1_b_cp[:, 0] *= -1  # Flip direction across yz axis
 app1_K1_b = Backbone(app1_K1_b_cp, reparameterize=True)
 
 cp = app1.cp
-cp[:,:,2] *= -1
+cp[:, :, 2] *= -1
 bent_cp = bend_sheet(cp, app1_K1_b, app1_K1_b_length)
 surf = make_surface(bent_cp)
 app1_K1 = make_mesh(surf, uu, vv)
@@ -179,13 +185,13 @@ app2.apply_transform(T_point_z)
 
 # Bend
 app2_K1_b_length = A_APPENDAGE_LENGTH - app2.rdist
-app2_K1_b_cp  = approximate_arc(APP_ANGLE, app2_K1_b_length, 5)
+app2_K1_b_cp = approximate_arc(APP_ANGLE, app2_K1_b_length, 5)
 app2_K1_b_cp = app2_K1_b_cp[:, [1, 2, 0]]  # Reorder
 app2_K1_b_cp[:, 0] *= -1  # Flip direction across yz axis
 app2_K1_b = Backbone(app2_K1_b_cp, reparameterize=True)
 
 cp = app2.cp
-cp[:,:,2] *= -1
+cp[:, :, 2] *= -1
 bent_cp = bend_sheet(cp, app2_K1_b, app2_K1_b_length)
 surf = make_surface(bent_cp)
 app2_K1 = make_mesh(surf, uu, vv)
@@ -206,13 +212,13 @@ app3.apply_transform(T_point_z)
 
 # Bend
 app3_K1_b_length = A_APPENDAGE_LENGTH - app3.rdist
-app3_K1_b_cp  = approximate_arc(APP_ANGLE, app3_K1_b_length, 5)
+app3_K1_b_cp = approximate_arc(APP_ANGLE, app3_K1_b_length, 5)
 app3_K1_b_cp = app3_K1_b_cp[:, [1, 2, 0]]  # Reorder
 app3_K1_b_cp[:, 0] *= -1  # Flip direction across yz axis
 app3_K1_b = Backbone(app3_K1_b_cp, reparameterize=True)
 
 cp = app3.cp
-cp[:,:,2] *= -1
+cp[:, :, 2] *= -1
 bent_cp = bend_sheet(cp, app3_K1_b, app3_K1_b_length)
 surf = make_surface(bent_cp)
 app3_K1 = make_mesh(surf, uu, vv)
@@ -232,13 +238,13 @@ app4.apply_transform(T_point_z)
 
 # Bend
 app4_K1_b_length = A_APPENDAGE_LENGTH - app4.rdist
-app4_K1_b_cp  = approximate_arc(APP_ANGLE, app4_K1_b_length, 5)
+app4_K1_b_cp = approximate_arc(APP_ANGLE, app4_K1_b_length, 5)
 app4_K1_b_cp = app4_K1_b_cp[:, [1, 2, 0]]  # Reorder
 app4_K1_b_cp[:, 0] *= -1  # Flip direction across yz axis
 app4_K1_b = Backbone(app4_K1_b_cp, reparameterize=True)
 
 cp = app4.cp
-cp[:,:,2] *= -1
+cp[:, :, 2] *= -1
 bent_cp = bend_sheet(cp, app4_K1_b, app4_K1_b_length)
 surf = make_surface(bent_cp)
 app4_K1 = make_mesh(surf, uu, vv)
@@ -257,7 +263,16 @@ app5 = Shaft(
 app5.apply_transform(T_point_z)
 app5_K1 = bend_app(app5, A_APPENDAGE_LENGTH)
 
-app6 = Shaft(APPENDAGE_LENGTH, 1.0 * X_WIDTH, 1.0 * X_WIDTH, 1.0*X_WIDTH, theta=0, lengthtype="one_hemi", num_cs=NUM_CS, num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,)
+app6 = Shaft(
+    APPENDAGE_LENGTH,
+    1.0 * X_WIDTH,
+    1.0 * X_WIDTH,
+    1.0 * X_WIDTH,
+    theta=0,
+    lengthtype="one_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
 app6.apply_transform(T_point_z)
 
 app7 = Shaft(
@@ -283,7 +298,6 @@ app8 = Shaft(
     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
 )
 app8.apply_transform(T_point_z)
-
 
 
 app9 = Shaft(
@@ -324,13 +338,14 @@ app10.apply_transform(T_point_z)
 
 
 # Post
-from scripts.stimulus_set_params import POST_RADIUS
+from scripts.archive_new.stimulus_set_params import POST_RADIUS
+
 post_th = np.linspace(0, 2 * np.pi, NUM_CP_PER_CROSS_SECTION, endpoint=False).reshape(-1, 1)
 post_cp = np.hstack((POST_RADIUS * np.sin(post_th), POST_RADIUS * np.cos(post_th), np.ones(post_th.shape)))
 post_stack = np.zeros((NUM_CS, NUM_CP_PER_CROSS_SECTION, 3))
-for i in range(1,NUM_CS):
+for i in range(1, NUM_CS):
     sub = post_cp.copy()
-    sub[:,2] = np.linspace(-10,0,NUM_CS, endpoint=False)[i]
+    sub[:, 2] = np.linspace(-10, 0, NUM_CS, endpoint=False)[i]
     post_stack[i] = sub
 surf = make_surface(post_stack)
 mesh = make_mesh(surf, uu, vv)
@@ -349,7 +364,7 @@ b_cp = b_cp[:, [1, 2, 0]]  # Reorder
 b_cp[:, 0] *= -1  # Flip direction across yz axis
 backbone_x_width = Backbone(b_cp, reparameterize=True)
 
-b_cp = approximate_arc(np.pi/2, APPENDAGE_LENGTH,5)
+b_cp = approximate_arc(np.pi / 2, APPENDAGE_LENGTH, 5)
 b_cp = b_cp[:, [1, 2, 0]]  # Reorder
 b_cp[:, 0] *= -1  # Flip direction across yz axis
 b_appendage_K1 = Backbone(b_cp, reparameterize=True)
@@ -385,14 +400,11 @@ T_K2 = np.eye(4)
 T_K2[:3, :3] = Rotation.from_rotvec(np.pi * np.array([0, 0, 1])).as_matrix()
 
 
-
 # Round sheet
 t = np.linspace(0, 2 * np.pi, NUM_CP_PER_BASE_SHEET, endpoint=False).reshape(-1, 1)
 round_cs_cp = np.hstack([np.zeros(t.shape), np.cos(t), np.sin(t)])
 base_sheet = round_cs_cp * ROUND_RADIUS
-cp = construct_sheet(
-    base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET
-)
+cp = construct_sheet(base_sheet, sheet_thickness=SHEET_THICKNESS, num_cs=NUM_CS_PER_SHEET)
 surf = make_surface(cp)
 sheet_round_K0 = make_mesh(surf, uu, vv)
 
@@ -492,9 +504,7 @@ sheet_point_K0 = make_mesh(surf, uu, vv)
 
 bent_cp = bend_sheet(sheet_point_cp, b_appendage_K1, point_x[2] - point_x[0])
 surf = make_surface(bent_cp)
-sheet_point_K1 = make_mesh(
-    surf, uu, vv
-)  # TODO: Has artifact, fix after deciding on thickness/size
+sheet_point_K1 = make_mesh(surf, uu, vv)  # TODO: Has artifact, fix after deciding on thickness/size
 sheet_point_K2 = sheet_point_K1.copy()
 sheet_point_K2.apply_transform(T_K2)
 
@@ -521,24 +531,24 @@ sheet_round_K2 = slice_mesh(sheet_round_K2, extent, T)
 mesh_dict = {
     "thin": thin.mesh,
     "volumetric": volumetric.mesh,
-    "app0": app0.mesh, # 1 1 1
+    "app0": app0.mesh,  # 1 1 1
     "app0_K1": app0_K1,
-    "app1": app1.mesh, # 1 1 2
+    "app1": app1.mesh,  # 1 1 2
     # "app1_post": app1_post,
     "app1_K1": app1_K1,
-    "app2": app2.mesh, # 1 2 0
+    "app2": app2.mesh,  # 1 2 0
     "app2_K1": app2_K1,
-    "app3": app3.mesh, # 1 2 1
+    "app3": app3.mesh,  # 1 2 1
     "app3_K1": app3_K1,
-    "app4": app4.mesh, # 1 1 0
+    "app4": app4.mesh,  # 1 1 0
     "app4_K1": app4_K1,
-    "app5": app5.mesh, # 1 2 2
+    "app5": app5.mesh,  # 1 2 2
     "app5_K1": app5_K1,
-    "app6": app6.mesh, # 1 1 1
-    "app7": app7.mesh, # 1 1 2
-    "app8": app8.mesh, # 1 2 0
-    "app9": app9.mesh, # 1 2 1 
-    "app10": app10.mesh, # 1 1 0
+    "app6": app6.mesh,  # 1 1 1
+    "app7": app7.mesh,  # 1 1 2
+    "app8": app8.mesh,  # 1 2 0
+    "app9": app9.mesh,  # 1 2 1
+    "app10": app10.mesh,  # 1 1 0
     # "app11": app11.mesh, # 1 2 2
     "app_point_concave": app_point_concave,
     "app_point_convex": app_point_convex,
