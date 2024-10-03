@@ -13,7 +13,6 @@ from vh_objects.parameters import (
     INTERFACE_DEPTH_FROM_ORIGIN,
     INTERFACE_PATH,
     INTERFACE_SHIFT,
-    FONT_HEIGHT_IN_MM,
 )
 
 ########################
@@ -21,9 +20,9 @@ from vh_objects.parameters import (
 ########################
 
 
-def get_character_outline(char, shift=(0, 0)):
+def get_character_outline(char, font_height, shift=(0, 0)):
     """Get the outline of a text character. Returns a list of contours, where each contour is a list of points."""
-    char_size_pts = int(FONT_HEIGHT_IN_MM * 1000 * 3 // 2)
+    char_size_pts = int(font_height * 1000 * 3 // 2)
 
     assert len(char) == 1
     face = Face(str(FONT_PATH))
@@ -58,14 +57,14 @@ def get_character_outline(char, shift=(0, 0)):
     return scaled_list
 
 
-def calc_offsets(text):
+def calc_offsets(text, font_height):
     """Calculate offsets for centering lines/characters."""
 
     lines = text.split("_")
     num_lines = len(lines)
 
-    FONT_OFFSET_HEIGHT = int(FONT_HEIGHT_IN_MM * 1000)
-    FONT_OFFSET_WIDTH = int(FONT_HEIGHT_IN_MM * 1000 * 9 // 10)
+    FONT_OFFSET_HEIGHT = int(font_height * 1000)
+    FONT_OFFSET_WIDTH = int(font_height * 1000 * 9 // 10)
 
     # Calculate height offsets based on number of lines
     height_offsets = np.arange(FONT_OFFSET_HEIGHT * num_lines, 0, -FONT_OFFSET_HEIGHT)
@@ -97,11 +96,11 @@ def calc_offsets(text):
     return chars, offsets
 
 
-def text_to_mesh(text, extrusion_height):
+def text_to_mesh(text, extrusion_height, font_height):
     """Converts text to a trimesh."""
 
     # Extract characters and calculate offsets for centering lines/characters
-    chars, offsets = calc_offsets(text)
+    chars, offsets = calc_offsets(text, font_height)
 
     # Gather outlines of characters
     text_list = []
@@ -109,7 +108,7 @@ def text_to_mesh(text, extrusion_height):
         assert len(line) <= 4, "No more than 4 characters allowed per line."
         for char_num, char in enumerate(line):
             offset = offsets[line_num][char_num]
-            contours_list = get_character_outline(char, shift=offset)
+            contours_list = get_character_outline(char, font_height, shift=offset)
             exterior = contours_list[0]
             num_contours = len(contours_list)
 
