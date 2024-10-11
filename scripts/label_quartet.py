@@ -12,12 +12,20 @@ LABEL_DEPTH = 1.5
 font_height = 8
 
 
-def apply_label(base_mesh, label_as_meshes, T):
+def label_mesh(base_mesh, label, T, label_depth, font_height, operation="difference"):
+
+    label_as_meshes = text_to_mesh(label, label_depth, font_height)
+    base_mesh = apply_label(base_mesh, label_as_meshes, T, operation)
+
+    return base_mesh
+
+
+def apply_label(base_mesh, label_as_meshes, T, operation="difference"):
 
     label_as_meshes = [mesh.copy().apply_transform(T) for mesh in label_as_meshes]
 
     for label_part in label_as_meshes:
-        base_mesh, _ = calc_mesh_boolean_and_edges(base_mesh, label_part, operation="difference")
+        base_mesh, _ = calc_mesh_boolean_and_edges(base_mesh, label_part, operation=operation)
 
     return base_mesh
 

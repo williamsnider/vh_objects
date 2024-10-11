@@ -225,7 +225,7 @@ def add_cap(mesh_list, T_list, op_list):
     # Add in cap
     mesh_list.append(mesh_dict["cap"])
     T = np.eye(4)
-    T[2, 3] = -3
+    # T[2, 3] = -3
     T_list.append(T)
     op_list.append("union")
     return mesh_list, T_list, op_list
@@ -331,7 +331,7 @@ for mesh_name in base_torsos:
 
     s = Shape(*claw6)
     s_list.append(s)
-    # s.mesh.show(smooth=False)
+    s.mesh.show(smooth=False)
 
 sf_list = [
     "sf_point",
