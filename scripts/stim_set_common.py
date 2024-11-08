@@ -11,7 +11,7 @@ UU, VV = 50, 50
 num_edge_cp = 7
 base_round_cp = 3
 top_round_cp = 3
-cap_path = Path("/home/oconnorlab/Code/vh_objects/assets/cap_20241003.stl")
+cap_path = Path("/home/oconnorlab/Code/vh_objects/assets/cap_20241108.stl")
 STL_DIR = Path("/home/oconnorlab/Code/vh_objects/sample_shapes/stl")
 
 

@@ -908,5 +908,9 @@ T_label[2, 3] = mesh_dict["cap"].bounds[0][2] + LABEL_DEPTH
 save_dir = Path(STL_DIR, "axial_component")
 for i, s in enumerate(s_list):
     label = "F" + str(i).zfill(3)
-    s.mesh = label_mesh(s.mesh, label, T_label, LABEL_DEPTH, font_height, "difference")
-    export_shape(s, save_dir, label)
+    try:
+        s.mesh = label_mesh(s.mesh, label, T_label, LABEL_DEPTH, font_height, "difference")
+        export_shape(s, save_dir, label)
+    except:
+        print(f"Failed to save {label}")
+        continue
