@@ -11,8 +11,10 @@ UU, VV = 50, 50
 num_edge_cp = 7
 base_round_cp = 3
 top_round_cp = 3
-cap_path = Path("/home/oconnorlab/Code/vh_objects/assets/cap_20241108.stl")
-STL_DIR = Path("/home/oconnorlab/Code/vh_objects/sample_shapes/stl")
+root_dir = Path(__file__).parents[1]
+print(root_dir)
+cap_path = Path(root_dir, "assets/cap_20241108.stl")
+STL_DIR = Path(root_dir, "sample_shapes/stl")
 
 
 def create_scene(mesh_dict_or_list, offset=True):

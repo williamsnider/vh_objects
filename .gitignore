@@ -8,6 +8,7 @@ stimulus_set
 *.ipynb
 samples
 *.png
+*.zip
 
 sample_shapes*/
 
