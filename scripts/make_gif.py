@@ -11,6 +11,18 @@ import cv2
 from trimesh.transformations import rotation_matrix as rotvec2T
 
 
+def size_check(fname_stl):
+
+    EXTENT_THRESHOLD = 45.1
+
+    # Load the STL file
+    mesh = trimesh.load_mesh(fname_stl)
+    extents = mesh.extents
+
+    if any(extents[:2] > EXTENT_THRESHOLD):
+        print(f"Shape {fname_stl} is too large and has extents {extents}; FIX THIS")
+
+
 def make_gif(fname_stl):
 
     # Load the STL file
@@ -327,14 +339,16 @@ from tqdm import tqdm
 
 
 def process_file(fname_stl):
+    size_check(fname_stl)
     fname_png = save_mesh_as_png(fname_stl)
-    fname_gif = make_gif_pyvista(fname_stl)
-    # combine_gif_and_image(fname_gif)
+    # fname_gif = make_gif_pyvista(fname_stl)
+    # # combine_gif_and_image(fname_gif)
 
 
 if __name__ == "__main__":
 
-    overall_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/")
+    base_dir = Path(__file__).parents[1]
+    overall_dir = Path(base_dir, "sample_shapes/stl/")
 
     fname_stl_all = list(overall_dir.rglob("*.stl"))
     # Use a multiprocessing pool

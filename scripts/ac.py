@@ -551,6 +551,7 @@ configs = np.array(
         [0, 60, 240],
         # [0, 240, 60],  # Symmetric to [0,60,240]
         [0, 60, 60],
+        [0, 60, 180],
         [0, 90, 180],
         [0, 180, 90],
         # [0, 90, 90], # Symmetric to [0,180,90]
@@ -563,29 +564,41 @@ configs /= 180 / np.pi
 for config in configs:
     for cs_type in ["ellipse", "round"]:
 
-        for curve_direction in ["flat", "up", "down"]:
+        for curve_direction in ["flat", "up", "down", "updown", "downup"]:
 
             if curve_direction in ["up", "down"]:
                 mesh_names = ["ac_" + cs_type + "_K0", "ac_" + cs_type + "_K1", "ac_" + cs_type + "_K1"]
+            elif curve_direction == "updown":
+                mesh_names = ["ac_" + cs_type + "_K0", "ac_" + cs_type + "_K1", "ac_" + cs_type + "_K2"]
+            elif curve_direction == "downup":
+                mesh_names = ["ac_" + cs_type + "_K0", "ac_" + cs_type + "_K2", "ac_" + cs_type + "_K1"]
             elif curve_direction == "flat":
                 mesh_names = ["ac_" + cs_type + "_K0", "ac_" + cs_type + "_K0", "ac_" + cs_type + "_K0"]
 
             T_list = [rotvec2T(config[0] + np.pi, [0, 1, 0])]
 
             if curve_direction == "down":
-                down_angle = np.pi
+                down_angle2 = np.pi
+                down_angle3 = np.pi
+            elif curve_direction == "updown":
+                down_angle2 = np.pi
+                down_angle3 = np.pi
+            elif curve_direction == "downup":
+                down_angle2 = 0
+                down_angle3 = 0
             else:
-                down_angle = 0
+                down_angle2 = 0
+                down_angle3 = 0
 
             # Second limb
             idx = 1
-            T = rotvec2T(config[idx], [0, 1, 0]) @ T_list[0] @ rotvec2T(down_angle, [0, 0, 1])  # Rotate to next angle
+            T = rotvec2T(config[idx], [0, 1, 0]) @ T_list[0] @ rotvec2T(down_angle2, [0, 0, 1])  # Rotate to next angle
             T_list.append(T)
 
             # Third Limb
             idx = 2
             T = (
-                rotvec2T(np.sum(config[:]), [0, 1, 0]) @ T_list[0] @ rotvec2T(down_angle + np.pi, [0, 0, 1])
+                rotvec2T(np.sum(config[:]), [0, 1, 0]) @ T_list[0] @ rotvec2T(down_angle3 + np.pi, [0, 0, 1])
             )  # Rotate to next angle
             T_list.append(T)
 
@@ -632,22 +645,23 @@ for config in configs:
 
             s = Shape(*claw6)
             s_list.append(s)
-            # s.mesh.show(smooth=False)
+            s.mesh.show(smooth=False)
 
 
-##########################
-### 4 SEGMENT COPLANAR ###
-##########################
+#################################
+### 8 SEGMENT COPLANAR / QUAD ###
+#################################
+num_components = 8
 for cs_type in ["ellipse", "round"]:
 
     for curve_direction in ["flat", "up", "down"]:
 
         if curve_direction == "up":
-            mesh_names = ["ac_" + cs_type + "_K1" for _ in range(4)]
+            mesh_names = ["ac_" + cs_type + "_K1" for _ in range(num_components)]
         elif curve_direction == "flat":
-            mesh_names = ["ac_" + cs_type + "_K0_long" for _ in range(4)]
+            mesh_names = ["ac_" + cs_type + "_K0_long" for _ in range(num_components)]
         elif curve_direction == "down":
-            mesh_names = ["ac_" + cs_type + "_K2" for _ in range(4)]
+            mesh_names = ["ac_" + cs_type + "_K2" for _ in range(num_components)]
         else:
             raise ValueError("Invalid curve direction")
 
@@ -666,13 +680,16 @@ for cs_type in ["ellipse", "round"]:
 
             if curve_direction in ["up", "down"]:
                 T[2, 3] += AC_LENGTH - AC_DIAMETER
-                pass
             elif curve_direction == "flat":
                 T[2, 3] += AC_LENGTH - AC_DIAMETER
-                pass
 
             T_list.append(T)
 
+        # Add T's for quad
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[0])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[1])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[2])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[3])
         # # Test scene
         # import trimesh
         # scene = trimesh.Scene()
@@ -708,7 +725,7 @@ for cs_type in ["ellipse", "round"]:
         label = "D006"
 
         # Loop around
-        idx_list = ["0", "01", "012", "0123"]
+        idx_list = ["0", "01", "012", "0123", "014", "0145", "012347", "01234567"]
         mesh_fairing_distance = 1
         for idx_string in idx_list:
 
@@ -723,7 +740,7 @@ for cs_type in ["ellipse", "round"]:
                 op_list_sub.append(op_list[i])
 
             # Shift all up slightly to keep tracking point visible
-            for i in idx:
+            for i in range(len(idx)):
                 T_list_sub[i][2, 3] += AC_DIAMETER / 4
 
             # Add in cap
@@ -765,7 +782,14 @@ for cs_type in ["ellipse", "round"]:
             T2[2, 3] = AC_LENGTH - AC_DIAMETER
         T3 = TZ @ T2
         T_list = [T0, T1, T2, T3]
-        idx_list = ["0", "01", "012", "0123"]
+
+        # Expand T_list for quad
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[0])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[1])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[2])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[3])
+
+        idx_list = ["0", "01", "012", "0123", "014", "0145", "0167", "012346", "01234567"]
         for idx_string in idx_list:
             idx = [int(i) for i in idx_string]
 
@@ -817,9 +841,9 @@ for cs_type in [
     "round",
 ]:
     for curve_direction in [
-        # "flat",
+        "flat",
         # "up",
-        "down",
+        # "down",
     ]:
 
         if curve_direction == "up":
@@ -894,7 +918,7 @@ for cs_type in [
 
         # 90deg all around
 
-        idx_list = ["01", "012", "013", "0123", "01234", "05", "015", "0125", "0135", "01235", "012345"]
+        idx_list = ["01", "012", "013", "0123", "01234", "015", "0125", "0135", "01235", "012345"]
         mesh_fairing_distance = 3
         for idx_string in idx_list:
 
