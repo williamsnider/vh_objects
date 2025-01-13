@@ -227,319 +227,319 @@ s_list = []
 ################
 ## 2 SEGMENT ###
 ################
-for cs_type in ["round", "ellipse"]:
-    ellipse_T23_shift = AC_LENGTH - AC_DIAMETER / 2 - AC_DIAMETER / 2 + 0.5
-    ellipse_T23_shift_double = ellipse_T23_shift - 3
-    # Straight-Straight
-    mesh_names = ["ac_" + cs_type + "_K0", "ac_" + cs_type + "_K0"]
+# for cs_type in ["round", "ellipse"]:
+#     ellipse_T23_shift = AC_LENGTH - AC_DIAMETER / 2 - AC_DIAMETER / 2 + 0.5
+#     ellipse_T23_shift_double = ellipse_T23_shift - 3
+#     # Straight-Straight
+#     mesh_names = ["ac_" + cs_type + "_K0", "ac_" + cs_type + "_K0"]
 
-    for j in range(3):
+#     for j in range(3):
 
-        mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
-        mesh_list = slightly_deform_mesh(mesh_list)
-        # for i in range(len(mesh_names)):
-        #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
-        #     mesh_copy.apply_scale(1 + 0.003 * i)
-        #     mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
-        #     mesh_list.append(mesh_copy)
+#         mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
+#         mesh_list = slightly_deform_mesh(mesh_list)
+#         # for i in range(len(mesh_names)):
+#         #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
+#         #     mesh_copy.apply_scale(1 + 0.003 * i)
+#         #     mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
+#         #     mesh_list.append(mesh_copy)
 
-        T_list = [np.eye(4)]  # Limb 1
-        T2 = rotvec2T(np.linspace(np.pi / 2, 0, 3)[j], [0, 1, 0])
+#         T_list = [np.eye(4)]  # Limb 1
+#         T2 = rotvec2T(np.linspace(np.pi / 2, 0, 3)[j], [0, 1, 0])
 
-        if cs_type == "ellipse":
-            T2[2, 3] = AC_LENGTH - AC_DIAMETER * base_cs_ellipse_factors[0]
-        elif cs_type == "round":
-            T2[2, 3] = AC_LENGTH - AC_DIAMETER
-        else:
-            raise ValueError("Invalid cross-section type")
+#         if cs_type == "ellipse":
+#             T2[2, 3] = AC_LENGTH - AC_DIAMETER * base_cs_ellipse_factors[0]
+#         elif cs_type == "round":
+#             T2[2, 3] = AC_LENGTH - AC_DIAMETER
+#         else:
+#             raise ValueError("Invalid cross-section type")
 
-        T_list.append(T2)  # Limb 2
+#         T_list.append(T2)  # Limb 2
 
-        op_list = ["union"] * len(mesh_list)
-        description = "straight"
-        label = "D006"
+#         op_list = ["union"] * len(mesh_list)
+#         description = "straight"
+#         label = "D006"
 
-        # Add in cap
-        mesh_list.append(mesh_dict["cap"])
-        T = np.eye(4)
-        # T[2, 3] = -AC_DIAMETER / 3
-        T_list.append(T)
-        op_list.append("union")
+#         # Add in cap
+#         mesh_list.append(mesh_dict["cap"])
+#         T = np.eye(4)
+#         # T[2, 3] = -AC_DIAMETER / 3
+#         T_list.append(T)
+#         op_list.append("union")
 
-        claw6 = [
-            mesh_list,
-            T_list,
-            op_list,
-            label,
-            description,
-            "test",
-            np.eye(4),
-            mesh_fairing_distance,
-        ]
+#         claw6 = [
+#             mesh_list,
+#             T_list,
+#             op_list,
+#             label,
+#             description,
+#             "test",
+#             np.eye(4),
+#             mesh_fairing_distance,
+#         ]
 
-        s = Shape(*claw6)
+#         s = Shape(*claw6)
 
-        s_list.append(s)
-        # s.mesh.show(smooth=False)
+#         s_list.append(s)
+#         # s.mesh.show(smooth=False)
 
-    # Straight - Curved
-    mesh_names = ["ac_" + cs_type + "_K0", "ac_" + cs_type + "_K1"]
-    T = np.eye(4)
-    T[2, 3] = AC_LENGTH - AC_DIAMETER
-    T_overall = [T]
+#     # Straight - Curved
+#     mesh_names = ["ac_" + cs_type + "_K0", "ac_" + cs_type + "_K1"]
+#     T = np.eye(4)
+#     T[2, 3] = AC_LENGTH - AC_DIAMETER
+#     T_overall = [T]
 
-    TY90 = rotvec2T(np.pi / 2, [0, 1, 0])
-    for th, i in enumerate(np.linspace(0, 2 * np.pi, 2, endpoint=False)):
-        T = rotvec2T(i, [1, 0, 0]) @ TY90
-        if cs_type == "ellipse":
-            T[2, 3] = AC_LENGTH - AC_DIAMETER * base_cs_ellipse_factors[0]
-        elif cs_type == "round":
-            T[2, 3] = AC_LENGTH - AC_DIAMETER
-        else:
-            raise ValueError("Invalid cross-section type")
+#     TY90 = rotvec2T(np.pi / 2, [0, 1, 0])
+#     for th, i in enumerate(np.linspace(0, 2 * np.pi, 2, endpoint=False)):
+#         T = rotvec2T(i, [1, 0, 0]) @ TY90
+#         if cs_type == "ellipse":
+#             T[2, 3] = AC_LENGTH - AC_DIAMETER * base_cs_ellipse_factors[0]
+#         elif cs_type == "round":
+#             T[2, 3] = AC_LENGTH - AC_DIAMETER
+#         else:
+#             raise ValueError("Invalid cross-section type")
 
-        T_overall.append(T)
+#         T_overall.append(T)
 
-    TX90 = rotvec2T(np.pi / 2, [1, 0, 0])
-    for th, i in enumerate(np.linspace(0, 2 * np.pi, 2, endpoint=False)):
-        T = rotvec2T(i, [0, 1, 0]) @ TX90
-        if cs_type == "ellipse":
-            T[2, 3] = ellipse_T23_shift
-        elif cs_type == "round":
-            T[2, 3] = AC_LENGTH - AC_DIAMETER
-        else:
-            raise ValueError("Invalid cross-section type")
-        T_overall.append(T)
+#     TX90 = rotvec2T(np.pi / 2, [1, 0, 0])
+#     for th, i in enumerate(np.linspace(0, 2 * np.pi, 2, endpoint=False)):
+#         T = rotvec2T(i, [0, 1, 0]) @ TX90
+#         if cs_type == "ellipse":
+#             T[2, 3] = ellipse_T23_shift
+#         elif cs_type == "round":
+#             T[2, 3] = AC_LENGTH - AC_DIAMETER
+#         else:
+#             raise ValueError("Invalid cross-section type")
+#         T_overall.append(T)
 
-    for T in T_overall:
+#     for T in T_overall:
 
-        mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
-        mesh_list = slightly_deform_mesh(mesh_list)
-        # mesh_list = []
-        # for i in range(len(mesh_names)):
-        #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
-        #     mesh_copy.apply_scale(1 + 0.003 * i)
-        #     mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
-        #     mesh_list.append(mesh_copy)
+#         mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
+#         mesh_list = slightly_deform_mesh(mesh_list)
+#         # mesh_list = []
+#         # for i in range(len(mesh_names)):
+#         #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
+#         #     mesh_copy.apply_scale(1 + 0.003 * i)
+#         #     mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
+#         #     mesh_list.append(mesh_copy)
 
-        T_list = [np.eye(4)]  # Limb 1
-        T_list.append(T)  # Limb 2
+#         T_list = [np.eye(4)]  # Limb 1
+#         T_list.append(T)  # Limb 2
 
-        op_list = ["union"] * len(mesh_list)
-        description = "straight"
-        label = "D006"
+#         op_list = ["union"] * len(mesh_list)
+#         description = "straight"
+#         label = "D006"
 
-        # Add in cap
-        mesh_list.append(mesh_dict["cap"])
-        T = np.eye(4)
-        # T[2, 3] = -AC_DIAMETER / 3
-        T_list.append(T)
-        op_list.append("union")
+#         # Add in cap
+#         mesh_list.append(mesh_dict["cap"])
+#         T = np.eye(4)
+#         # T[2, 3] = -AC_DIAMETER / 3
+#         T_list.append(T)
+#         op_list.append("union")
 
-        claw6 = [
-            mesh_list,
-            T_list,
-            op_list,
-            label,
-            description,
-            "test",
-            np.eye(4),
-            mesh_fairing_distance,
-        ]
+#         claw6 = [
+#             mesh_list,
+#             T_list,
+#             op_list,
+#             label,
+#             description,
+#             "test",
+#             np.eye(4),
+#             mesh_fairing_distance,
+#         ]
 
-        s = Shape(*claw6)
-        s_list.append(s)
-        # s.mesh.show(smooth=False)
+#         s = Shape(*claw6)
+#         s_list.append(s)
+#         # s.mesh.show(smooth=False)
 
-    # Curved-Straight
-    mesh_names = ["ac_" + cs_type + "_K1", "ac_" + cs_type + "_K0"]
-    T = np.eye(4)
-    T[2, 3] = AC_LENGTH - AC_DIAMETER
-    T_overall = [T]
-    for i in range(2):
-        T = rotvec2T(np.linspace(0, 2 * np.pi, 2, endpoint=False)[i], [0, 0, 1]) @ rotvec2T(np.pi / 2, [0, 1, 0])
-        if cs_type == "ellipse":
-            # T[2, 3] = AC_LENGTH - AC_DIAMETER * base_cs_ellipse_factors[0]
-            T[2, 3] = ellipse_T23_shift
-        elif cs_type == "round":
-            T[2, 3] = AC_LENGTH - AC_DIAMETER
-        else:
-            raise ValueError("Invalid cross-section type")
-        T_overall.append(T)
+#     # Curved-Straight
+#     mesh_names = ["ac_" + cs_type + "_K1", "ac_" + cs_type + "_K0"]
+#     T = np.eye(4)
+#     T[2, 3] = AC_LENGTH - AC_DIAMETER
+#     T_overall = [T]
+#     for i in range(2):
+#         T = rotvec2T(np.linspace(0, 2 * np.pi, 2, endpoint=False)[i], [0, 0, 1]) @ rotvec2T(np.pi / 2, [0, 1, 0])
+#         if cs_type == "ellipse":
+#             # T[2, 3] = AC_LENGTH - AC_DIAMETER * base_cs_ellipse_factors[0]
+#             T[2, 3] = ellipse_T23_shift
+#         elif cs_type == "round":
+#             T[2, 3] = AC_LENGTH - AC_DIAMETER
+#         else:
+#             raise ValueError("Invalid cross-section type")
+#         T_overall.append(T)
 
-    for i in range(2):
-        T = rotvec2T(np.linspace(0, 2 * np.pi, 2, endpoint=False)[i], [0, 0, 1]) @ rotvec2T(np.pi / 2, [1, 0, 0])
-        if cs_type == "ellipse":
-            T[2, 3] = ellipse_T23_shift_double
-            pass
-        elif cs_type == "round":
-            T[2, 3] = AC_LENGTH - AC_DIAMETER
-            pass
-        else:
-            raise ValueError("Invalid cross-section type")
-        T_overall.append(T)
+#     for i in range(2):
+#         T = rotvec2T(np.linspace(0, 2 * np.pi, 2, endpoint=False)[i], [0, 0, 1]) @ rotvec2T(np.pi / 2, [1, 0, 0])
+#         if cs_type == "ellipse":
+#             T[2, 3] = ellipse_T23_shift_double
+#             pass
+#         elif cs_type == "round":
+#             T[2, 3] = AC_LENGTH - AC_DIAMETER
+#             pass
+#         else:
+#             raise ValueError("Invalid cross-section type")
+#         T_overall.append(T)
 
-    for T in T_overall:
+#     for T in T_overall:
 
-        mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
-        mesh_list = slightly_deform_mesh(mesh_list)
-        # mesh_list = []
-        # for i in range(len(mesh_names)):
-        #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
-        #     mesh_copy.apply_scale(1 + 0.003 * i)
-        #     mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
-        #     mesh_list.append(mesh_copy)
+#         mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
+#         mesh_list = slightly_deform_mesh(mesh_list)
+#         # mesh_list = []
+#         # for i in range(len(mesh_names)):
+#         #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
+#         #     mesh_copy.apply_scale(1 + 0.003 * i)
+#         #     mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
+#         #     mesh_list.append(mesh_copy)
 
-        T1 = rotvec2T(np.pi, [0, 1, 0])  # Limb 1
-        T1[2, 3] = AC_LENGTH - AC_DIAMETER
-        T_list = [T1]
-        T_list.append(T)  # Limb 2
+#         T1 = rotvec2T(np.pi, [0, 1, 0])  # Limb 1
+#         T1[2, 3] = AC_LENGTH - AC_DIAMETER
+#         T_list = [T1]
+#         T_list.append(T)  # Limb 2
 
-        op_list = ["union"] * len(mesh_list)
-        description = "straight"
-        label = "D006"
+#         op_list = ["union"] * len(mesh_list)
+#         description = "straight"
+#         label = "D006"
 
-        # Add in cap
-        mesh_list.append(mesh_dict["cap"])
-        T = np.eye(4)
-        # T[2, 3] = -AC_DIAMETER / 3
-        T_list.append(T)
-        op_list.append("union")
+#         # Add in cap
+#         mesh_list.append(mesh_dict["cap"])
+#         T = np.eye(4)
+#         # T[2, 3] = -AC_DIAMETER / 3
+#         T_list.append(T)
+#         op_list.append("union")
 
-        claw6 = [
-            mesh_list,
-            T_list,
-            op_list,
-            label,
-            description,
-            "test",
-            np.eye(4),
-            mesh_fairing_distance,
-        ]
+#         claw6 = [
+#             mesh_list,
+#             T_list,
+#             op_list,
+#             label,
+#             description,
+#             "test",
+#             np.eye(4),
+#             mesh_fairing_distance,
+#         ]
 
-        s = Shape(*claw6)
-        s_list.append(s)
-        # s.mesh.show(smooth=False)
+#         s = Shape(*claw6)
+#         s_list.append(s)
+#         # s.mesh.show(smooth=False)
 
-    # Curved-Curved
-    mesh_names = ["ac_" + cs_type + "_K1", "ac_" + cs_type + "_K1"]
-    T_overall = []
+#     # Curved-Curved
+#     mesh_names = ["ac_" + cs_type + "_K1", "ac_" + cs_type + "_K1"]
+#     T_overall = []
 
-    # Rotations about Z axis
-    for i in range(4):
+#     # Rotations about Z axis
+#     for i in range(4):
 
-        # Skip rotations that result in misaligned ellipses
-        if cs_type == "ellipse" and i % 2 == 1:
-            continue
+#         # Skip rotations that result in misaligned ellipses
+#         if cs_type == "ellipse" and i % 2 == 1:
+#             continue
 
-        T = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 0, 1])
-        T[2, 3] = AC_LENGTH - AC_DIAMETER
-        T_overall.append(T)
+#         T = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 0, 1])
+#         T[2, 3] = AC_LENGTH - AC_DIAMETER
+#         T_overall.append(T)
 
-    # Rotations about +X axis
-    for i in range(4):
+#     # Rotations about +X axis
+#     for i in range(4):
 
-        # Skip rotations that result in misaligned ellipses
-        if cs_type == "ellipse" and i % 2 == 1:
-            continue
+#         # Skip rotations that result in misaligned ellipses
+#         if cs_type == "ellipse" and i % 2 == 1:
+#             continue
 
-        T = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [1, 0, 0]) @ rotvec2T(np.pi / 2, [0, 1, 0])
+#         T = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [1, 0, 0]) @ rotvec2T(np.pi / 2, [0, 1, 0])
 
-        if cs_type == "ellipse":
-            T[2, 3] = ellipse_T23_shift
-        elif cs_type == "round":
-            T[2, 3] = AC_LENGTH - AC_DIAMETER
-        else:
-            raise ValueError("Invalid cross-section type")
+#         if cs_type == "ellipse":
+#             T[2, 3] = ellipse_T23_shift
+#         elif cs_type == "round":
+#             T[2, 3] = AC_LENGTH - AC_DIAMETER
+#         else:
+#             raise ValueError("Invalid cross-section type")
 
-        T_overall.append(T)
+#         T_overall.append(T)
 
-    # Rotations about +Y axis
-    for i in range(4):
+#     # Rotations about +Y axis
+#     for i in range(4):
 
-        # Skip rotations that result in misaligned ellipses
-        if cs_type == "ellipse" and i % 2 == 1:
-            continue
+#         # Skip rotations that result in misaligned ellipses
+#         if cs_type == "ellipse" and i % 2 == 1:
+#             continue
 
-        T = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 1, 0]) @ rotvec2T(np.pi / 2, [1, 0, 0])
-        if cs_type == "ellipse":
-            T[2, 3] = ellipse_T23_shift_double
-        elif cs_type == "round":
-            T[2, 3] = AC_LENGTH - AC_DIAMETER
-        else:
-            raise ValueError("Invalid cross-section type")
-        T_overall.append(T)
+#         T = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 1, 0]) @ rotvec2T(np.pi / 2, [1, 0, 0])
+#         if cs_type == "ellipse":
+#             T[2, 3] = ellipse_T23_shift_double
+#         elif cs_type == "round":
+#             T[2, 3] = AC_LENGTH - AC_DIAMETER
+#         else:
+#             raise ValueError("Invalid cross-section type")
+#         T_overall.append(T)
 
-    # Rotatoins about -X axis
-    for i in range(4):
+#     # Rotatoins about -X axis
+#     for i in range(4):
 
-        # Skip rotations that result in misaligned ellipses
-        if cs_type == "ellipse" and i % 2 == 1:
-            continue
+#         # Skip rotations that result in misaligned ellipses
+#         if cs_type == "ellipse" and i % 2 == 1:
+#             continue
 
-        T = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [1, 0, 0]) @ rotvec2T(-np.pi / 2, [0, 1, 0])
-        T[2, 3] = AC_LENGTH - AC_DIAMETER
+#         T = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [1, 0, 0]) @ rotvec2T(-np.pi / 2, [0, 1, 0])
+#         T[2, 3] = AC_LENGTH - AC_DIAMETER
 
-        T_overall.append(T)
+#         T_overall.append(T)
 
-    # Rotations about -Y axis
-    for i in range(4):
+#     # Rotations about -Y axis
+#     for i in range(4):
 
-        # Skip rotations that result in misaligned ellipses
-        if cs_type == "ellipse" and i % 2 == 1:
-            continue
+#         # Skip rotations that result in misaligned ellipses
+#         if cs_type == "ellipse" and i % 2 == 1:
+#             continue
 
-        T = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 1, 0]) @ rotvec2T(-np.pi / 2, [1, 0, 0])
-        if cs_type == "ellipse":
-            T[2, 3] = ellipse_T23_shift_double
-        elif cs_type == "round":
-            T[2, 3] = AC_LENGTH - AC_DIAMETER
-        else:
-            raise ValueError("Invalid cross-section type")
-        T_overall.append(T)
+#         T = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 1, 0]) @ rotvec2T(-np.pi / 2, [1, 0, 0])
+#         if cs_type == "ellipse":
+#             T[2, 3] = ellipse_T23_shift_double
+#         elif cs_type == "round":
+#             T[2, 3] = AC_LENGTH - AC_DIAMETER
+#         else:
+#             raise ValueError("Invalid cross-section type")
+#         T_overall.append(T)
 
-    for T in T_overall:
+#     for T in T_overall:
 
-        mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
-        mesh_list = slightly_deform_mesh(mesh_list)
-        # mesh_list = []
-        # for i in range(len(mesh_names)):
-        #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
-        #     mesh_copy.apply_scale(1 + 0.003 * i)
-        #     mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
-        #     mesh_list.append(mesh_copy)
+#         mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
+#         mesh_list = slightly_deform_mesh(mesh_list)
+#         # mesh_list = []
+#         # for i in range(len(mesh_names)):
+#         #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
+#         #     mesh_copy.apply_scale(1 + 0.003 * i)
+#         #     mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
+#         #     mesh_list.append(mesh_copy)
 
-        T1 = rotvec2T(np.pi, [0, 1, 0])  # Limb 1
-        T1[2, 3] = AC_LENGTH - AC_DIAMETER
-        T_list = [T1]
-        T_list.append(T)  # Limb 2
+#         T1 = rotvec2T(np.pi, [0, 1, 0])  # Limb 1
+#         T1[2, 3] = AC_LENGTH - AC_DIAMETER
+#         T_list = [T1]
+#         T_list.append(T)  # Limb 2
 
-        op_list = ["union"] * len(mesh_list)
-        description = "straight"
-        label = "D006"
+#         op_list = ["union"] * len(mesh_list)
+#         description = "straight"
+#         label = "D006"
 
-        # Add in cap
-        mesh_list.append(mesh_dict["cap"])
-        T = np.eye(4)
-        # T[2, 3] = -AC_DIAMETER / 3
-        T_list.append(T)
-        op_list.append("union")
+#         # Add in cap
+#         mesh_list.append(mesh_dict["cap"])
+#         T = np.eye(4)
+#         # T[2, 3] = -AC_DIAMETER / 3
+#         T_list.append(T)
+#         op_list.append("union")
 
-        claw6 = [
-            mesh_list,
-            T_list,
-            op_list,
-            label,
-            description,
-            "test",
-            np.eye(4),
-            mesh_fairing_distance,
-        ]
+#         claw6 = [
+#             mesh_list,
+#             T_list,
+#             op_list,
+#             label,
+#             description,
+#             "test",
+#             np.eye(4),
+#             mesh_fairing_distance,
+#         ]
 
-        s = Shape(*claw6)
-        s_list.append(s)
+#         s = Shape(*claw6)
+#         s_list.append(s)
 
-        # s.mesh.show(smooth=False)
+#         # s.mesh.show(smooth=False)
 
 #################
 ### 3 SEGMENT ###
@@ -591,7 +591,12 @@ for config in configs:
 
             # Shift all T up
             for i in range(3):
-                T_list[i][2, 3] += AC_LENGTH - AC_DIAMETER
+                if cs_type == "round":
+                    T_list[i][2, 3] += AC_LENGTH - AC_DIAMETER * 7 / 8
+                elif cs_type == "ellipse":
+                    T_list[i][2, 3] += AC_LENGTH - AC_DIAMETER / 2
+                else:
+                    raise ValueError("Invalid cross-section type")
 
             # Transform meshes slightly
             mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
@@ -668,9 +673,28 @@ for cs_type in ["ellipse", "round"]:
 
             T_list.append(T)
 
+        # # Test scene
+        # import trimesh
+        # scene = trimesh.Scene()
+        # for i in range(4):
+        #     new_mesh = mesh_dict[mesh_names[3]].copy()
+        #     new_mesh.apply_transform(T_list[i])
+        #     scene.add_geometry(new_mesh)
+        # scene.show()
+
         # Apply transformations
         mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
         mesh_list = slightly_deform_mesh(mesh_list)
+
+        # # Test scene
+        # import trimesh
+        # scene = trimesh.Scene()
+        # for i in range(4):
+        #     new_mesh = mesh_list[i].copy()
+        #     new_mesh.apply_transform(T_list[i])
+        #     scene.add_geometry(new_mesh)
+        # scene.show()
+
         # mesh_list = []
         # for i in range(len(mesh_names)):
         #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
@@ -694,9 +718,13 @@ for cs_type in ["ellipse", "round"]:
             T_list_sub = []
             op_list_sub = []
             for i in idx:
-                mesh_list_sub.append(mesh_list[i])
-                T_list_sub.append(T_list[i])
+                mesh_list_sub.append(mesh_list[i].copy())
+                T_list_sub.append(T_list[i].copy())
                 op_list_sub.append(op_list[i])
+
+            # Shift all up slightly to keep tracking point visible
+            for i in idx:
+                T_list_sub[i][2, 3] += AC_DIAMETER / 4
 
             # Add in cap
             mesh_list_sub.append(mesh_dict["cap"])
@@ -749,6 +777,13 @@ for cs_type in ["ellipse", "round"]:
                 T_list_sub.append(T_list[i])
                 op_list_sub.append(op_list[i])
 
+            # # Add in extra segment so the post connects with the shape
+            mesh_list_sub.append(mesh_dict["ac_round_K0"])
+            T_extra = np.eye(4)
+            T_extra[2, 3] = AC_DIAMETER / 8
+            T_list_sub.append(T_extra)
+            op_list_sub.append("union")
+
             # Add in cap
             mesh_list_sub.append(mesh_dict["cap"])
             T = np.eye(4)
@@ -771,6 +806,7 @@ for cs_type in ["ellipse", "round"]:
             s_list.append(s)
 
             # s.mesh.show(smooth=False)
+
 
 ###############
 ### DREIDLE ###
