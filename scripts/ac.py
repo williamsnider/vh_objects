@@ -744,7 +744,7 @@ for mesh_list, T_list, op_list, T_UP_SHIFT in list_for_coplanar:
     # Rotate about x-axis 90 deg
     for i in range(3):
         T_list[i] = rotvec2T(np.pi / 2, [1, 0, 0]) @ T_list[i]
-        T_list[i][2, 3] += T_UP_SHIFT  # Shift back up
+        T_list[i][2, 3] += K0_LENGTH - AC_DIAMETER * 7 / 8
 
     # Add in post
     mesh_list.append(mesh_dict["ac_post_extra"])
