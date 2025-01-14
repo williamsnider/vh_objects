@@ -11,16 +11,25 @@ import cv2
 from trimesh.transformations import rotation_matrix as rotvec2T
 
 
+def calc_dist_from_z_axis(mesh):
+    x = mesh.vertices[:, 0]
+    y = mesh.vertices[:, 1]
+    dist = np.sqrt(x**2 + y**2)
+    max_dist = np.max(dist)
+    return max_dist
+
+
 def size_check(fname_stl):
 
-    EXTENT_THRESHOLD = 45.1
+    DIST_FROM_Z_AXIS_THRES = 22.6
 
     # Load the STL file
     mesh = trimesh.load_mesh(fname_stl)
-    extents = mesh.extents
+    max_dist = calc_dist_from_z_axis(mesh)
+    print(max_dist)
 
-    if any(extents[:2] > EXTENT_THRESHOLD):
-        print(f"Shape {fname_stl} is too large and has extents {extents}; FIX THIS")
+    if max_dist > DIST_FROM_Z_AXIS_THRES:
+        print(f"Shape {fname_stl} is too large and has distance {max_dist} from z-axis; FIX THIS")
 
 
 def make_gif(fname_stl):

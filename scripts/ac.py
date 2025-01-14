@@ -24,16 +24,18 @@ import copy
 from trimesh.transformations import rotation_matrix as rotvec2T
 from pathlib import Path
 from scripts.label_quartet import label_mesh
+from scripts.make_gif import calc_dist_from_z_axis
 
-
-AC_LENGTH = 27.5
+AC_LENGTH = 25.5
 AC_DIAMETER = 10
 AC_FLAT_THICKNESS = 5
 NUM_CS = 11
 NUM_CP_PER_CROSS_SECTION = 50
 AC_K_PERPENDICULAR = 1 / 20
+LONG_FACTOR = 1.1265
 base_cs_ellipse_factors = [2 / 3, 5 / 4]
 mesh_fairing_distance = 1
+
 # ac_round_K0
 ac_round_K0_shape = Shaft(
     AC_LENGTH,
@@ -55,7 +57,7 @@ ac_round_K0.apply_transform(T)
 
 # ac_round_K0_long
 ac_round_K0_long_shape = Shaft(
-    AC_LENGTH * 1.3,
+    AC_LENGTH * LONG_FACTOR,
     AC_DIAMETER / 2,
     AC_DIAMETER / 2,
     AC_DIAMETER / 2,
@@ -74,7 +76,7 @@ ac_round_K0_long.apply_transform(TY45 @ T)
 
 # ac_round_K1
 ac_round_K1_shape = Shaft(
-    1.3 * AC_LENGTH,
+    LONG_FACTOR * AC_LENGTH,
     AC_DIAMETER / 2,
     AC_DIAMETER / 2,
     AC_DIAMETER / 2,
@@ -119,7 +121,7 @@ ac_ellipse_K0.apply_transform(T)
 
 # ac_ellipse_K1
 ac_ellipse_K1_shape = Shaft(
-    1.3 * AC_LENGTH,
+    LONG_FACTOR * AC_LENGTH,
     AC_DIAMETER / 2,
     AC_DIAMETER / 2,
     AC_DIAMETER / 2,
@@ -140,7 +142,7 @@ ac_ellipse_K2.apply_transform(rotvec2T(np.pi, [1, 0, 1]))
 
 # ac_ellipse_K0_long
 ac_ellipse_K0_long_shape = Shaft(
-    1.3 * AC_LENGTH,
+    LONG_FACTOR * AC_LENGTH,
     AC_DIAMETER / 2,
     AC_DIAMETER / 2,
     AC_DIAMETER / 2,
@@ -220,7 +222,7 @@ mesh_dict = {
     "ac_round_K2": ac_round_K2,
 }
 
-# create_scene(mesh_dict)
+create_scene(mesh_dict)
 
 
 s_list = []
@@ -645,7 +647,10 @@ for config in configs:
 
             s = Shape(*claw6)
             s_list.append(s)
-            s.mesh.show(smooth=False)
+            # s.mesh.show(smooth=False)
+
+            if calc_dist_from_z_axis(s.mesh) > 22.6:
+                pass
 
 
 #################################
@@ -831,129 +836,205 @@ for cs_type in ["ellipse", "round"]:
 
             # s.mesh.show(smooth=False)
 
+###########
+### Fan ###
+###########
 
-###############
-### DREIDLE ###
-###############
+for cs_type in ["round", "ellipse"]:
 
-for cs_type in [
-    # "ellipse",
-    "round",
-]:
-    for curve_direction in [
-        "flat",
-        # "up",
-        # "down",
-    ]:
+    mesh_names = [
+        "ac_" + "round" + "_K0",
+        "ac_" + cs_type + "_K1",
+        "ac_" + cs_type + "_K1",
+        "ac_" + cs_type + "_K1",
+        "ac_" + cs_type + "_K1",
+    ]
 
-        if curve_direction == "up":
-            mesh_names = [
-                "ac_round_K0",
-                "ac_" + cs_type + "_K1",
-                "ac_" + cs_type + "_K1",
-                "ac_" + cs_type + "_K1",
-                "ac_" + cs_type + "_K1",
-                "ac_round_K0",
-            ]
-        elif curve_direction == "flat":
-            mesh_names = ["ac_round_K0" for _ in range(6)]
-        elif curve_direction == "down":
-            mesh_names = [
-                "ac_round_K0",
-                "ac_" + cs_type + "_K1",
-                "ac_" + cs_type + "_K1",
-                "ac_" + cs_type + "_K1",
-                "ac_" + cs_type + "_K1",
-                "ac_round_K0",
-            ]
+    # Component 1 straight up
+    T_list = [np.eye(4)]
+
+    # Components 2,3,4,5 (90deg rotations about y-axis then z-axis)
+    for i in range(4):
+        T1 = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 0, 1])
+        T2 = rotvec2T(np.pi / 2, [1, 0, 0])
+        T = T1 @ T2
+        if cs_type == "ellipse":
+            T[2, 3] = AC_LENGTH - AC_DIAMETER * base_cs_ellipse_factors[0]
         else:
-            raise ValueError("Invalid curve direction")
-
-        # Component 1 straight up
-        T_list = [np.eye(4)]
-
-        # Components 2,3,4,5 (90deg rotations about z-axis)
-        for i in range(4):
-            T1 = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 0, 1])
-            if curve_direction == "up":
-                T2 = rotvec2T(-np.pi / 2, [0, 1, 0])
-            elif curve_direction == "flat":
-                T2 = rotvec2T(np.pi / 2, [1, 0, 0])
-            elif curve_direction == "down":
-                T2 = rotvec2T(np.pi / 2, [0, 1, 0])
-            else:
-                raise ValueError("Invalid curve direction")
-
-            T = T1 @ T2
-
-            if cs_type == "ellipse":
-                T[2, 3] += AC_LENGTH - AC_DIAMETER / 2
-                pass
-            elif cs_type == "round":
-                T[2, 3] += AC_LENGTH - AC_DIAMETER
-                pass
-            else:
-                raise ValueError("Invalid cross-section type")
-            T_list.append(T)
-
-        # Component 6 (straight up)
-        T = np.eye(4)
-        T[2, 3] += AC_LENGTH - AC_DIAMETER
+            T[2, 3] = AC_LENGTH - AC_DIAMETER
         T_list.append(T)
 
-        # Apply transformations
-        mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
-        mesh_list = slightly_deform_mesh(mesh_list)
-        # mesh_list = []
-        # for i in range(len(mesh_names)):
-        #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
-        #     mesh_copy.apply_scale(1 + 0.003 * i)
-        #     mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
-        #     # mesh_copy.apply_transform(T_list[i])
-        #     mesh_list.append(mesh_copy)
+    # Apply transformations
+    mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
+    mesh_list = slightly_deform_mesh(mesh_list)
+    mesh_list = slightly_deform_mesh(mesh_list)
 
-        op_list = ["union"] * len(mesh_list)
-        description = "straight"
-        label = "D006"
+    op_list = ["union"] * len(mesh_list)
+    description = "straight"
+    label = "D006"
+    idx_list = ["01", "012", "013", "0123", "01234"]
+    mesh_fairing_distance = 1
 
-        # 90deg all around
+    for idx_string in idx_list:
 
-        idx_list = ["01", "012", "013", "0123", "01234", "015", "0125", "0135", "01235", "012345"]
-        mesh_fairing_distance = 3
-        for idx_string in idx_list:
+        idx = [int(i) for i in idx_string]
 
-            idx = [int(i) for i in idx_string]
+        mesh_list_sub = []
+        T_list_sub = []
+        op_list_sub = []
+        for i in idx:
+            mesh_list_sub.append(mesh_list[i])
+            T_list_sub.append(T_list[i])
+            op_list_sub.append(op_list[i])
 
-            mesh_list_sub = []
-            T_list_sub = []
-            op_list_sub = []
-            for i in idx:
-                mesh_list_sub.append(mesh_list[i])
-                T_list_sub.append(T_list[i])
-                op_list_sub.append(op_list[i])
+        # Add in cap
+        mesh_list_sub.append(mesh_dict["cap"])
+        T = np.eye(4)
+        # T[2, 3] = -AC_DIAMETER / 3 + 0.1
+        T_list_sub.append(T)
+        op_list_sub.append("union")
 
-            # Add in cap
-            mesh_list_sub.append(mesh_dict["cap"])
-            T = np.eye(4)
-            # T[2, 3] = -AC_DIAMETER / 3 + 0.1
-            T_list_sub.append(T)
-            op_list_sub.append("union")
+        claw6 = [
+            mesh_list_sub,
+            T_list_sub,
+            op_list_sub,
+            label,
+            description,
+            "test",
+            np.eye(4),
+            mesh_fairing_distance,
+        ]
 
-            claw6 = [
-                mesh_list_sub,
-                T_list_sub,
-                op_list_sub,
-                label,
-                description,
-                "test",
-                np.eye(4),
-                mesh_fairing_distance,
-            ]
+        s = Shape(*claw6)
+        s_list.append(s)
 
-            s = Shape(*claw6)
-            s_list.append(s)
+        # s.mesh.show(smooth=False)
+        if calc_dist_from_z_axis(s.mesh) > 22.6:
+            pass
+            print(calc_dist_from_z_axis(s.mesh))
 
-            # s.mesh.show(smooth=False)
+# ###############
+# ### DREIDLE ###
+# ###############
+
+# for cs_type in [
+#     # "ellipse",
+#     "round",
+# ]:
+#     for curve_direction in [
+#         "flat",
+#         # "up",
+#         # "down",
+#     ]:
+
+#         if curve_direction == "up":
+#             mesh_names = [
+#                 "ac_round_K0",
+#                 "ac_" + cs_type + "_K1",
+#                 "ac_" + cs_type + "_K1",
+#                 "ac_" + cs_type + "_K1",
+#                 "ac_" + cs_type + "_K1",
+#                 "ac_round_K0",
+#             ]
+#         elif curve_direction == "flat":
+#             mesh_names = ["ac_round_K0" for _ in range(6)]
+#         elif curve_direction == "down":
+#             mesh_names = [
+#                 "ac_round_K0",
+#                 "ac_" + cs_type + "_K1",
+#                 "ac_" + cs_type + "_K1",
+#                 "ac_" + cs_type + "_K1",
+#                 "ac_" + cs_type + "_K1",
+#                 "ac_round_K0",
+#             ]
+#         else:
+#             raise ValueError("Invalid curve direction")
+
+#         # Component 1 straight up
+#         T_list = [np.eye(4)]
+
+#         # Components 2,3,4,5 (90deg rotations about z-axis)
+#         for i in range(4):
+#             T1 = rotvec2T(np.linspace(0, 2 * np.pi, 4, endpoint=False)[i], [0, 0, 1])
+#             if curve_direction == "up":
+#                 T2 = rotvec2T(-np.pi / 2, [0, 1, 0])
+#             elif curve_direction == "flat":
+#                 T2 = rotvec2T(np.pi / 2, [1, 0, 0])
+#             elif curve_direction == "down":
+#                 T2 = rotvec2T(np.pi / 2, [0, 1, 0])
+#             else:
+#                 raise ValueError("Invalid curve direction")
+
+#             T = T1 @ T2
+
+#             if cs_type == "ellipse":
+#                 T[2, 3] += AC_LENGTH - AC_DIAMETER / 2
+#                 pass
+#             elif cs_type == "round":
+#                 T[2, 3] += AC_LENGTH - AC_DIAMETER
+#                 pass
+#             else:
+#                 raise ValueError("Invalid cross-section type")
+#             T_list.append(T)
+
+#         # Component 6 (straight up)
+#         T = np.eye(4)
+#         T[2, 3] += AC_LENGTH - AC_DIAMETER
+#         T_list.append(T)
+
+#         # Apply transformations
+#         mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
+#         mesh_list = slightly_deform_mesh(mesh_list)
+#         # mesh_list = []
+#         # for i in range(len(mesh_names)):
+#         #     mesh_copy = copy.deepcopy(mesh_dict[mesh_names[i]])
+#         #     mesh_copy.apply_scale(1 + 0.003 * i)
+#         #     mesh_copy.apply_translation(np.array([0.001, 0.001, 0.001]) * i)
+#         #     # mesh_copy.apply_transform(T_list[i])
+#         #     mesh_list.append(mesh_copy)
+
+#         op_list = ["union"] * len(mesh_list)
+#         description = "straight"
+#         label = "D006"
+
+#         # 90deg all around
+
+#         idx_list = ["01", "012", "013", "0123", "01234", "015", "0125", "0135", "01235", "012345"]
+#         mesh_fairing_distance = 3
+#         for idx_string in idx_list:
+
+#             idx = [int(i) for i in idx_string]
+
+#             mesh_list_sub = []
+#             T_list_sub = []
+#             op_list_sub = []
+#             for i in idx:
+#                 mesh_list_sub.append(mesh_list[i])
+#                 T_list_sub.append(T_list[i])
+#                 op_list_sub.append(op_list[i])
+
+#             # Add in cap
+#             mesh_list_sub.append(mesh_dict["cap"])
+#             T = np.eye(4)
+#             # T[2, 3] = -AC_DIAMETER / 3 + 0.1
+#             T_list_sub.append(T)
+#             op_list_sub.append("union")
+
+#             claw6 = [
+#                 mesh_list_sub,
+#                 T_list_sub,
+#                 op_list_sub,
+#                 label,
+#                 description,
+#                 "test",
+#                 np.eye(4),
+#                 mesh_fairing_distance,
+#             ]
+
+#             s = Shape(*claw6)
+#             s_list.append(s)
+
+#             # s.mesh.show(smooth=False)
 
 
 # Label parameters
