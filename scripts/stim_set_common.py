@@ -82,7 +82,7 @@ def slightly_deform_mesh(mesh_list):
     mesh_list_new = []
     for i in range(len(mesh_list)):
         mesh_copy = copy.deepcopy(mesh_list[i])
-        mesh_copy.apply_scale(1 + 0.001 * i)
+        mesh_copy.apply_scale(1 - 0.002 * i)
         mesh_copy.apply_translation(np.array([0.01, 0.01, 0.01]) * i)
         mesh_list_new.append(mesh_copy)
     return mesh_list_new
