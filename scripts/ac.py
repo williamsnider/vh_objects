@@ -1022,19 +1022,6 @@ for cs_type in ["round", "ellipse"]:
             pass
             print(calc_dist_from_z_axis(s.mesh))
 
-##############
-### FAN v2 ###
-##############
-
-for cs_type in ["round", "ellipse"]:
-
-    mesh_names = [
-        "ac_post_extra",
-        "ac_" + cs_type + "_K1",
-        "ac_" + cs_type + "_K2",
-        "ac_" + cs_type + "_K2",
-        "ac_" + cs_type + "_K2",
-    ]
 
 ###############
 ### DREIDLE ###
