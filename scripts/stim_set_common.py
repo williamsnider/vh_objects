@@ -13,7 +13,7 @@ base_round_cp = 3
 top_round_cp = 3
 root_dir = Path(__file__).parents[1]
 print(root_dir)
-cap_path = Path(root_dir, "assets/cap_20241108.stl")
+cap_path = Path(root_dir, "assets/cap_20250114.stl")
 STL_DIR = Path(root_dir, "sample_shapes/stl")
 
 

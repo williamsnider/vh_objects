@@ -7,7 +7,8 @@ from vh_objects.utilities import calc_mesh_boolean_and_edges
 from vh_objects.interface import text_to_mesh
 from pathlib import Path
 
-quartet_path = "/home/oconnorlab/Code/vh_objects/assets/quartet_20241002.stl"
+root_dir = Path(__file__).parents[1]
+quartet_path = Path(root_dir, "assets/cartridge_20250114.stl")
 LABEL_DEPTH = 1.5
 font_height = 8
 
@@ -68,17 +69,44 @@ def label_quartet(stl_path, label, label_depth, font_height):
     return quartet
 
 
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+
+
+def process_quartet(i):
+    print(i)
+    label = "Q" + str(i).zfill(3)
+    quartet = label_quartet(quartet_path, label, LABEL_DEPTH, font_height)
+
+    # Export
+    export_path = Path(root_dir, f"sample_shapes/stl/quartet/{label}.stl")
+    if not export_path.parent.exists():
+        export_path.parent.mkdir(parents=True)
+    quartet.export(export_path)
+
+
 if __name__ == "__main__":
 
-    for i in range(3):
-        label = "Q" + str(i).zfill(3)
-        quartet = label_quartet(quartet_path, label, LABEL_DEPTH, font_height)
+    num_processes = 8  # You can set this to the number of CPU cores or desired parallelism level
+    with ProcessPoolExecutor(max_workers=num_processes) as executor:
+        executor.map(process_quartet, range(150))
 
-        # Export
-        export_path = Path(f"/home/oconnorlab/Code/vh_objects/sample_shapes/stl/quartet/{label}.stl")
-        if export_path.parent.exists() == False:
-            export_path.parent.mkdir(parents=True)
-        quartet.export(export_path)
+
+# if __name__ == "__main__":
+
+#     for i in range(150):
+#         print(i)
+#         label = "Q" + str(i).zfill(3)
+#         quartet = label_quartet(quartet_path, label, LABEL_DEPTH, font_height)
+
+#         # Export
+#         export_path = Path(root_dir, f"sample_shapes/stl/quartet/{label}.stl")
+#         if export_path.parent.exists() == False:
+#             export_path.parent.mkdir(parents=True)
+#         quartet.export(export_path)
+
+#     # Run above in parallel
+#     import multiprocessing as m
 # scene = trimesh.Scene()
 # scene.add_geometry(label_as_meshes)
 # scene.add_geometry(quartet)
