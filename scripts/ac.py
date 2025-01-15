@@ -851,7 +851,7 @@ for cs_type in ["ellipse", "round"]:
 
             # Shift all up slightly to keep tracking point visible
             for i in range(len(idx)):
-                T_list_sub[i][2, 3] += AC_DIAMETER / 3
+                T_list_sub[i][2, 3] += AC_DIAMETER / 2
 
             # Add in cap
             mesh_list_sub.append(mesh_dict["cap"])
@@ -873,6 +873,7 @@ for cs_type in ["ellipse", "round"]:
 
             s = Shape(*claw6)
             s_list.append(s)
+            # s.mesh.show()
 
             # s.mesh.show(smooth=False)
             if calc_dist_from_z_axis(s.mesh) > 22.6:
