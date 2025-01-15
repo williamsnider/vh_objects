@@ -36,18 +36,18 @@ TZ90 = rotvec2T(np.pi / 2, [0, 0, 1])
 NUM_CS = 11
 NUM_CP_PER_CROSS_SECTION = 50
 # Inputs
-torso_length = 60
-torso_radius = 10
+torso_length = 50
+torso_radius = 12
 K1_theta = np.pi / 4
-football_r1 = 0.5 * torso_radius
-football_r2 = 1.5 * torso_radius
-football_r3 = 0.5 * torso_radius
+football_r1 = 0.5*torso_radius
+football_r2 = 1.25 * torso_radius
+football_r3 = 0.5*torso_radius
 cylinder_r1 = torso_radius
 cylinder_r2 = torso_radius
 cylinder_r3 = torso_radius
-dumbbell_r1 = 1.15 * torso_radius
+dumbbell_r1 = torso_radius
 dumbbell_r2 = 0.9 * torso_radius
-dumbbell_r3 = 1.15 * torso_radius
+dumbbell_r3 = torso_radius
 mesh_fairing_distance = 1
 
 # football K0
@@ -62,6 +62,7 @@ torso_football_K0 = Shaft(
     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
 )
 torso_football_K0.mesh.apply_transform(T_point_z)
+torso_football_K0.mesh.apply_translation([0,0,-torso_football_K0.mesh.bounds[0,2]])
 
 # football K1
 torso_football_K1 = Shaft(
@@ -76,6 +77,7 @@ torso_football_K1 = Shaft(
 )
 torso_football_K1.mesh.apply_transform(T_point_z)
 torso_football_K1.mesh.apply_transform(TZ90)
+torso_football_K1.mesh.apply_translation([0,0,-torso_football_K1.mesh.bounds[0,2]])
 
 # cylinder K0
 torso_cylinder_K0 = Shaft(
@@ -89,6 +91,7 @@ torso_cylinder_K0 = Shaft(
     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
 )
 torso_cylinder_K0.mesh.apply_transform(T_point_z)
+torso_cylinder_K0.mesh.apply_translation([0,0,-torso_cylinder_K0.mesh.bounds[0,2]])
 
 # cylinder K1
 torso_cylinder_K1 = Shaft(
@@ -103,6 +106,7 @@ torso_cylinder_K1 = Shaft(
 )
 torso_cylinder_K1.mesh.apply_transform(T_point_z)
 torso_cylinder_K1.mesh.apply_transform(TZ90)
+torso_cylinder_K1.mesh.apply_translation([0,0,-torso_cylinder_K1.mesh.bounds[0,2]])
 
 # dumbbell K0
 torso_dumbbell_K0 = Shaft(
@@ -116,6 +120,7 @@ torso_dumbbell_K0 = Shaft(
     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
 )
 torso_dumbbell_K0.mesh.apply_transform(T_point_z)
+torso_dumbbell_K0.mesh.apply_translation([0,0,-torso_dumbbell_K0.mesh.bounds[0,2]])
 
 # dumbbell K1
 torso_dumbbell_K1 = Shaft(
@@ -130,13 +135,14 @@ torso_dumbbell_K1 = Shaft(
 )
 torso_dumbbell_K1.mesh.apply_transform(T_point_z)
 torso_dumbbell_K1.mesh.apply_transform(TZ90)
-
+torso_dumbbell_K1.mesh.apply_translation([0,0,-torso_dumbbell_K1.mesh.bounds[0,2]])
+                                         
 ########################
 ### Surface Features ###
 ########################
 
 # inputs
-sf_radius = 5
+sf_radius = 10
 sf_radius_termination = 0.4  # Prevent sharp point
 color_union = [0, 0, 255, 255]
 color_difference = [255, 0, 0, 255]
@@ -218,7 +224,7 @@ mesh_dict = {
     "sf_sphere_difference": sf_sphere_difference,
 }
 
-# create_scene(mesh_dict)
+create_scene(mesh_dict)
 
 
 def add_cap(mesh_list, T_list, op_list):
@@ -360,9 +366,9 @@ vec_right_origin = np.array([0, 0, T_left_base[2, 3]])
 
 count = 0
 for base_torso in [
-    "torso_cylinder_K0",
+    # "torso_cylinder_K0",
     "torso_football_K0",
-    "torso_dumbbell_K0",
+    # "torso_dumbbell_K0",
 ]:
 
     for sf_type in sf_list:
