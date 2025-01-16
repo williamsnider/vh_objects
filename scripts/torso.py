@@ -6,24 +6,38 @@ from scripts.stim_set_common import create_scene, load_cap, UU, VV, export_shape
 from scipy.spatial.transform import Rotation
 from scripts.sheets import make_surface, make_mesh, construct_sheet
 from vh_objects.shape import Shape
+from vh_objects.utilities import calc_mesh_boolean_and_edges, fuse_meshes, fair_mesh
 from trimesh.transformations import rotation_matrix as rotvec2T
 import copy
 from pathlib import Path
 
 
-def calc_mohawk_T(
-    T_left_base, vec_left, closest_point, closest_point_normal
-):  # Angle between vector and surface normal
-    angle = np.arccos(np.dot(vec_left, closest_point_normal))
+def add_rotations_about_Z(num_rotations, T_base, mesh_dict, sf_type, mesh_list, T_list, op_list):
+    for i in range(num_rotations):
+        ang = np.linspace(0, 2 * np.pi, num_rotations, endpoint=False)[i]
+        T = rotvec2T(ang, [0, 0, 1]) @ T_base
+        mesh_list.append(mesh_dict[sf_type].copy())
+        T_list.append(T)
+        if "difference" in sf_type:
+            op_list.append("difference")
+        else:
+            op_list.append("union")
+    return mesh_list, T_list, op_list
 
-    # Flip angle if normal is downward
-    assert np.all(np.isclose(vec_left, np.array([1, 0, 0])))
-    if closest_point_normal[2] < 0:
-        angle = -angle
 
-    new_T = T_left_base @ rotvec2T(-angle, [0, 1, 0])
-    new_T[:3, 3] = closest_point
-    return new_T
+# def calc_mohawk_T(
+#     T_left_base, vec_left, closest_point, closest_point_normal
+# ):  # Angle between vector and surface normal
+#     angle = np.arccos(np.dot(vec_left, closest_point_normal))
+
+#     # Flip angle if normal is downward
+#     assert np.all(np.isclose(vec_left, np.array([0, 1, 0])))
+#     if closest_point_normal[2] < 0:
+#         angle = -angle
+
+#     new_T = T_left_base @ rotvec2T(-angle, [0, 1, 0])
+#     new_T[:3, 3] = closest_point
+#     return new_T
 
 
 # Tranform to be pointing upwards
@@ -36,17 +50,17 @@ TZ90 = rotvec2T(np.pi / 2, [0, 0, 1])
 NUM_CS = 11
 NUM_CP_PER_CROSS_SECTION = 50
 # Inputs
-torso_length = 50
+torso_length = 40
 torso_radius = 12
 K1_theta = np.pi / 4
-football_r1 = 0.5*torso_radius
+football_r1 = 0.5 * torso_radius
 football_r2 = 1.25 * torso_radius
-football_r3 = 0.5*torso_radius
+football_r3 = 0.5 * torso_radius
 cylinder_r1 = torso_radius
 cylinder_r2 = torso_radius
 cylinder_r3 = torso_radius
 dumbbell_r1 = torso_radius
-dumbbell_r2 = 0.9 * torso_radius
+dumbbell_r2 = 1.0 * torso_radius
 dumbbell_r3 = torso_radius
 mesh_fairing_distance = 1
 
@@ -62,7 +76,7 @@ torso_football_K0 = Shaft(
     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
 )
 torso_football_K0.mesh.apply_transform(T_point_z)
-torso_football_K0.mesh.apply_translation([0,0,-torso_football_K0.mesh.bounds[0,2]])
+torso_football_K0.mesh.apply_translation([0, 0, -torso_football_K0.mesh.bounds[0, 2]])
 
 # football K1
 torso_football_K1 = Shaft(
@@ -77,7 +91,7 @@ torso_football_K1 = Shaft(
 )
 torso_football_K1.mesh.apply_transform(T_point_z)
 torso_football_K1.mesh.apply_transform(TZ90)
-torso_football_K1.mesh.apply_translation([0,0,-torso_football_K1.mesh.bounds[0,2]])
+torso_football_K1.mesh.apply_translation([0, 0, -torso_football_K1.mesh.bounds[0, 2]])
 
 # cylinder K0
 torso_cylinder_K0 = Shaft(
@@ -91,7 +105,7 @@ torso_cylinder_K0 = Shaft(
     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
 )
 torso_cylinder_K0.mesh.apply_transform(T_point_z)
-torso_cylinder_K0.mesh.apply_translation([0,0,-torso_cylinder_K0.mesh.bounds[0,2]])
+torso_cylinder_K0.mesh.apply_translation([0, 0, -torso_cylinder_K0.mesh.bounds[0, 2]])
 
 # cylinder K1
 torso_cylinder_K1 = Shaft(
@@ -106,43 +120,52 @@ torso_cylinder_K1 = Shaft(
 )
 torso_cylinder_K1.mesh.apply_transform(T_point_z)
 torso_cylinder_K1.mesh.apply_transform(TZ90)
-torso_cylinder_K1.mesh.apply_translation([0,0,-torso_cylinder_K1.mesh.bounds[0,2]])
+torso_cylinder_K1.mesh.apply_translation([0, 0, -torso_cylinder_K1.mesh.bounds[0, 2]])
+
+# # dumbbell K0
+# torso_dumbbell_K0 = Shaft(
+#     torso_length,
+#     dumbbell_r1,
+#     dumbbell_r2,
+#     dumbbell_r3,
+#     theta=0,
+#     lengthtype="two_hemi",
+#     num_cs=NUM_CS,
+#     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+# )
+# torso_dumbbell_K0.mesh.apply_transform(T_point_z)
+# torso_dumbbell_K0.mesh.apply_translation([0, 0, -torso_dumbbell_K0.mesh.bounds[0, 2]])
+
+# # dumbbell K1
+# torso_dumbbell_K1 = Shaft(
+#     1 * torso_length,
+#     dumbbell_r1,
+#     dumbbell_r2,
+#     dumbbell_r3,
+#     theta=K1_theta,
+#     lengthtype="two_hemi",
+#     num_cs=NUM_CS,
+#     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+# )
+# torso_dumbbell_K1.mesh.apply_transform(T_point_z)
+# torso_dumbbell_K1.mesh.apply_transform(TZ90)
+# torso_dumbbell_K1.mesh.apply_translation([0, 0, -torso_dumbbell_K1.mesh.bounds[0, 2]])
 
 # dumbbell K0
-torso_dumbbell_K0 = Shaft(
-    torso_length,
-    dumbbell_r1,
-    dumbbell_r2,
-    dumbbell_r3,
-    theta=0,
-    lengthtype="two_hemi",
-    num_cs=NUM_CS,
-    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
-)
-torso_dumbbell_K0.mesh.apply_transform(T_point_z)
-torso_dumbbell_K0.mesh.apply_translation([0,0,-torso_dumbbell_K0.mesh.bounds[0,2]])
+sphere1 = trimesh.creation.icosphere(subdivisions=5, radius=torso_radius)
+sphere1.apply_translation([0, 0, -sphere1.bounds[0, 2]])  # align bottom to origin
+sphere2 = sphere1.copy()
+sphere2.apply_translation([0, 0, torso_length - 2 * torso_radius])  # align top_to_origin
+torso_dumbbell_K0 = fuse_meshes(sphere1, sphere2, 2, "union")
+torso_dumbbell_K0.show(smooth=False)
 
-# dumbbell K1
-torso_dumbbell_K1 = Shaft(
-    1 * torso_length,
-    dumbbell_r1,
-    dumbbell_r2,
-    dumbbell_r3,
-    theta=K1_theta,
-    lengthtype="two_hemi",
-    num_cs=NUM_CS,
-    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
-)
-torso_dumbbell_K1.mesh.apply_transform(T_point_z)
-torso_dumbbell_K1.mesh.apply_transform(TZ90)
-torso_dumbbell_K1.mesh.apply_translation([0,0,-torso_dumbbell_K1.mesh.bounds[0,2]])
-                                         
+
 ########################
 ### Surface Features ###
 ########################
 
 # inputs
-sf_radius = 10
+sf_radius = 5
 sf_radius_termination = 0.4  # Prevent sharp point
 color_union = [0, 0, 255, 255]
 color_difference = [255, 0, 0, 255]
@@ -210,11 +233,11 @@ sf_sphere_difference.visual.face_colors = color_difference
 mesh_dict = {
     "cap": load_cap(),
     "torso_football_K0": torso_football_K0.mesh,
-    "torso_football_K1": torso_football_K1.mesh,
+    # "torso_football_K1": torso_football_K1.mesh,
     "torso_cylinder_K0": torso_cylinder_K0.mesh,
-    "torso_cylinder_K1": torso_cylinder_K1.mesh,
-    "torso_dumbbell_K0": torso_dumbbell_K0.mesh,
-    "torso_dumbbell_K1": torso_dumbbell_K1.mesh,
+    # "torso_cylinder_K1": torso_cylinder_K1.mesh,
+    "torso_dumbbell_K0": torso_dumbbell_K0,
+    # "torso_dumbbell_K1": torso_dumbbell_K1.mesh,
     "sf_point": sf_point.mesh,
     "sf_ridge_vert_union": sf_ridge_vert_union,
     "sf_ridge_vert_difference": sf_ridge_vert_difference,
@@ -229,7 +252,7 @@ create_scene(mesh_dict)
 
 def add_cap(mesh_list, T_list, op_list):
     # Add in cap
-    mesh_list.append(mesh_dict["cap"])
+    mesh_list.append(mesh_dict["cap"].copy())
     T = np.eye(4)
     # T[2, 3] = -3
     T_list.append(T)
@@ -294,8 +317,8 @@ def find_mesh_point_closest_to_vec(mesh, vec, vec_origin):
 ### Transformations ###
 #######################
 
-T_left_base = np.eye(4)
-T_left_base[:3, 3] = [10, 0, 30]
+# T_left_base = trimesh.transformations.rotation_matrix(np.pi, [0, 0, 1])
+# T_left_base[:3, 3] = [torso_radius, 0, torso_length - torso_radius]
 
 
 s_list = []
@@ -306,16 +329,16 @@ s_list = []
 
 base_torsos = [
     "torso_cylinder_K0",
-    "torso_cylinder_K1",
+    # "torso_cylinder_K1",
     "torso_football_K0",
-    "torso_football_K1",
+    # "torso_football_K1",
     "torso_dumbbell_K0",
-    "torso_dumbbell_K1",
+    # "torso_dumbbell_K1",
 ]
 
 for mesh_name in base_torsos:
 
-    mesh_list = [mesh_dict[mesh_name]]
+    mesh_list = [mesh_dict[mesh_name].copy()]
     T_list = [np.eye(4)]
     op_list = ["union"]
 
@@ -337,7 +360,6 @@ for mesh_name in base_torsos:
 
     s = Shape(*claw6)
     s_list.append(s)
-    s.mesh.show(smooth=False)
 
 sf_list = [
     "sf_point",
@@ -350,134 +372,245 @@ sf_list = [
 ]
 
 
-### 3
+def calc_T_given_mesh_vec_T_base(mesh, vec, vec_origin):
+    closest_point, closest_point_normal = find_mesh_point_closest_to_vec(mesh, vec, vec_origin)
+    # Calc T_Surface given closest_point, closest_point_normal
+    TT = closest_point_normal
+    TN = np.array([1, 0, 0])
+    assert np.dot(TT, TN) == 0
+    TB = np.cross(TT, TN)
+    TB = TB / np.linalg.norm(TB)
+    T = np.eye(4)
+    T[:3, 0] = TT
+    T[:3, 1] = TN
+    T[:3, 2] = TB
+    T[:3, 3] = closest_point
+
+    return T
 
 
 ##################
 ### Numerosity ###
 ##################
 
-vec_left = np.array([1, 0, 0])
-vec_left_origin = np.array([0, 0, T_left_base[2, 3]])
-vec_head = np.array([0, 0, 1])
-vec_head_origin = np.array([0, 0, T_left_base[2, 3]])
-vec_right = np.array([-1, 0, 0])
-vec_right_origin = np.array([0, 0, T_left_base[2, 3]])
+vec_left = np.array([0, 1, 0])
+vec_right = -vec_left
+front_origin = np.array([0, 0, torso_length - torso_radius])
+back_origin = np.array([0, 0, torso_radius])
+# vec_left_origin = np.array([0, 0, T_left_base[2, 3]])
+# vec_head = np.array([0, 0, 1])
+# vec_head_origin = np.array([0, 0, T_left_base[2, 3]])
+# vec_right_origin = np.array([0, 0, T_left_base[2, 3]])
 
+list_for_rotation = []
 count = 0
 for base_torso in [
     # "torso_cylinder_K0",
-    "torso_football_K0",
-    # "torso_dumbbell_K0",
+    # "torso_football_K0",
+    "torso_dumbbell_K0",
 ]:
+
+    # Calculate the frontright and backright transformation matrices
+    T_frontright = calc_T_given_mesh_vec_T_base(mesh_dict[base_torso], vec_right, front_origin)
+    T_backright = calc_T_given_mesh_vec_T_base(mesh_dict[base_torso], vec_right, back_origin)
 
     for sf_type in sf_list:
 
         for sf_locations in [
-            "head",
-            "left",
-            "head_left",
-            "left_right",
-            "head_left_right",
-            "radial",
-            "mohawk",
+            "single",
+            "double",
+            "quad",
+            "octo",
         ]:
 
-            mesh_list = [mesh_dict[base_torso]]
+            mesh_list = [mesh_dict[base_torso].copy()]
             T_list = [np.eye(4)]
             op_list = ["union"]
 
-            if "head" in sf_locations:
-
-                mesh_list.append(mesh_dict[sf_type])
-
-                closest_point, closest_point_normal = find_mesh_point_closest_to_vec(
-                    mesh_dict[base_torso], vec_head, vec_head_origin
+            if "single" in sf_locations:
+                # Single sf at frontright
+                mesh_list, T_list, op_list = add_rotations_about_Z(
+                    1, T_frontright, mesh_dict, sf_type, mesh_list, T_list, op_list
                 )
-                T_head = calc_mohawk_T(T_left_base, vec_left, closest_point, closest_point_normal)
-                T_list.append(T_head)
 
-                if "difference" in sf_type:
-                    op_list.append("difference")
-                else:
-                    op_list.append("union")
-
-            if "left" in sf_locations:
-
-                mesh_list.append(mesh_dict[sf_type])
-
-                closest_point, closest_point_normal = find_mesh_point_closest_to_vec(
-                    mesh_dict[base_torso], vec_left, vec_left_origin
+            elif "double" in sf_locations:
+                # Double sf at frontright, frontleft
+                mesh_list, T_list, op_list = add_rotations_about_Z(
+                    2, T_frontright, mesh_dict, sf_type, mesh_list, T_list, op_list
                 )
-                T_left = calc_mohawk_T(T_left_base, vec_left, closest_point, closest_point_normal)
-                T_list.append(T_left)
-
-                if "difference" in sf_type:
-                    op_list.append("difference")
-                else:
-                    op_list.append("union")
-
-            if "right" in sf_locations:
-
-                mesh_list.append(mesh_dict[sf_type])
-
-                closest_point, closest_point_normal = find_mesh_point_closest_to_vec(
-                    mesh_dict[base_torso], vec_right, vec_right_origin
+            elif "quad" in sf_locations:
+                # Quad sf at frontright, frontleft, backright, backleft
+                mesh_list, T_list, op_list = add_rotations_about_Z(
+                    2, T_frontright, mesh_dict, sf_type, mesh_list, T_list, op_list
                 )
-                T_right = calc_mohawk_T(T_left_base, vec_left, closest_point, closest_point_normal)
-                T_list.append(T_right)
 
-                if "difference" in sf_type:
-                    op_list.append("difference")
-                else:
-                    op_list.append("union")
-
-            if sf_locations == "radial":
-
-                closest_point, closest_point_normal = find_mesh_point_closest_to_vec(
-                    mesh_dict[base_torso], vec_left, vec_left_origin
+                mesh_list, T_list, op_list = add_rotations_about_Z(
+                    2, T_backright, mesh_dict, sf_type, mesh_list, T_list, op_list
                 )
-                T_base = T_left_base.copy()
-                T_base[:3, 3] = closest_point
 
-                for i in range(4):
+            elif "octo" in sf_locations:
+                # Quad sf at frontright, frontleft, backright, backleft
+                mesh_list, T_list, op_list = add_rotations_about_Z(
+                    4, T_frontright, mesh_dict, sf_type, mesh_list, T_list, op_list
+                )
 
-                    th = np.linspace(0, 2 * np.pi, 4, endpoint=False)[i]
-                    T = rotvec2T(th, [0, 0, 1]) @ T_base
-                    T_list.append(T)
-                    mesh_list.append(mesh_dict[sf_type])
+                mesh_list, T_list, op_list = add_rotations_about_Z(
+                    4, T_backright, mesh_dict, sf_type, mesh_list, T_list, op_list
+                )
+            else:
+                raise ValueError("Invalid sf_locations")
 
-                for i in range(4):
-                    if "difference" in sf_type:
-                        op_list.append("difference")
-                    else:
-                        op_list.append("union")
+            #     # Rotate about Z-axis
+            #     num_rotations = 4
+            #     for i in range(1, num_rotations):
+            #         ang = np.linspace(0, 2 * np.pi, num_rotations, endpoint=False)[i]
+            #         T = rotvec2T(ang, [0, 0, 1]) @ T_frontright
+            #         mesh_list.append(mesh_dict[sf_type])
+            #         T_list.append(T)
+            #         if "difference" in sf_type:
+            #             op_list.append("difference")
+            #         else:
+            #             op_list.append("union")
 
-            elif sf_locations == "mohawk":
+            # if "frontright" in sf_locations:
 
-                num_features = 4
-                for i in range(num_features):
+            #     mesh_list.append(mesh_dict[sf_type])
 
-                    th_pos = np.linspace(0, np.pi, num_features, endpoint=True)[i]
-                    T = rotvec2T(-th_pos, [0, 1, 0])
-                    new_vec = T[:3, :3] @ vec_left
+            #     print(closest_point, closest_point_normal)
 
-                    closest_point, closest_point_normal = find_mesh_point_closest_to_vec(
-                        mesh_dict[base_torso], new_vec, vec_left_origin
-                    )
+            #     # Solve for T: T@ T_prev = T_goal
 
-                    new_T = calc_mohawk_T(T_left_base, vec_left, closest_point, closest_point_normal)
+            #     # T_right = calc_mohawk_T(T_left_base, vec_left, closest_point, closest_point_normal)
+            #     T_list.append(T)
 
-                    T_list.append(new_T)
-                    mesh_list.append(mesh_dict[sf_type])
+            #     if "difference" in sf_type:
+            #         op_list.append("difference")
+            #     else:
+            #         op_list.append("union")
 
-                for i in range(num_features):
-                    if "difference" in sf_type:
-                        op_list.append("difference")
-                    else:
-                        op_list.append("union")
+            # if "head" in sf_locations:
+
+            #     mesh_list.append(mesh_dict[sf_type])
+
+            #     closest_point, closest_point_normal = find_mesh_point_closest_to_vec(
+            #
+            #     # Rotate about Z-axis
+            #     num_rotations = 4
+            #     for i in range(1, num_rotations):
+            #         ang = np.linspace(0, 2 * np.pi, num_rotations, endpoint=False)[i]
+            #         T = rotvec2T(ang, [0, 0, 1]) @ T_frontright
+            #         mesh_list.append(mesh_dict[sf_type])
+            #         T_list.append(T)
+            #         if "difference" in sf_type:
+            #             op_list.append("difference")
+            #         else:
+            #             op_list.append("union")
+
+            # if "frontright" in sf_locations:
+
+            #     mesh_list.append(mesh_dict[sf_type])
+
+            #     print(closest_point, closest_point_normal)
+
+            #     # Solve for T: T@ T_prev = T_goal
+
+            #     # T_right = calc_mohawk_T(T_left_base, vec_left, closest_point, closest_point_normal)
+            #     T_list.append(T)
+
+            #     if "difference" in sf_type:
+            #         op_list.append("difference")
+            #     else:
+            #         op_list.append("union")mesh_dict[base_torso], vec_head, vec_head_origin
+            #     )
+            #     T_head = calc_mohawk_T(T_left_base, vec_left, closest_point, closest_point_normal)
+            #     T_list.append(T_head)
+
+            #     if "difference" in sf_type:
+            #         op_list.append("difference")
+            #     else:
+            #         op_list.append("union")
+
+            # if "left" in sf_locations:
+
+            #     mesh_list.append(mesh_dict[sf_type])
+
+            #     closest_point, closest_point_normal = find_mesh_point_closest_to_vec(
+            #         mesh_dict[base_torso], vec_left, vec_left_origin
+            #     )
+            #     T_left = calc_mohawk_T(T_left_base, vec_left, closest_point, closest_point_normal)
+            #     T_list.append(T_left)
+
+            #     if "difference" in sf_type:
+            #         op_list.append("difference")
+            #     else:
+            #         op_list.append("union")
+
+            # if "right" in sf_locations:
+
+            #     mesh_list.append(mesh_dict[sf_type])
+
+            #     closest_point, closest_point_normal = find_mesh_point_closest_to_vec(
+            #         mesh_dict[base_torso], vec_right, vec_right_origin
+            #     )
+            #     T_right = calc_mohawk_T(T_left_base, vec_left, closest_point, closest_point_normal)
+            #     T_list.append(T_right)
+
+            #     if "difference" in sf_type:
+            #         op_list.append("difference")
+            #     else:
+            #         op_list.append("union")
+
+            # if sf_locations == "radial":
+
+            #     closest_point, closest_point_normal = find_mesh_point_closest_to_vec(
+            #         mesh_dict[base_torso], vec_left, vec_left_origin
+            #     )
+            #     T_base = T_left_base.copy()
+            #     T_base[:3, 3] = closest_point
+
+            #     for i in range(4):
+
+            #         th = np.linspace(0, 2 * np.pi, 4, endpoint=False)[i]
+            #         T = rotvec2T(th, [0, 0, 1]) @ T_base
+            #         T_list.append(T)
+            #         mesh_list.append(mesh_dict[sf_type])
+
+            #     for i in range(4):
+            #         if "difference" in sf_type:
+            #             op_list.append("difference")
+            #         else:
+            #             op_list.append("union")
+
+            # elif sf_locations == "mohawk":
+
+            #     num_features = 4
+            #     for i in range(num_features):
+
+            #         th_pos = np.linspace(0, np.pi, num_features, endpoint=True)[i]
+            #         T = rotvec2T(-th_pos, [0, 1, 0])
+            #         new_vec = T[:3, :3] @ vec_left
+
+            #         closest_point, closest_point_normal = find_mesh_point_closest_to_vec(
+            #             mesh_dict[base_torso], new_vec, vec_left_origin
+            #         )
+
+            #         new_T = calc_mohawk_T(T_left_base, vec_left, closest_point, closest_point_normal)
+
+            #         T_list.append(new_T)
+            #         mesh_list.append(mesh_dict[sf_type])
+
+            #     for i in range(num_features):
+            #         if "difference" in sf_type:
+            #             op_list.append("difference")
+            #         else:
+            #             op_list.append("union")
 
             mesh_list = slightly_deform_mesh(mesh_list)
+
+            # Store dumbbell so it can be rotated below
+            if base_torso == "torso_dumbbell_K0":
+                list_for_rotation.append(copy.deepcopy([mesh_list, T_list, op_list, torso_length / 2]))
+
             mesh_list, T_list, op_list = add_cap(mesh_list, T_list, op_list)
 
             label = ""
@@ -500,6 +633,40 @@ for base_torso in [
             count += 1
             # s.mesh.show(smooth=False)
 
+
+########################################
+### Three but now in different plane ###
+########################################
+for mesh_list, T_list, op_list, T_UP_SHIFT in list_for_rotation:
+
+    # Shift all down
+    for i in range(len(T_list)):
+        T_list[i][2, 3] -= T_UP_SHIFT
+
+    # Rotate about x-axis 90 deg
+    for i in range(len(T_list)):
+        T_list[i] = rotvec2T(-np.pi / 2, [1, 0, 0]) @ T_list[i]
+        T_list[i][2, 3] += torso_radius
+
+    # Add in cap
+    mesh_list.append(mesh_dict["cap"])
+    T = np.eye(4)
+    # T[2, 3] = -AC_DIAMETER / 3
+    T_list.append(T)
+    op_list.append("union")
+
+    # Add in post
+    # mesh_list.append(mesh_dict["ac_post_extra"])
+    T_list.append(np.eye(4))
+
+    op_list = ["union" for _ in range(len(mesh_list))]
+
+    s = Shape(mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance)
+    s_list.append(s)
+    s.mesh.show()
+
+    # if calc_dist_from_z_axis(s.mesh) > 22.6:
+    #     raise ValueError
 
 save_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso")
 for i, s in enumerate(s_list):
