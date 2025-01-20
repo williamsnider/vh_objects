@@ -630,7 +630,7 @@ configs /= 180 / np.pi
 
 list_for_coplanar = []
 for config in configs:
-    for cs_type in ["ellipse", "round"]:
+    for cs_type in ["round", "ellipse"]:
 
         for curve_direction in ["flat", "up", "down", "updown", "downup"]:
 
@@ -766,7 +766,7 @@ for mesh_list, T_list, op_list, T_UP_SHIFT in list_for_coplanar:
 
 
 num_components = 8
-for cs_type in ["ellipse", "round"]:
+for cs_type in ["round", "ellipse"]:
 
     for curve_direction in [
         "flat",
@@ -1029,8 +1029,8 @@ for cs_type in ["round", "ellipse"]:
 ###############
 
 for cs_type in [
-    # "ellipse",
     "round",
+    "ellipse",
 ]:
     for curve_direction in [
         "flat",

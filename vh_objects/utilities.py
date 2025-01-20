@@ -562,9 +562,9 @@ def move_verts_on_broken_faces(union_mesh, mesh1, mesh2):
 def calc_mesh_boolean_and_edges(mesh1, mesh2, operation):
     # Use compas/CGAL to calculate boolean operation
     VA = mesh1.vertices.__array__()
-    FA = mesh1.faces.__array__().astype('int32')
+    FA = mesh1.faces.__array__().astype("int32")
     VB = mesh2.vertices.__array__()
-    FB = mesh2.faces.__array__().astype('int32')
+    FB = mesh2.faces.__array__().astype("int32")
     mesh_B = [mesh2.vertices.tolist(), mesh2.faces.tolist()]
     if operation == "union":
         mesh_C = booleans.boolean_union(VA, FA, VB, FB)
@@ -614,11 +614,24 @@ def fair_mesh(input_mesh, neighbors, harmonic_power):
 
     This is useful when combining two meshes, resulting in a smooth transition."""
 
+    # # Add specific vertices to fair
+    # fair_radius = 3
+    # extra_verts = input_mesh.vertices
+    # extra_verts = extra_verts[np.linalg.norm(extra_verts-np.array([0,0,3]), axis=1) < fair_radius]
+
+    # # Identify indices of extra_verts
+    # tree = scipy.spatial.KDTree(input_mesh.vertices)
+    # extra_verts_indices = tree.query_ball_point(extra_verts, r=0)
+    # extra_verts_indices = set().union(*extra_verts_indices)
+    # neighbors = list(set(neighbors) | extra_verts_indices)
+
     union_mesh = input_mesh.copy()
     v = union_mesh.vertices.__array__()
     f = union_mesh.faces.__array__().astype("int64")
     num_verts = v.shape[0]
-    b = np.array(list(set(range(num_verts)) - set(neighbors))).astype("int64")  # Bounday indices - NOT to be faired
+    b = np.array(list(set(range(num_verts)) - set(neighbors))).astype(
+        "int64"
+    )  # Bounday indices - NOT to be faired
     bc = v[b]  # XYZ coordinates of the boundary indices
     z = igl.harmonic_weights(v, f, b, bc, harmonic_power)  # Smooths indices at creases
 

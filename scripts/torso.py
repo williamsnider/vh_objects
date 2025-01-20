@@ -8,6 +8,8 @@ from scripts.sheets import make_surface, make_mesh, construct_sheet
 from vh_objects.shape import Shape
 from vh_objects.utilities import calc_mesh_boolean_and_edges, fuse_meshes, fair_mesh
 from trimesh.transformations import rotation_matrix as rotvec2T
+from scripts.make_gif import calc_dist_from_z_axis
+from scripts.subdivide_box import load_subdivided_box
 import copy
 from pathlib import Path
 
@@ -157,7 +159,7 @@ sphere1.apply_translation([0, 0, -sphere1.bounds[0, 2]])  # align bottom to orig
 sphere2 = sphere1.copy()
 sphere2.apply_translation([0, 0, torso_length - 2 * torso_radius])  # align top_to_origin
 torso_dumbbell_K0 = fuse_meshes(sphere1, sphere2, 2, "union")
-torso_dumbbell_K0.show(smooth=False)
+# torso_dumbbell_K0.show(smooth=False)
 
 
 ########################
@@ -230,6 +232,19 @@ sf_sphere_difference = sf_sphere_union.copy()
 sf_sphere_difference.visual.face_colors = color_difference
 
 
+# Size meshes
+
+size_ico = trimesh.creation.icosphere(subdivisions=5, radius=22.5)
+box_edge = 27
+# size_cube = load_subdivided_box([box_edge, box_edge, box_edge], 10)
+size_cube = trimesh.creation.box([box_edge, box_edge, box_edge])
+size_cubeR = size_cube.copy()
+diagonal_vector = np.array([1, 1, 1]) / np.sqrt(3)
+target_vector = np.array([0, 0, 1])
+rotation_matrix = trimesh.geometry.align_vectors(diagonal_vector, target_vector)
+size_cubeR.apply_transform(rotation_matrix)
+size_cubeR.apply_translation(-size_cubeR.centroid)
+
 mesh_dict = {
     "cap": load_cap(),
     "torso_football_K0": torso_football_K0.mesh,
@@ -245,9 +260,12 @@ mesh_dict = {
     "sf_ridge_hori_difference": sf_ridge_hori_difference,
     "sf_sphere_union": sf_sphere_union,
     "sf_sphere_difference": sf_sphere_difference,
+    "size_ico": size_ico,
+    "size_cube": size_cube,
+    "size_cubeR": size_cubeR,
 }
 
-create_scene(mesh_dict)
+# create_scene(mesh_dict)
 
 
 def add_cap(mesh_list, T_list, op_list):
@@ -336,11 +354,15 @@ base_torsos = [
     # "torso_dumbbell_K1",
 ]
 
+list_for_rotation = []
 for mesh_name in base_torsos:
 
     mesh_list = [mesh_dict[mesh_name].copy()]
     T_list = [np.eye(4)]
     op_list = ["union"]
+
+    # Store dumbbell so it can be rotated below
+    list_for_rotation.append(copy.deepcopy([mesh_list, T_list, op_list, torso_length / 2]))
 
     mesh_list, T_list, op_list = add_cap(mesh_list, T_list, op_list)
 
@@ -376,10 +398,12 @@ def calc_T_given_mesh_vec_T_base(mesh, vec, vec_origin):
     closest_point, closest_point_normal = find_mesh_point_closest_to_vec(mesh, vec, vec_origin)
     # Calc T_Surface given closest_point, closest_point_normal
     TT = closest_point_normal
-    TN = np.array([1, 0, 0])
-    assert np.dot(TT, TN) == 0
-    TB = np.cross(TT, TN)
+    Xaxis = np.array([1, 0, 0])
+    TB = np.cross(TT, Xaxis)
     TB = TB / np.linalg.norm(TB)
+    TN = np.cross(TB, TT)
+    TN = TN / np.linalg.norm(TN)
+    assert np.abs(np.dot(TT, TN)) < 1e-8
     T = np.eye(4)
     T[:3, 0] = TT
     T[:3, 1] = TN
@@ -402,11 +426,10 @@ back_origin = np.array([0, 0, torso_radius])
 # vec_head_origin = np.array([0, 0, T_left_base[2, 3]])
 # vec_right_origin = np.array([0, 0, T_left_base[2, 3]])
 
-list_for_rotation = []
 count = 0
 for base_torso in [
-    # "torso_cylinder_K0",
-    # "torso_football_K0",
+    "torso_football_K0",
+    "torso_cylinder_K0",
     "torso_dumbbell_K0",
 ]:
 
@@ -634,39 +657,102 @@ for base_torso in [
             # s.mesh.show(smooth=False)
 
 
-########################################
-### Three but now in different plane ###
-########################################
-for mesh_list, T_list, op_list, T_UP_SHIFT in list_for_rotation:
+# ########################################
+# ### Three but now in different plane ###
+# ########################################
+# for mesh_list, T_list, op_list, T_UP_SHIFT in list_for_rotation:
 
-    # Shift all down
-    for i in range(len(T_list)):
-        T_list[i][2, 3] -= T_UP_SHIFT
+#     # Shift all down
+#     for i in range(len(T_list)):
+#         T_list[i][2, 3] -= T_UP_SHIFT
 
-    # Rotate about x-axis 90 deg
-    for i in range(len(T_list)):
-        T_list[i] = rotvec2T(-np.pi / 2, [1, 0, 0]) @ T_list[i]
-        T_list[i][2, 3] += torso_radius
+#     for i in range(len(T_list)):
+#         T_list[i] = rotvec2T(-np.pi / 2, [1, 0, 0]) @ T_list[i]  # Rotate about x-axis 90 deg
+#         T_list[i] = rotvec2T(-np.pi / 2, [0, 1, 0]) @ T_list[i]  # Rotate about y-axis 90 deg
+#         T_list[i][2, 3] += torso_radius
 
-    # Add in cap
-    mesh_list.append(mesh_dict["cap"])
-    T = np.eye(4)
-    # T[2, 3] = -AC_DIAMETER / 3
-    T_list.append(T)
-    op_list.append("union")
+#     # Add in cap
+#     mesh_list.append(mesh_dict["cap"])
+#     T = np.eye(4)
+#     # T[2, 3] = -AC_DIAMETER / 3
+#     T_list.append(T)
+#     op_list.append("union")
 
-    # Add in post
-    # mesh_list.append(mesh_dict["ac_post_extra"])
-    T_list.append(np.eye(4))
+#     # Add in post
+#     # mesh_list.append(mesh_dict["ac_post_extra"])
+#     T_list.append(np.eye(4))
 
-    op_list = ["union" for _ in range(len(mesh_list))]
+#     op_list = ["union" for _ in range(len(mesh_list))]
 
-    s = Shape(mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance)
-    s_list.append(s)
-    s.mesh.show()
+#     s = Shape(mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance)
+#     s_list.append(s)
+#     # s.mesh.show()
 
-    # if calc_dist_from_z_axis(s.mesh) > 22.6:
-    #     raise ValueError
+#     # if calc_dist_from_z_axis(s.mesh) > 22.6:
+#     #     raise ValueError
+
+
+mesh_fairing_distance = 0
+size_meshes = [
+    "size_ico",
+    "size_cube",
+    "size_cubeR",
+]
+scale_factors = np.linspace(1.0, 0.5, 4)
+for mesh_name in size_meshes:
+
+    for scale in scale_factors:
+        m = mesh_dict[mesh_name].copy()
+        m.apply_translation(-m.centroid)  # Center before scaling
+        m.apply_scale(scale)
+
+        # Align to z of centroid of largest scale
+        m.apply_translation([0, 0, scale_factors[0] * mesh_dict[mesh_name].extents[2] / 2])
+        # m.apply_translation([0, 0, -m.bounds[0, 2]])
+
+        # Add cap
+        mesh_list = [m]
+        T_list = [np.eye(4)]
+        op_list = ["union"]
+        mesh_list, T_list, op_list = add_cap(mesh_list, T_list, op_list)
+
+        # # Add icosphere
+        # ico = trimesh.creation.icosphere(subdivisions=5, radius=5)
+        # ico.apply_translation([0, 0, -ico.bounds[0, 2]])
+        # mesh_list.append(ico)
+        # T_list.append(np.eye(4))
+        # op_list.append("union")
+
+        # Add capsule
+        # if mesh_name == "size_cubeR":
+        capsule_radius = 4.999
+        capsule_height = scale_factors[0] * mesh_dict[mesh_name].extents[2] / 2
+        capsule = trimesh.primitives.Capsule(radius=capsule_radius, height=capsule_height, sections=64)
+        capsule = trimesh.Trimesh(vertices=capsule.vertices, faces=capsule.faces)  # Allow editing
+        capsule.apply_translation([0, 0, -capsule.bounds[0, 2] - capsule_radius - 0.001])
+        capsule.vertices[capsule.vertices[:, 2] < 0] *= [1, 1, 0.25]
+        # Scale vertices below z=0
+        # capsule.apply_translation([0, 0, -capsule.bounds[0, 2]])
+        mesh_list.append(capsule)
+        T_list.append(np.eye(4))
+        op_list.append("union")
+
+        label = ""
+        description = ""
+        s = Shape(mesh_list, T_list, op_list, label, description, "test", np.eye(4), mesh_fairing_distance)
+        s_list.append(s)
+        s.mesh.show(smooth=False)
+
+        if calc_dist_from_z_axis(s.mesh) > 22.6:
+            print(calc_dist_from_z_axis(s.mesh))
+            s.mesh.show()
+            raise ValueError
+
+
+list_for_size = [list_for_rotation[i] for i in range(2, len(list_for_rotation), min(len(sf_list), 3))]
+
+# for mesh_list, T_list, op_list, T_UP_SHIFT in list_for_rotation:
+
 
 save_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso")
 for i, s in enumerate(s_list):

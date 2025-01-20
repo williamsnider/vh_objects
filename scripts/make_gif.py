@@ -182,7 +182,7 @@ def make_gif_pyvista(fname_stl):
 
     # Write a frame. This triggers a render.
     for th in np.linspace(0, 2 * np.pi, FRAMES, endpoint=False):
-        shape_euler = np.array([0, 0, th])
+        shape_euler = np.array([0, 0, -th])
         R = scipy.spatial.transform.Rotation.from_euler("xyz", shape_euler).as_matrix()
         R_pts = pts @ R
         mesh.points = R_pts
@@ -350,7 +350,7 @@ from tqdm import tqdm
 def process_file(fname_stl):
     size_check(fname_stl)
     fname_png = save_mesh_as_png(fname_stl)
-    # fname_gif = make_gif_pyvista(fname_stl)
+    fname_gif = make_gif_pyvista(fname_stl)
     # # combine_gif_and_image(fname_gif)
 
 
@@ -360,6 +360,8 @@ if __name__ == "__main__":
     overall_dir = Path(base_dir, "sample_shapes/stl/")
 
     fname_stl_all = list(overall_dir.rglob("*.stl"))
+    fname_stl_all = [f for f in fname_stl_all if "sheet" in str(f)]
+
     # Use a multiprocessing pool
     with Pool() as pool:
         # Use tqdm to display the progress bar

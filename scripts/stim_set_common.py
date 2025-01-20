@@ -88,6 +88,7 @@ def slightly_deform_mesh(mesh_list):
     return mesh_list_new
 
 
+
 if __name__ == "__main__":
     cap = load_cap()
     cap.show()
