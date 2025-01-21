@@ -629,9 +629,7 @@ def fair_mesh(input_mesh, neighbors, harmonic_power):
     v = union_mesh.vertices.__array__()
     f = union_mesh.faces.__array__().astype("int64")
     num_verts = v.shape[0]
-    b = np.array(list(set(range(num_verts)) - set(neighbors))).astype(
-        "int64"
-    )  # Bounday indices - NOT to be faired
+    b = np.array(list(set(range(num_verts)) - set(neighbors))).astype("int64")  # Bounday indices - NOT to be faired
     bc = v[b]  # XYZ coordinates of the boundary indices
     z = igl.harmonic_weights(v, f, b, bc, harmonic_power)  # Smooths indices at creases
 

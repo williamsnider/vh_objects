@@ -1,104 +1,3 @@
-# # Load mesh
-# # Define texture
-# # Apply texture
-# # Compare meshes
-
-# import trimesh
-# from pathlib import Path
-
-# import numpy as np
-# from scipy.spatial import cKDTree
-
-
-# def maximize_spheres(points, radius, runs=10):
-#     best_solution = []
-#     best_count = 0
-#     radius_check = 2 * radius
-
-#     for _ in range(runs):
-#         # Randomly shuffle points
-#         np.random.shuffle(points)
-
-#         # Initialize accepted points and KDTree
-#         accepted_points = []
-#         tree = None  # Start with no tree
-
-#         for point in points:
-#             if tree is None:
-#                 # Accept the first point unconditionally
-#                 accepted_points.append(point)
-#                 tree = cKDTree([point])
-#             else:
-#                 # Query the tree for nearby points within radius_check
-#                 nearby = tree.query_ball_point(point, radius_check)
-#                 if not nearby:
-#                     # No overlap, accept the point
-#                     accepted_points.append(point)
-#                     # Update the tree
-#                     tree = cKDTree(accepted_points)
-
-#         # Check if this solution is better
-#         if len(accepted_points) > best_count:
-#             best_solution = accepted_points
-#             best_count = len(accepted_points)
-
-#     return np.array(best_solution)
-
-
-# # Load mesh
-# mesh1_fname = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/sheet/sheet_017.stl")
-# mesh1 = trimesh.load(mesh1_fname)
-# mesh1.show()
-
-# # Choose verts
-# verts = mesh1.vertices.copy()
-
-# pts, face_idx = trimesh.sample.sample_surface_even(mesh1, 100000)
-# pts = pts[pts[:, 2] > 0.1]
-
-
-# sphere_points = maximize_spheres(pts, 1.0, runs=10)
-
-
-# scene = trimesh.Scene()
-# scene.add_geometry(trimesh.points.PointCloud(pts, size=0.01))
-# scene.add_geometry(mesh1)
-# scene.show()
-
-
-# # Subtract from mesh
-# e = 1.0
-# texture_unit = trimesh.creation.icosphere(radius=1, subdivisions=1)
-
-# # Aggregate into a single mesh
-# agg_faces = []
-# agg_verts = []
-# for i in range(len(sphere_points)):
-#     p = sphere_points[i]
-#     t = texture_unit.copy()
-#     t.apply_translation(p + 1e-2)
-
-#     agg_faces.extend((t.faces + len(agg_verts)).tolist())
-#     agg_verts.extend((t.vertices).tolist())
-
-# agg_mesh = trimesh.Trimesh(vertices=agg_verts, faces=agg_faces, process=True)
-# agg_mesh.show()
-
-
-# output = mesh1.copy()
-# for i in range(len(pts)):
-#     print(i)
-
-#     p = pts[i]
-#     t = texture_unit.copy()
-#     t.apply_translation(p + 1e-2)
-
-#     # Subtract
-#     output = fuse_meshes(output, t, 0, operation="difference")
-
-# output.show(smooth=False)
-
-
 import numpy as np
 from scipy.spatial import cKDTree
 from pathlib import Path
@@ -117,6 +16,7 @@ def poisson_disk_sampling(points, min_dist):
     Returns:
         numpy.ndarray: Downsampled point cloud.
     """
+
     # Shuffle the input points to reduce bias
     np.random.shuffle(points)
 
@@ -142,11 +42,17 @@ def poisson_disk_sampling(points, min_dist):
     return np.array(sampled_points)
 
 
-def apply_blue_noise_to_mesh(mesh, min_dist, texture_element, operation, z_min=0.0):
+def apply_blue_noise_to_mesh(mesh, min_dist, texture_element, operation, z_min=0.0, rexclude=6.0):
+
+    mesh = mesh.copy()
 
     # Sample the mesh
     pts, _ = trimesh.sample.sample_surface_even(mesh, 100000)
-    pts = pts[pts[:, 2] > z_min]
+
+    # Exclude points at post
+    pts = pts[pts[:, 2] > -20.0]
+    within_rexclude = np.logical_and(np.linalg.norm(pts[:, :2], axis=1) < rexclude, pts[:, 2] < z_min)
+    pts = pts[~within_rexclude]
 
     # Downsample the point cloud with Poisson disk sampling
     downsampled_cloud = poisson_disk_sampling(pts, min_dist)
@@ -155,7 +61,7 @@ def apply_blue_noise_to_mesh(mesh, min_dist, texture_element, operation, z_min=0
     tree = cKDTree(downsampled_cloud)
     distances, indices = tree.query(downsampled_cloud, k=2)
     assert np.all(distances[:, 1] >= min_dist)
-    assert np.all(downsampled_cloud[:, 2] > z_min)
+    # assert np.all(downsampled_cloud[:, 2] > z_min)
 
     # Aggregate into a single mesh
     agg_faces = []
@@ -170,8 +76,23 @@ def apply_blue_noise_to_mesh(mesh, min_dist, texture_element, operation, z_min=0
 
     agg_mesh = trimesh.Trimesh(vertices=agg_verts, faces=agg_faces, process=True)
 
-    # Apply the operation
-    textured_mesh = trimesh.boolean.boolean_manifold([mesh, agg_mesh], operation=operation)
+    # # Apply the operation
+    # if operation == "union":
+    #     textured_mesh = trimesh.boolean.union([mesh, agg_mesh])
+    # elif operation == "difference":
+    #     textured_mesh = trimesh.boolean.difference([mesh, agg_mesh])
+
+    # Apply operation using manifold3d
+    mesh_sequence = [mesh, agg_mesh]
+    if operation == "union":
+        textured_mesh = trimesh.boolean.boolean_manifold(mesh_sequence)
+    elif operation == "difference":
+        textured_mesh = trimesh.boolean.boolean_manifold(mesh_sequence, operation="difference")
+    textured_mesh.show()
+
+    # Label broken faces
+
+    assert textured_mesh.is_watertight
 
     return textured_mesh
 
@@ -200,49 +121,9 @@ def sort_points_circle(points):
     return points[sorted_indices]
 
 
-# Example usage:
-if __name__ == "__main__":
+def create_entity_tube(entity_verts, radius):
 
-    # # Load mesh
-    # mesh1_fname = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/sheet/sheet_017.stl")
-    # mesh1 = trimesh.load(mesh1_fname)
-
-    # # Define texture
-    # radius = 0.5
-    # texture_element = trimesh.creation.icosphere(radius=0.5, subdivisions=1)
-
-    # # Apply texture
-    # textured_mesh = apply_blue_noise_to_mesh(
-    #     mesh=mesh1,
-    #     min_dist=1.0,
-    #     texture_element=texture_element,
-    #     operation="difference",
-    #     z_min=0.0,
-    # )
-
-    # # Compare meshes
-    # scene = trimesh.Scene()
-    # xshift = 0
-    # for m in [mesh1, textured_mesh]:
-    #     m_copy = m.copy()
-    #     m.apply_translation([xshift, 0, 0])
-    #     xshift += m.extents[0]
-    #     scene.add_geometry(m)
-    # scene.show()
-
-    # Add linear pattern
-    mesh1_fname = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/sheet/sheet_017.stl")
-    mesh1 = trimesh.load(mesh1_fname)
-    mesh1.apply_scale([1, 2, 1])
-
-    # Find outline of mesh sliced by plane
-    plane_origin = np.array([0, 0, 20])
-    plane_normal = np.array([0, 0, -1])
-
-    section = mesh1.section(plane_origin=plane_origin, plane_normal=plane_normal)
-
-    # Sort vertices by their nearest neighbors (can assume it is)
-    sorted_points = sort_points_circle(section.vertices)
+    sorted_points = sort_points_circle(entity_verts)
     sorted_points = np.vstack([sorted_points, sorted_points[0]])  # Close loop
 
     from vh_objects.backbone import Backbone
@@ -264,9 +145,10 @@ if __name__ == "__main__":
     # Create cross section
     th = np.linspace(0, 2 * np.pi, 8)
     cp = np.array([np.cos(th), np.sin(th)]).T
+    cp *= radius
 
     # TODO: Chase down the number of cross sections impacting the correct vv ratio.
-    cs_list = [CrossSection(cp, position=pos) for pos in np.linspace(0, 1, 10)]
+    cs_list = [CrossSection(cp, position=pos) for pos in np.linspace(0, 1, 100)]
 
     # Create axial component
     from vh_objects.axial_component import AxialComponent
@@ -294,13 +176,13 @@ if __name__ == "__main__":
     # mesh = make_mesh(surf, 100,100)
     # mesh.show(smooth=False)
 
-    uu = 100
-    vv = 100
+    uu = 20
+    vv = 300
     NUM_ENDPOINTS = 2
 
     (us, vs) = surface.start()
     (ue, ve) = surface.end()
-    vs = 0.125  # TODO: decipher why this is necessary
+    vs = 3 / (2 * (cp.shape[0] - 2))  # TODO: decipher why this is necessary
     ve = 1 - vs
     u = np.linspace(us, ue, uu, endpoint=False)
     v = np.linspace(vs, ve, vv)
@@ -308,6 +190,7 @@ if __name__ == "__main__":
 
     # # Plot 3D
     # from mpl_toolkits.mplot3d import Axes3D
+    # import matplotlib.pyplot as plt
 
     # fig = plt.figure()
     # ax = fig.add_subplot(111, projection="3d")
@@ -329,7 +212,7 @@ if __name__ == "__main__":
     # plt.show()
 
     # Stitch tube
-    assert np.all(np.isclose(verts_array[:, 0, :], verts_array[:, -1, :]))
+    assert np.all(np.abs(verts_array[:, 0, :] - verts_array[:, -1, :] < 0.01))
 
     verts = verts_array[:, :-1, :].reshape(-1, 3, order="F")
 
@@ -357,6 +240,113 @@ if __name__ == "__main__":
 
     m = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
 
-    # Combine
-    output_mesh = trimesh.boolean.union([m, mesh1])
-    output_mesh.show(smooth=False)
+    return m
+
+
+def apply_linear_texture_to_mesh(mesh, tube_radius, tube_spacing, operation, zmin, rexclude):
+    mesh = mesh.copy()
+
+    # Slice mesh to identify sections to apply texture
+    plane_normal = np.array([0, 0, -1])
+    section_list = []
+    for z in np.arange(-20, mesh.bounds[1, 2], tube_spacing):
+        plane_origin = np.array([0, 0, z])
+        section = mesh.section(plane_origin=plane_origin, plane_normal=plane_normal)
+        if section is not None:
+            section_list.append(section)
+
+    # Create list of tubes (textures)
+    etube_list = []
+    for section in section_list:
+        for i in range(len(section.entities)):
+            sub_verts = section.vertices[section.entities[i].points]
+
+            # Skip small sections
+            if len(sub_verts) < 10:
+                continue
+
+            # Skip sections that are solely within the exclusion region (i.e. the post)
+            if (
+                np.all(np.linalg.norm(sub_verts[:, :2], axis=1) < rexclude)
+                and (np.all(sub_verts[:, 2] < zmin))
+                or np.any(sub_verts[:, 2] < -20)
+            ):
+                continue
+
+            etube = create_entity_tube(sub_verts, tube_radius)
+            etube_list.append(etube)
+
+    # Aggregate into a single mesh
+    agg_faces = []
+    agg_verts = []
+    for i in range(len(etube_list)):
+        t = etube_list[i].copy()
+
+        agg_faces.extend((t.faces + len(agg_verts)).tolist())
+        agg_verts.extend((t.vertices).tolist())
+
+    agg_mesh = trimesh.Trimesh(vertices=agg_verts, faces=agg_faces, process=True)
+
+    # # Apply the operation
+    # if operation == "union":
+    #     textured_mesh = trimesh.boolean.union([mesh, agg_mesh])
+    # elif operation == "difference":
+    #     textured_mesh = trimesh.boolean.difference([mesh, agg_mesh])
+
+    # Apply operation using manifold3d
+    mesh_sequence = [mesh, agg_mesh]
+    if operation == "union":
+        textured_mesh = trimesh.boolean.boolean_manifold(mesh_sequence)
+    elif operation == "difference":
+        textured_mesh = trimesh.boolean.boolean_manifold(mesh_sequence, operation="difference")
+
+    return textured_mesh
+
+
+# Example usage:
+save_list = []
+
+if __name__ == "__main__":
+
+    torso_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso")
+    fname_list = list(torso_dir.glob("*.stl"))
+    fname_list.sort()
+    fname_list = fname_list[:12]
+
+    for fname in fname_list:
+        mesh = trimesh.load(fname)
+
+        # Apply blue noise
+        min_dist = 1.0
+        radius = 0.5
+        operation = "difference"
+        texture_element = trimesh.creation.icosphere(radius=radius, subdivisions=1)
+        texture_element.apply_translation(1e-2 * np.ones(3))
+        textured_mesh = apply_blue_noise_to_mesh(mesh, min_dist, texture_element, operation, z_min=0.0, rexclude=6.0)
+        new_name = "H" + fname.stem.split("_")[1]
+        save_list.append([new_name, textured_mesh])
+
+    for fname in fname_list:
+
+        mesh = trimesh.load(fname)
+
+        # Apply linear texture
+        tube_radius = 0.5
+        tube_spacing = 4 * tube_radius
+        textured_mesh = apply_linear_texture_to_mesh(
+            mesh=mesh,
+            tube_radius=tube_radius,
+            tube_spacing=tube_spacing,
+            operation="difference",
+            zmin=0.0,
+            rexclude=6.0,
+        )
+
+        new_name = "J" + fname.stem.split("_")[1]
+        save_list.append([new_name, textured_mesh])
+
+    for i, (name, mesh) in enumerate(save_list):
+
+        savepath = Path(torso_dir.parent, "texture", f"{name}.stl")
+        savepath.parent.mkdir(parents=True, exist_ok=True)
+        mesh.export(savepath)

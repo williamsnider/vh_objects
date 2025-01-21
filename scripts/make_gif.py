@@ -356,11 +356,12 @@ def process_file(fname_stl):
 
 if __name__ == "__main__":
 
-    base_dir = Path(__file__).parents[1]
+    # base_dir = Path(__file__).parents[1]
+    base_dir = Path("/home/williamsnider/Code/vh_objects")
     overall_dir = Path(base_dir, "sample_shapes/stl/")
 
     fname_stl_all = list(overall_dir.rglob("*.stl"))
-    fname_stl_all = [f for f in fname_stl_all if "sheet" in str(f)]
+    fname_stl_all = [f for f in fname_stl_all if "axial_component" in str(f)]
 
     # Use a multiprocessing pool
     with Pool() as pool:
@@ -369,6 +370,9 @@ if __name__ == "__main__":
             pool.imap_unordered(process_file, fname_stl_all), total=len(fname_stl_all), desc="Processing STL files"
         ):
             pass
+
+    # for fname_stl in fname_stl_all:
+    #     process_file(fname_stl)
 
     # fname_gif = make_gif_pyvista(fname_stl)
     # combine_gif_and_image(fname_gif)
