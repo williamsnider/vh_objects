@@ -609,6 +609,40 @@ s_list = []
 
 #         # s.mesh.show(smooth=False)
 
+
+#################
+### 2 SEGMENT ###
+#################
+
+
+T_list_master = []
+for th in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+    T = rotvec2T(th, [0, 1, 0])
+    T_list_master.append(T)
+
+from itertools import combinations
+
+idx_list = "1234567"
+all_combinations = []
+
+# Generate combinations for all possible lengths
+for r in range(1, 3):
+    all_combinations.extend([''.join(comb) for comb in combinations(idx_list, r)])
+
+mesh_list = []
+T_list = []
+op_list = []
+for idx in idx_list:
+    mesh_list.append(mesh_dict["ac_round_K0"].copy())
+    T_list.append(T_list_master[int(idx[0])])
+    op_list.append("union")
+
+mesh_list = slightly_deform_mesh(mesh_list)
+s_without_cap = Shape(mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance)
+
+# TODO: Decide rotations, implement, then move planes
+
+
 #################
 ### 3 SEGMENT ###
 #################
