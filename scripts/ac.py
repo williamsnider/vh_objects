@@ -835,7 +835,7 @@ for cs_type in ["round", "ellipse"]:
         label = "D006"
 
         # Loop around
-        idx_list = ["0", "01", "012", "0123", "014", "0145", "012347", "01234567"]
+        idx_list = ["0", "01", "02", "012", "0123", "014", "0145", "012347", "01234567"]
         mesh_fairing_distance = 1
         for idx_string in idx_list:
 
@@ -902,7 +902,7 @@ for cs_type in ["round", "ellipse"]:
         T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[2])
         T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[3])
 
-        idx_list = ["0", "01", "012", "0123", "014", "0145", "0167", "012346", "01234567"]
+        idx_list = ["0", "01", "02", "012", "0123", "014", "0145", "0167", "012346", "01234567"]
         for idx_string in idx_list:
             idx = [int(i) for i in idx_string]
 
