@@ -354,7 +354,9 @@ scene.add_geometry(s_without_cap.mesh)
 # scene.show()
 # s_without_cap.mesh.show()
 
-list_meshes_for_rotation = []
+list_two_segment_meshes_for_rotation = []
+list_straight_meshes_for_rotation = []
+list_curved_meshes_for_rotation = []
 
 idx_string_list = [
     "01",
@@ -448,13 +450,14 @@ for ac_name in [
             mesh_list = slightly_deform_mesh(mesh_list)
             mesh_list = slightly_deform_mesh(mesh_list)
 
-            mesh_fairing_distance = 1
+            # Store this non-truncated, non-capped version for rotation in next section
             s_without_cap = Shape(
                 mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance
             )
-
-            # Store this non-truncated, non-capped version for rotation in next section
-            list_meshes_for_rotation.append(s_without_cap.mesh)
+            if ac_name == "ac_round_K0":
+                list_straight_meshes_for_rotation.append(s_without_cap.mesh)
+            elif ac_name == "ac_round_K1":
+                list_curved_meshes_for_rotation.append(s_without_cap.mesh)
 
             print(f"ac_name: {ac_name}, th1: {th1}, th2: {th2}, idx_string: {idx_string}")
             count += 1
@@ -478,32 +481,91 @@ for ac_name in [
             # s.mesh.show(smooth=False)
 
 
+######################################
+### Curved Two-segment in XY Plane ###
+######################################
+
+# Start with index 1 to align with above (which has index 0 being the post)
+idx_string_list = ["12", "13", "14", "15", "16", "17", "10"]
+for ac_name in [
+    "ac_round_K1",
+]:
+
+    th1 = 0
+    for th2 in [0, np.pi]:
+
+        for idx_string in idx_string_list:
+
+            # Omit shapes - same logic as above
+            if any(
+                [
+                    # Adjacent limbs with same rotation (overlap)
+                    idx_string[1] == str(int(idx_string[0]) + 1) and (th1 == th2),
+                    # Adjacent limbs with same rotation (overlap) - flip for "10"
+                    idx_string[0] == str(int(idx_string[1]) + 1) and (th1 == th2),
+                    # Adjacent limbs not curving into each other
+                    idx_string[1] == str(int(idx_string[0]) + 1) and (th1 == 0 and th2 == np.pi),
+                    # 1 gap limbs not curving into each other
+                    idx_string[1] == str(int(idx_string[0]) + 2) and (th1 == 0 and th2 == np.pi),
+                ]
+            ):
+                continue
+
+            mesh_list = []
+            T_list = []
+            op_list = []
+
+            # limb1 - do not rotate as th1 is constant
+            mesh_list.append(mesh_dict[ac_name].copy())
+            T_list.append(T_list_master[int(idx_string[0])] @ rotvec2T(th1, [0, 0, 1]))
+            op_list.append("union")
+
+            # limb2
+            mesh_list.append(mesh_dict[ac_name].copy())
+            T_list.append(T_list_master[int(idx_string[1])] @ rotvec2T(th2, [0, 0, 1]))
+            op_list.append("union")
+
+            mesh_list = slightly_deform_mesh(mesh_list)
+            mesh_list = slightly_deform_mesh(mesh_list)
+
+            mesh_fairing_distance = 1
+            s_without_cap = Shape(
+                mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance
+            )
+
+            # Add to rotation list
+            list_two_segment_meshes_for_rotation.append(s_without_cap.mesh)
+
 ##############################################
 ### Rotate the above to be in the XY plane ###
 ##############################################
 
-for m in list_meshes_for_rotation:
+for rotation_list in [
+    list_straight_meshes_for_rotation,
+    list_two_segment_meshes_for_rotation,
+    list_curved_meshes_for_rotation,
+]:
+    for m in rotation_list:
+        # Rotate
+        mesh = m.copy()
+        mesh.apply_transform(rotvec2T(np.pi / 2, [1, 0, 0]))
 
-    # Rotate
-    mesh = m.copy()
-    mesh.apply_transform(rotvec2T(np.pi / 2, [1, 0, 0]))
+        # Translate up
+        mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER])
 
-    # Translate up
-    mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER])
+        # Add post
+        mesh_list = [mesh, mesh_dict["ac_post_extra"]]
+        T_list = [np.eye(4), np.eye(4)]
+        op_list = ["union", "union"]
 
-    # Add post
-    mesh_list = [mesh, mesh_dict["ac_post_extra"]]
-    T_list = [np.eye(4), np.eye(4)]
-    op_list = ["union", "union"]
+        # Add cap
+        mesh_list.append(mesh_dict["cap"])
+        T_list.append(np.eye(4))
+        op_list.append("union")
 
-    # Add cap
-    mesh_list.append(mesh_dict["cap"])
-    T_list.append(np.eye(4))
-    op_list.append("union")
-
-    s = Shape(mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance)
-    s_list.append(s)
-    # s.mesh.show()
+        s = Shape(mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance)
+        s_list.append(s)
+        # s.mesh.show()
 
 
 # # Make most complex shape: 3 segment with all rotated up
@@ -726,191 +788,194 @@ for m in list_meshes_for_rotation:
 #         raise ValueError
 
 
-# #################################
-# ### 8 SEGMENT COPLANAR / QUAD ###
-# #################################
+#################################
+### 8 SEGMENT COPLANAR / QUAD ###
+#################################
 
 
-# num_components = 8
-# for cs_type in ["round", "ellipse"]:
+num_components = 8
+for cs_type in [
+    "round",
+    # "ellipse",
+]:
 
-#     for curve_direction in [
-#         "flat",
-#         "up",
-#         "down",
-#     ]:
+    for curve_direction in [
+        "flat",
+        "up",
+        "down",
+    ]:
 
-#         if curve_direction == "up":
-#             mesh_names = ["ac_" + cs_type + "_K1_long" for _ in range(num_components)]
-#         elif curve_direction == "flat":
-#             mesh_names = ["ac_" + cs_type + "_K0_long" for _ in range(num_components)]
-#         elif curve_direction == "down":
-#             mesh_names = ["ac_" + cs_type + "_K2_long" for _ in range(num_components)]
-#         else:
-#             raise ValueError("Invalid curve direction")
+        if curve_direction == "up":
+            mesh_names = ["ac_" + cs_type + "_K1_long" for _ in range(num_components)]
+        elif curve_direction == "flat":
+            mesh_names = ["ac_" + cs_type + "_K0_long" for _ in range(num_components)]
+        elif curve_direction == "down":
+            mesh_names = ["ac_" + cs_type + "_K2_long" for _ in range(num_components)]
+        else:
+            raise ValueError("Invalid curve direction")
 
-#         T_list = []
-#         for i in range(4):
+        T_list = []
+        for i in range(4):
 
-#             # Translate such that the mesh forms 1/4 of the final shape
-#             TA = np.eye(4)
-#             TA[0, 3] = -(mesh_dict[mesh_names[i]].bounds[1, 0] + mesh_dict[mesh_names[i]].bounds[0, 0])
+            # Translate such that the mesh forms 1/4 of the final shape
+            TA = np.eye(4)
+            TA[0, 3] = -(mesh_dict[mesh_names[i]].bounds[1, 0] + mesh_dict[mesh_names[i]].bounds[0, 0])
 
-#             # Shift inward
-#             if (cs_type == "ellipse") and (curve_direction == "up"):
-#                 shift = 1.25
-#                 TA[0, 3] += shift
-#                 TA[2, 3] += -shift
+            # Shift inward
+            if (cs_type == "ellipse") and (curve_direction == "up"):
+                shift = 1.25
+                TA[0, 3] += shift
+                TA[2, 3] += -shift
 
-#             # Rotate about y-axis
-#             offset = np.pi
-#             TB = rotvec2T(np.linspace(0 + offset, 2 * np.pi + offset, 4, endpoint=False)[i], [0, 1, 0])
+            # Rotate about y-axis
+            offset = np.pi
+            TB = rotvec2T(np.linspace(0 + offset, 2 * np.pi + offset, 4, endpoint=False)[i], [0, 1, 0])
 
-#             T = TB @ TA
+            T = TB @ TA
 
-#             if curve_direction in ["up", "down"]:
-#                 T[2, 3] += K0_LENGTH - AC_DIAMETER
-#             elif curve_direction == "flat":
-#                 T[2, 3] += K0_LENGTH - AC_DIAMETER
+            if curve_direction in ["up", "down"]:
+                T[2, 3] += K0_LENGTH - AC_DIAMETER
+            elif curve_direction == "flat":
+                T[2, 3] += K0_LENGTH - AC_DIAMETER
 
-#             T_list.append(T)
+            T_list.append(T)
 
-#         # Add T's for quad
-#         T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[0])
-#         T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[1])
-#         T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[2])
-#         T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[3])
+        # Add T's for quad
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[0])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[1])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[2])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[3])
 
-#         # Apply transformations
-#         mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
-#         mesh_list = slightly_deform_mesh(mesh_list)
-#         mesh_list = slightly_deform_mesh(mesh_list)
+        # Apply transformations
+        mesh_list = [mesh_dict[mesh_names[i]] for i in range(len(mesh_names))]
+        mesh_list = slightly_deform_mesh(mesh_list)
+        mesh_list = slightly_deform_mesh(mesh_list)
 
-#         # # Plot scene
-#         # import trimesh
+        # # Plot scene
+        # import trimesh
 
-#         # scene = trimesh.Scene()
-#         # for i in range(4):
-#         #     new_mesh = mesh_list[i].copy()
-#         #     new_mesh.apply_transform(T_list[i])
-#         #     scene.add_geometry(new_mesh)
-#         # scene.show()
+        # scene = trimesh.Scene()
+        # for i in range(4):
+        #     new_mesh = mesh_list[i].copy()
+        #     new_mesh.apply_transform(T_list[i])
+        #     scene.add_geometry(new_mesh)
+        # scene.show()
 
-#         op_list = ["union"] * len(mesh_list)
-#         description = "straight"
-#         label = "D006"
+        op_list = ["union"] * len(mesh_list)
+        description = "straight"
+        label = "D006"
 
-#         # Loop around
-#         idx_list = ["0", "01", "02", "012", "0123", "014", "0145", "012347", "01234567"]
-#         mesh_fairing_distance = 1
-#         for idx_string in idx_list:
+        # Loop around
+        idx_list = ["0", "01", "03", "013", "0123", "014", "0145", "012347", "01234567"]
+        mesh_fairing_distance = 1
+        for idx_string in idx_list:
 
-#             idx = [int(i) for i in idx_string]
+            idx = [int(i) for i in idx_string]
 
-#             mesh_list_sub = []
-#             T_list_sub = []
-#             op_list_sub = []
-#             for i in idx:
-#                 mesh_list_sub.append(mesh_list[i].copy())
-#                 T_list_sub.append(T_list[i].copy())
-#                 op_list_sub.append(op_list[i])
+            mesh_list_sub = []
+            T_list_sub = []
+            op_list_sub = []
+            for i in idx:
+                mesh_list_sub.append(mesh_list[i].copy())
+                T_list_sub.append(T_list[i].copy())
+                op_list_sub.append(op_list[i])
 
-#             # Shift all up slightly to keep tracking point visible
-#             for i in range(len(idx)):
-#                 T_list_sub[i][2, 3] += AC_DIAMETER / 2
+            # Shift all up slightly to keep tracking point visible
+            for i in range(len(idx)):
+                T_list_sub[i][2, 3] += AC_DIAMETER / 2
 
-#             # Add in cap
-#             mesh_list_sub.append(mesh_dict["cap"])
-#             T = np.eye(4)
-#             # T[2, 3] = -AC_DIAMETER / 3
-#             T_list_sub.append(T)
-#             op_list_sub.append("union")
+            # Add in cap
+            mesh_list_sub.append(mesh_dict["cap"])
+            T = np.eye(4)
+            # T[2, 3] = -AC_DIAMETER / 3
+            T_list_sub.append(T)
+            op_list_sub.append("union")
 
-#             claw6 = [
-#                 mesh_list_sub,
-#                 T_list_sub,
-#                 op_list_sub,
-#                 label,
-#                 description,
-#                 "test",
-#                 np.eye(4),
-#                 mesh_fairing_distance,
-#             ]
+            claw6 = [
+                mesh_list_sub,
+                T_list_sub,
+                op_list_sub,
+                label,
+                description,
+                "test",
+                np.eye(4),
+                mesh_fairing_distance,
+            ]
 
-#             s = Shape(*claw6)
-#             s_list.append(s)
-#             # s.mesh.show()
+            s = Shape(*claw6)
+            s_list.append(s)
+            # s.mesh.show()
 
-#             # s.mesh.show(smooth=False)
-#             if calc_dist_from_z_axis(s.mesh) > 22.6:
-#                 pass
+            # s.mesh.show(smooth=False)
+            if calc_dist_from_z_axis(s.mesh) > 22.6:
+                pass
 
-#         # Open
-#         TA = np.eye(4)
-#         TA[0, 3] = -(mesh_dict[mesh_names[i]].bounds[1, 0] + mesh_dict[mesh_names[i]].bounds[0, 0])
+        # Open
+        TA = np.eye(4)
+        TA[0, 3] = -(mesh_dict[mesh_names[i]].bounds[1, 0] + mesh_dict[mesh_names[i]].bounds[0, 0])
 
-#         TZ = rotvec2T(np.pi, [0, 0, 1])
+        TZ = rotvec2T(np.pi, [0, 0, 1])
 
-#         T0 = TA
-#         T1 = TZ @ T0
-#         T2 = rotvec2T(-np.pi / 2, [0, 1, 0])
+        T0 = TA
+        T1 = TZ @ T0
+        T2 = rotvec2T(-np.pi / 2, [0, 1, 0])
 
-#         if cs_type == "ellipse":
-#             T2[2, 3] = K0_LENGTH - AC_DIAMETER * base_cs_ellipse_factors[0]
-#         else:
-#             T2[2, 3] = K0_LENGTH - AC_DIAMETER
-#         T3 = TZ @ T2
-#         T_list = [T0, T1, T2, T3]
+        if cs_type == "ellipse":
+            T2[2, 3] = K0_LENGTH - AC_DIAMETER * base_cs_ellipse_factors[0]
+        else:
+            T2[2, 3] = K0_LENGTH - AC_DIAMETER
+        T3 = TZ @ T2
+        T_list = [T0, T1, T2, T3]
 
-#         # Expand T_list for quad
-#         T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[0])
-#         T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[1])
-#         T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[2])
-#         T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[3])
+        # Expand T_list for quad
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[0])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[1])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[2])
+        T_list.append(rotvec2T(np.pi / 2, [0, 0, 1]) @ T_list[3])
 
-#         idx_list = ["0", "01", "02", "012", "0123", "014", "0145", "0167", "012346", "01234567"]
-#         for idx_string in idx_list:
-#             idx = [int(i) for i in idx_string]
+        idx_list = ["0", "01", "02", "03", "012", "0123", "014", "0145", "0167", "012346", "01234567"]
+        for idx_string in idx_list:
+            idx = [int(i) for i in idx_string]
 
-#             mesh_list_sub = []
-#             T_list_sub = []
-#             op_list_sub = []
-#             for i in idx:
-#                 mesh_list_sub.append(mesh_list[i].copy())
-#                 T_list_sub.append(T_list[i].copy())
-#                 op_list_sub.append(op_list[i])
+            mesh_list_sub = []
+            T_list_sub = []
+            op_list_sub = []
+            for i in idx:
+                mesh_list_sub.append(mesh_list[i].copy())
+                T_list_sub.append(T_list[i].copy())
+                op_list_sub.append(op_list[i])
 
-#             # # Add in extra segment so the post connects with the shape
-#             mesh_list_sub.append(mesh_dict["ac_post_extra"])
-#             T_extra = np.eye(4)
-#             # T_extra[2, 3] = AC_DIAMETER / 8
-#             T_list_sub.append(T_extra)
-#             op_list_sub.append("union")
+            # # Add in extra segment so the post connects with the shape
+            mesh_list_sub.append(mesh_dict["ac_post_extra"])
+            T_extra = np.eye(4)
+            # T_extra[2, 3] = AC_DIAMETER / 8
+            T_list_sub.append(T_extra)
+            op_list_sub.append("union")
 
-#             # Add in cap
-#             mesh_list_sub.append(mesh_dict["cap"])
-#             T = np.eye(4)
-#             # T[2, 3] = -AC_DIAMETER / 3 + 0.1
-#             # T[:2, 3] = np.array([0.1, 0.1])  # TODO: FIX THIS - ugly
-#             T_list_sub.append(T)
-#             op_list_sub.append("union")
+            # Add in cap
+            mesh_list_sub.append(mesh_dict["cap"])
+            T = np.eye(4)
+            # T[2, 3] = -AC_DIAMETER / 3 + 0.1
+            # T[:2, 3] = np.array([0.1, 0.1])  # TODO: FIX THIS - ugly
+            T_list_sub.append(T)
+            op_list_sub.append("union")
 
-#             claw6 = [
-#                 mesh_list_sub,
-#                 T_list_sub,
-#                 op_list_sub,
-#                 label,
-#                 description,
-#                 "test",
-#                 np.eye(4),
-#                 mesh_fairing_distance,
-#             ]
-#             s = Shape(*claw6)
-#             s_list.append(s)
+            claw6 = [
+                mesh_list_sub,
+                T_list_sub,
+                op_list_sub,
+                label,
+                description,
+                "test",
+                np.eye(4),
+                mesh_fairing_distance,
+            ]
+            s = Shape(*claw6)
+            s_list.append(s)
 
-#             # s.mesh.show(smooth=False)
-#             if calc_dist_from_z_axis(s.mesh) > 22.6:
-#                 pass
+            # s.mesh.show(smooth=False)
+            if calc_dist_from_z_axis(s.mesh) > 22.6:
+                pass
 # ###########
 # ### Fan ###
 # ###########
