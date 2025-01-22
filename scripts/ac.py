@@ -567,6 +567,46 @@ for rotation_list in [
         s_list.append(s)
         # s.mesh.show()
 
+###########################################################################
+### Same as above but with extra component in z-axis for 4-way junction ###
+###########################################################################
+
+for rotation_list in [
+    list_straight_meshes_for_rotation,
+    list_two_segment_meshes_for_rotation,
+    list_curved_meshes_for_rotation,
+]:
+    for m in rotation_list:
+        # Rotate
+        mesh = m.copy()
+        mesh.apply_transform(rotvec2T(np.pi / 2, [1, 0, 0]))
+
+        # Translate up
+        mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER])
+
+        # Add post
+        mesh_list = [mesh, mesh_dict["ac_post_extra"]]
+        T_list = [np.eye(4), np.eye(4)]
+        op_list = ["union", "union"]
+
+        # Add cap
+        mesh_list.append(mesh_dict["cap"])
+        T_list.append(np.eye(4))
+        op_list.append("union")
+
+        # Add extra component
+        comp = mesh_dict["ac_round_K0"].copy()
+        T = np.eye(4)
+        T[2, 3] = K0_LENGTH - AC_DIAMETER
+        comp.apply_transform(T)
+        mesh_list.append(comp)
+        T_list.append(np.eye(4))
+        op_list.append("union")
+
+        s = Shape(mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance)
+        s_list.append(s)
+        # s.mesh.show()
+
 
 # # Make most complex shape: 3 segment with all rotated up
 # idx_string_list = [
