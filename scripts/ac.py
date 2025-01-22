@@ -224,7 +224,9 @@ ac_ellipse_K2_long.apply_transform(rotvec2T(np.pi, [1, 0, 1]))
 
 ac_post_extra = ac_round_K0.copy()
 ac_post_extra.vertices[ac_post_extra.vertices[:, 2] < 0] *= [1, 1, 0.5]  # Multiply all z vertives below 0 by 0.5
-
+ac_post_extra_flipped = ac_post_extra.copy()
+ac_post_extra_flipped.apply_transform(rotvec2T(np.pi, [1, 0, 0]))
+ac_post_extra_flipped.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER])
 
 # # ac_flat_K0
 # flat_length = 10
@@ -271,6 +273,24 @@ ac_post_extra.vertices[ac_post_extra.vertices[:, 2] < 0] *= [1, 1, 0.5]  # Multi
 # ac_n_K1 = make_mesh(surf, UU, VV)
 
 
+def shrink_z_near_cap(mesh):
+
+    # Assumes mesh has small overlap near origin; shrinking the vertices in the z direction here will ensure better attachment to cap
+
+    verts = mesh.vertices.copy()
+
+    within_cap_radius = np.linalg.norm(verts[:, :2], axis=1) < 6.0
+    below_z = verts[:, 2] < 0
+
+    indices_to_shrink = np.logical_and(within_cap_radius, below_z)
+
+    # Scale by half
+    verts[indices_to_shrink, 2] *= 0.5
+
+    mesh.vertices = verts
+    return mesh
+
+
 mesh_dict = {
     "cap": load_cap(),
     "ac_round_K0": ac_round_K0,
@@ -286,6 +306,7 @@ mesh_dict = {
     "ac_ellipse_K1_long": ac_ellipse_K1_long,
     "ac_ellipse_K2_long": ac_ellipse_K2_long,
     "ac_post_extra": ac_post_extra,
+    "ac_post_extra_flipped": ac_post_extra_flipped,
 }
 
 # create_scene(mesh_dict)
@@ -299,13 +320,13 @@ s_list = []
 
 
 T_list_master = []
-for th in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+for th in np.linspace(-np.pi, np.pi, 8, endpoint=False):
     T = rotvec2T(th, [0, 1, 0])
     T_list_master.append(T)
 
 from itertools import combinations
 
-idx_list = "1234567"
+idx_list = "0"
 all_combinations = []
 
 # Generate combinations for all possible lengths
@@ -322,8 +343,18 @@ for idx in idx_list:
 
 mesh_list = slightly_deform_mesh(mesh_list)
 s_without_cap = Shape(mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance)
-s_without_cap.mesh.show()
 
+import trimesh
+
+line = trimesh.creation.box([0.1, 0.1, 100])
+line.apply_translation([0, 0, -line.bounds[0, 2]])
+scene = trimesh.Scene()
+scene.add_geometry(line)
+scene.add_geometry(s_without_cap.mesh)
+# scene.show()
+# s_without_cap.mesh.show()
+
+list_meshes_for_rotation = []
 
 idx_string_list = [
     "01",
@@ -398,7 +429,7 @@ for ac_name in [
             T_list = []
             op_list = []
 
-            # limb0
+            # limb0 - will truncate for non-rotated version
             mesh_list.append(mesh_dict["ac_round_K0"].copy())
             T_list.append(T_list_master[int(idx_string[0])])
             op_list.append("union")
@@ -417,25 +448,62 @@ for ac_name in [
             mesh_list = slightly_deform_mesh(mesh_list)
             mesh_list = slightly_deform_mesh(mesh_list)
 
+            mesh_fairing_distance = 1
             s_without_cap = Shape(
                 mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance
             )
+
+            # Store this non-truncated, non-capped version for rotation in next section
+            list_meshes_for_rotation.append(s_without_cap.mesh)
 
             print(f"ac_name: {ac_name}, th1: {th1}, th2: {th2}, idx_string: {idx_string}")
             count += 1
             print(count)
             # s_without_cap.mesh.show()
 
-            # Add cap
+            # Shift up so that limb0 is the post
             new_mesh = s_without_cap.mesh.copy()
+            new_mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER])
 
+            # Truncate the end so that it fuses better with the cap
+            new_mesh = shrink_z_near_cap(new_mesh)
+
+            # Add cap
             mesh_list = [new_mesh, mesh_dict["cap"]]
             T_list = [np.eye(4), np.eye(4)]
             op_list = ["union", "union"]
 
             s = Shape(mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance)
             s_list.append(s)
-            s.mesh.show()
+            # s.mesh.show(smooth=False)
+
+
+##############################################
+### Rotate the above to be in the XY plane ###
+##############################################
+
+for m in list_meshes_for_rotation:
+
+    # Rotate
+    mesh = m.copy()
+    mesh.apply_transform(rotvec2T(np.pi / 2, [1, 0, 0]))
+
+    # Translate up
+    mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER])
+
+    # Add post
+    mesh_list = [mesh, mesh_dict["ac_post_extra"]]
+    T_list = [np.eye(4), np.eye(4)]
+    op_list = ["union", "union"]
+
+    # Add cap
+    mesh_list.append(mesh_dict["cap"])
+    T_list.append(np.eye(4))
+    op_list.append("union")
+
+    s = Shape(mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance)
+    s_list.append(s)
+    # s.mesh.show()
 
 
 # # Make most complex shape: 3 segment with all rotated up
