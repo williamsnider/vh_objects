@@ -582,17 +582,12 @@ for rotation_list in [
         mesh.apply_transform(rotvec2T(np.pi / 2, [1, 0, 0]))
 
         # Translate up
-        mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER])
+        mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER-0.01])
 
         # Add post
         mesh_list = [mesh, mesh_dict["ac_post_extra"]]
         T_list = [np.eye(4), np.eye(4)]
         op_list = ["union", "union"]
-
-        # Add cap
-        mesh_list.append(mesh_dict["cap"])
-        T_list.append(np.eye(4))
-        op_list.append("union")
 
         # Add extra component
         comp = mesh_dict["ac_round_K0"].copy()
@@ -600,6 +595,14 @@ for rotation_list in [
         T[2, 3] = K0_LENGTH - AC_DIAMETER
         comp.apply_transform(T)
         mesh_list.append(comp)
+        T_list.append(np.eye(4))
+        op_list.append("union")
+
+        mesh_list = slightly_deform_mesh(mesh_list)
+        mesh_list = slightly_deform_mesh(mesh_list)
+
+        # Add cap
+        mesh_list.append(mesh_dict["cap"])
         T_list.append(np.eye(4))
         op_list.append("union")
 
