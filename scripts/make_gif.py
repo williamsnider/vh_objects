@@ -261,10 +261,13 @@ def save_mesh_as_png(fname_stl):
 
     # Rotate mesh to get better view
     mesh_pose = np.eye(4)
+    mesh_pose = rotvec2T(-np.pi / 4, [0, 1, 0]) @ rotvec2T(np.pi / 4, [1, 0, 0]) @ rotvec2T(-6 * np.pi / 8, [0, 0, 1])
+    # mesh_pose = rotvec2T(np.pi / 2, [1, 1, 1])
+
     # TZ90 = rotvec2T(-np.pi / 2, [0, 0, 1])
-    TX90 = rotvec2T(-np.pi / 2.1, [1, 0, 0])
-    mesh_pose = TX90
-    mesh_pose[2, 3] -= 10
+    # TX90 = rotvec2T(-np.pi / 2.1, [1, 0, 0])
+    # mesh_pose = TX90
+    # mesh_pose[2, 3] -= 10
 
     scene.add(mesh, pose=mesh_pose)
 
@@ -273,7 +276,7 @@ def save_mesh_as_png(fname_stl):
     # +Y axis is towards the top of the screen
     # -Z axis points into the screen (camera looks into the screen)
     yfov = np.pi / 4.0
-    ywidth = 120  # mm
+    ywidth = 100  # mm
     camera_pose = np.eye(4)
     camera_pose[2, 3] = ywidth / 2 / np.tan(yfov / 2)  # Calculate correct distance for camera to have ywidth and yfov
     camera = pyrender.PerspectiveCamera(yfov=yfov)
@@ -318,6 +321,12 @@ def save_mesh_as_png(fname_stl):
     r = pyrender.OffscreenRenderer(resolution[0], resolution[1])
     color, _ = r.render(scene)
 
+    # # Display image with imshow
+    # import matplotlib.pyplot as plt
+
+    # plt.imshow(color)
+    # plt.show()
+
     cv2.imwrite(str(fname_png), color)
 
     return fname_png
@@ -361,7 +370,7 @@ if __name__ == "__main__":
     overall_dir = Path(base_dir, "sample_shapes/stl/")
 
     fname_stl_all = list(overall_dir.rglob("*.stl"))
-    fname_stl_all = [f for f in fname_stl_all if "torso" in str(f)]
+    # fname_stl_all = [f for f in fname_stl_all if "torso" in str(f)]
 
     # Use a multiprocessing pool
     with Pool() as pool:

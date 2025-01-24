@@ -217,8 +217,8 @@ color_union = [0, 0, 255, 255]
 color_difference = [255, 0, 0, 255]
 NUM_CP_PER_BASE_SHEET = 50
 NUM_CS_PER_SHEET = 11
-uu = 50
-vv = 50
+uu = 30
+vv = 30
 
 # Point
 sf_point = Shaft(

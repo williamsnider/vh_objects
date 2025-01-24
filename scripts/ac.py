@@ -41,6 +41,11 @@ AC_K_PERPENDICULAR = 1 / 20
 base_cs_ellipse_factors = [2 / 3, 5 / 4]
 mesh_fairing_distance = 1
 
+
+# Rotation about Z 90 degrees to align with right side
+TZ90 = rotvec2T(-np.pi / 2, [0, 0, 1])
+
+
 ################
 
 # ac_round_K0
@@ -454,6 +459,8 @@ for ac_name in [
             s_without_cap = Shape(
                 mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance
             )
+            s_without_cap.mesh.apply_transform(TZ90)  # Rotate about Z 90 degrees
+
             if ac_name == "ac_round_K0":
                 list_straight_meshes_for_rotation.append(s_without_cap.mesh)
             elif ac_name == "ac_round_K1":
@@ -532,6 +539,7 @@ for ac_name in [
             s_without_cap = Shape(
                 mesh_list, T_list, op_list, "D006", "straight", "test", np.eye(4), mesh_fairing_distance
             )
+            s_without_cap.mesh.apply_transform(TZ90)  # Rotate about Z 90 degrees
 
             # Add to rotation list
             list_two_segment_meshes_for_rotation.append(s_without_cap.mesh)
@@ -548,10 +556,10 @@ for rotation_list in [
     for m in rotation_list:
         # Rotate
         mesh = m.copy()
-        mesh.apply_transform(rotvec2T(np.pi / 2, [1, 0, 0]))
+        mesh.apply_transform(rotvec2T(-np.pi / 2, [0, 0, 1]) @ rotvec2T(np.pi / 2, [0, 1, 0]))
 
         # Translate up
-        mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER])
+        mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER + 0.1])
 
         # Add post
         mesh_list = [mesh, mesh_dict["ac_post_extra"]]
@@ -579,10 +587,10 @@ for rotation_list in [
     for m in rotation_list:
         # Rotate
         mesh = m.copy()
-        mesh.apply_transform(rotvec2T(np.pi / 2, [1, 0, 0]))
+        mesh.apply_transform(rotvec2T(-np.pi / 2, [0, 0, 1]) @ rotvec2T(np.pi / 2, [0, 1, 0]))
 
         # Translate up
-        mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER-0.01])
+        mesh.apply_translation([0, 0, K0_LENGTH - AC_DIAMETER + 0.1])
 
         # Add post
         mesh_list = [mesh, mesh_dict["ac_post_extra"]]
@@ -946,6 +954,7 @@ for cs_type in [
             ]
 
             s = Shape(*claw6)
+            s.mesh.apply_transform(TZ90)  # Rotate about Z 90 degrees
             s_list.append(s)
             # s.mesh.show()
 
@@ -1014,6 +1023,7 @@ for cs_type in [
                 mesh_fairing_distance,
             ]
             s = Shape(*claw6)
+            s.mesh.apply_transform(TZ90)
             s_list.append(s)
 
             # s.mesh.show(smooth=False)
