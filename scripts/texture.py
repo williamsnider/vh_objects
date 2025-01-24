@@ -17,8 +17,11 @@ def poisson_disk_sampling(points, min_dist):
         numpy.ndarray: Downsampled point cloud.
     """
 
-    # Shuffle the input points to reduce bias
-    np.random.shuffle(points)
+    # # Shuffle the input points to reduce bias
+    # np.random.shuffle(points)
+
+    # Sort points by descending z for better packing
+    points = points[np.argsort(points[:, 2])[::-1]]
 
     # Initialize the sampled point list
     sampled_points = []
@@ -47,7 +50,7 @@ def apply_blue_noise_to_mesh(mesh, min_dist, texture_element, operation, z_min=0
     mesh = mesh.copy()
 
     # Sample the mesh
-    pts, _ = trimesh.sample.sample_surface_even(mesh, 100000)
+    pts, _ = trimesh.sample.sample_surface_even(mesh, 1000000)
 
     # Exclude points at post
     pts = pts[pts[:, 2] > -20.0]
@@ -88,10 +91,13 @@ def apply_blue_noise_to_mesh(mesh, min_dist, texture_element, operation, z_min=0
         textured_mesh = trimesh.boolean.boolean_manifold(mesh_sequence)
     elif operation == "difference":
         textured_mesh = trimesh.boolean.boolean_manifold(mesh_sequence, operation="difference")
-    textured_mesh.show()
 
     # Label broken faces
-
+    if not textured_mesh.is_watertight:
+        for face in textured_mesh.faces:
+            if not textured_mesh.face_adjacency[face].size:
+                textured_mesh.visual.face_colors[face] = [255, 0, 0, 255]
+        textured_mesh.show()
     assert textured_mesh.is_watertight
 
     return textured_mesh
@@ -303,36 +309,110 @@ def apply_linear_texture_to_mesh(mesh, tube_radius, tube_spacing, operation, zmi
     return textured_mesh
 
 
+def apply_voxelization_texture_to_mesh(input_mesh, voxel_size, zmin, rexclude):
+
+    pitch = voxel_size
+    mesh = input_mesh.copy()
+
+    # Remove cap region
+    cap_radius = 10
+    slice_box = trimesh.primitives.Box([cap_radius * 2, cap_radius * 2, 0.1])
+    slice_box.apply_translation([0, 0, -slice_box.bounds[1, 2]])  # Top of box is at xy plane
+    meshes = trimesh.boolean.difference([mesh, slice_box])
+
+    # Isolate top watertight portion
+    meshes = meshes.split()
+    assert len(meshes) == 2
+    zval = -np.inf
+    target_mesh = None
+    for m in meshes:
+        if m.bounds[0, 2] > zval:
+            zval = m.bounds[0, 2]
+            mesh = m
+
+    # Voxelize and fill
+    voxel_grid = mesh.voxelized(pitch=pitch)
+    voxel_grid.fill()
+
+    # # Convert to mesh using marching cubes
+    # mc = trimesh.voxel.ops.matrix_to_marching_cubes(voxel_grid.matrix, pitch=pitch / 10)
+    # mc.show()
+
+    voxels = voxel_grid.as_boxes()
+    verts = voxels.vertices
+    faces = voxels.faces
+    m_new = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    print(m_new.is_watertight)
+    m_new.show(smooth=False)
+
+    voxel_grid.show()
+
+
+# voxel_grid = trimesh.voxel.VoxelGrid(mesh, pitch=pitch)
+
+
 # Example usage:
 save_list = []
 
 if __name__ == "__main__":
 
-    torso_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso")
-    fname_list = list(torso_dir.glob("*.stl"))
-    fname_list.sort()
-    fname_list = fname_list[:12]
+    fname_list = [
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component/F154.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component/F161.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component/F171.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component/F017.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component/F030.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_000.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_001.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_002.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_003.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_057.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_092.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_127.stl"),
+    ]
+    # torso_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component")
+    # fname_list = list(torso_dir.glob("*.stl"))
+    # fname_list.sort()
+    # fname_list = fname_list[:12]
+
+    # input_mesh = trimesh.load(fname_list[0])
+    # voxel_size = 1
+    # apply_voxelization_texture_to_mesh(input_mesh, voxel_size, 5, 5)
 
     for fname in fname_list:
         mesh = trimesh.load(fname)
 
         # Apply blue noise
-        min_dist = 1.0
-        radius = 0.5
+        radius = 1.0
+        min_dist = 2 * radius + 0.5
         operation = "difference"
         texture_element = trimesh.creation.icosphere(radius=radius, subdivisions=1)
-        texture_element.apply_translation(1e-2 * np.ones(3))
-        textured_mesh = apply_blue_noise_to_mesh(mesh, min_dist, texture_element, operation, z_min=0.0, rexclude=6.0)
-        new_name = "H" + fname.stem.split("_")[1]
-        save_list.append([new_name, textured_mesh])
+        texture_element.apply_translation(2e-2 * np.ones(3))
+        textured_mesh = apply_blue_noise_to_mesh(mesh, min_dist, texture_element, operation, z_min=radius, rexclude=6.0)
+        new_name = "A" + fname.stem[-3:]
+        new_path = Path(fname.parent.parent, "texture", f"{new_name}.stl")
+        save_list.append([new_path, textured_mesh])
 
+    for fname in fname_list:
+        mesh = trimesh.load(fname)
+
+        # Apply blue noise
+        radius = 2.5
+        min_dist = 2 * radius + 0.5
+        operation = "difference"
+        texture_element = trimesh.creation.icosphere(radius=radius, subdivisions=2)
+        texture_element.apply_translation(2e-2 * np.ones(3))
+        textured_mesh = apply_blue_noise_to_mesh(mesh, min_dist, texture_element, operation, z_min=radius, rexclude=6.0)
+        new_name = "B" + fname.stem[-3:]
+        new_path = Path(fname.parent.parent, "texture", f"{new_name}.stl")
+        save_list.append([new_path, textured_mesh])
     for fname in fname_list:
 
         mesh = trimesh.load(fname)
 
         # Apply linear texture
         tube_radius = 0.5
-        tube_spacing = 4 * tube_radius
+        tube_spacing = 3 * tube_radius
         textured_mesh = apply_linear_texture_to_mesh(
             mesh=mesh,
             tube_radius=tube_radius,
@@ -341,12 +421,11 @@ if __name__ == "__main__":
             zmin=0.0,
             rexclude=6.0,
         )
+        new_name = "C" + fname.stem[-3:]
+        new_path = Path(fname.parent.parent, "texture", f"{new_name}.stl")
+        save_list.append([new_path, textured_mesh])
 
-        new_name = "J" + fname.stem.split("_")[1]
-        save_list.append([new_name, textured_mesh])
+    for i, (savepath, mesh) in enumerate(save_list):
 
-    for i, (name, mesh) in enumerate(save_list):
-
-        savepath = Path(torso_dir.parent, "texture", f"{name}.stl")
         savepath.parent.mkdir(parents=True, exist_ok=True)
         mesh.export(savepath)

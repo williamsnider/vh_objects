@@ -9,7 +9,7 @@ from vh_objects.shape import Shape
 from vh_objects.utilities import calc_mesh_boolean_and_edges, fuse_meshes, fair_mesh
 from trimesh.transformations import rotation_matrix as rotvec2T
 from scripts.make_gif import calc_dist_from_z_axis
-from scripts.subdivide_box import load_subdivided_box
+from scripts.subdivide_box import load_subdivided_box, construct_tetrahedron
 import copy
 from pathlib import Path
 
@@ -64,7 +64,11 @@ cylinder_r3 = torso_radius
 dumbbell_r1 = torso_radius
 dumbbell_r2 = 1.0 * torso_radius
 dumbbell_r3 = torso_radius
+cone_r1 = 0.920 * torso_radius
+cone_r3 = 0.1 * torso_radius
+cone_r2 = 0.5 * (cone_r1 + cone_r3)
 mesh_fairing_distance = 1
+scale_factors = np.linspace(1.0, 0.6, 4)
 
 # football K0
 torso_football_K0 = Shaft(
@@ -160,6 +164,24 @@ sphere2 = sphere1.copy()
 sphere2.apply_translation([0, 0, torso_length - 2 * torso_radius])  # align top_to_origin
 torso_dumbbell_K0 = fuse_meshes(sphere1, sphere2, 2, "union")
 # torso_dumbbell_K0.show(smooth=False)
+
+# Cone
+torso_cone_K0 = Shaft(
+    torso_length,
+    cone_r1,
+    cone_r2,
+    cone_r3,
+    theta=0,
+    lengthtype="two_hemi",
+    num_cs=NUM_CS,
+    num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+)
+torso_cone_K0.mesh.apply_transform(T_point_z)
+torso_cone_K0.mesh.apply_translation([0, 0, -torso_cone_K0.mesh.bounds[0, 2]])
+assert abs(torso_cone_K0.l_sphere_radius - torso_radius) < 0.1
+print(torso_cone_K0.l_sphere_radius, torso_cone_K0.r_sphere_radius)
+print(torso_radius)
+# torso_cone_K0.mesh.show()
 
 
 # ac_round_K0
@@ -257,7 +279,7 @@ sf_sphere_difference.visual.face_colors = color_difference
 # Size meshes
 
 size_ico = trimesh.creation.icosphere(subdivisions=5, radius=torso_radius)
-box_edge = 1.5 * torso_radius
+box_edge = 2.0 * torso_radius
 # size_cube = load_subdivided_box([box_edge, box_edge, box_edge], 10)
 size_cube = trimesh.creation.box([box_edge, box_edge, box_edge])
 size_cubeR = size_cube.copy()
@@ -265,6 +287,21 @@ size_cubeR = size_cube.copy()
 T = rotvec2T(np.arctan(np.sqrt(2)), [0, 1, 0]) @ rotvec2T(np.pi / 4, [0, 0, 1])
 size_cubeR.apply_transform(T)
 size_cubeR.apply_translation(-size_cubeR.centroid)
+
+# Tetrahedron
+size_tetr = construct_tetrahedron(box_edge / scale_factors[2])
+size_tetrR = size_tetr.copy()
+size_tetrR.apply_transform(
+    rotvec2T(
+        np.pi,
+        [
+            0,
+            1,
+            0,
+        ],
+    )
+)
+size_tetrR.apply_translation([0, 0, -size_tetrR.bounds[0, 2]])
 
 
 # scene = trimesh.Scene()
@@ -285,6 +322,7 @@ mesh_dict = {
     "torso_cylinder_K0": torso_cylinder_K0.mesh,
     # "torso_cylinder_K1": torso_cylinder_K1.mesh,
     "torso_dumbbell_K0": torso_dumbbell_K0,
+    "torso_cone_K0": torso_cone_K0.mesh,
     # "torso_dumbbell_K1": torso_dumbbell_K1.mesh,
     "sf_point": sf_point.mesh,
     "sf_ridge_vert_union": sf_ridge_vert_union,
@@ -296,6 +334,8 @@ mesh_dict = {
     "size_ico": size_ico,
     "size_cube": size_cube,
     "size_cubeR": size_cubeR,
+    "size_tetr": size_tetr,
+    "size_tetrR": size_tetrR,
     "ac_post_extra": ac_post_extra,
 }
 
@@ -387,6 +427,7 @@ base_torsos = [
     # "torso_football_K1",
     "torso_dumbbell_K0",
     # "torso_dumbbell_K1",
+    "torso_cone_K0",
 ]
 
 
@@ -467,6 +508,7 @@ back_origin = np.array([0, 0, torso_radius])
 count = 0
 
 for base_torso in [
+    "torso_cone_K0",
     "torso_football_K0",
     "torso_cylinder_K0",
     "torso_dumbbell_K0",
@@ -691,6 +733,7 @@ for base_torso in [
             #             op_list.append("union")
 
             mesh_list = slightly_deform_mesh(mesh_list)
+            mesh_list = slightly_deform_mesh(mesh_list)
 
             # # Store dumbbell so it can be rotated below
             # if base_torso == "torso_dumbbell_K0":
@@ -701,7 +744,7 @@ for base_torso in [
             )
 
             # Omit cylinder for rotations because it is so similar to dumbbell when rotated
-            if base_torso in ["torso_dumbbell_K0", "torso_football_K0"]:
+            if base_torso in ["torso_dumbbell_K0", "torso_football_K0", "torso_cone_K0"]:
                 list_meshes_without_cap.append(s.mesh)
 
                 if sf_type in ["sf_point", "sf_sphere_union", "sf_ridge_vert_union"] and sf_locations == "double":
@@ -782,8 +825,6 @@ for mesh in list_meshes_without_cap:
 ### Scale ###
 #############
 
-scale_factors = np.linspace(1.0, 0.6, 4)
-
 
 # Scale the meshes identified above by their idx (total of 3)
 for idx in list_meshes_without_cap_idx_for_scaling:
@@ -826,6 +867,8 @@ for idx in list_meshes_without_cap_idx_for_scaling:
 # Scale a sphere, cube, and rotated cube.
 mesh_fairing_distance = 0
 size_meshes = [
+    "size_tetr",
+    "size_tetrR",
     "size_ico",
     "size_cube",
     "size_cubeR",
@@ -862,6 +905,20 @@ for mesh_name in size_meshes:
         capsule = trimesh.Trimesh(vertices=capsule.vertices, faces=capsule.faces)  # Allow editing
         capsule.apply_translation([0, 0, -capsule.bounds[0, 2] - capsule_radius - 0.001])
         capsule.vertices[capsule.vertices[:, 2] < 0] *= [1, 1, 0.25]
+
+        # Adust top of cap for small tetrahedron
+        if mesh_name == "size_tetr":
+            bottom_of_tetr = mesh_list[0].bounds[0, 2]
+            capsule.apply_translation([0, 0, -bottom_of_tetr - 0.01])
+            capsule.vertices[capsule.vertices[:, 2] > +0] *= [1, 1, 0.1]
+            capsule.apply_translation([0, 0, -(-bottom_of_tetr - 0.01)])
+
+        if mesh_name == "size_tetrR":
+            top_of_tetr = mesh_list[0].bounds[1, 2]
+            capsule.apply_translation([0, 0, -top_of_tetr + 0.01])
+            capsule.vertices[capsule.vertices[:, 2] > 0] *= [1, 1, 0.1]
+            capsule.apply_translation([0, 0, -(-top_of_tetr + 0.01)])
+
         # Scale vertices below z=0
         # capsule.apply_translation([0, 0, -capsule.bounds[0, 2]])
         mesh_list.append(capsule)

@@ -142,6 +142,75 @@ def load_subdivided_box(extents=[1, 1, 1], subdivisions=4):
     return subdivided_box
 
 
+import numpy as np
+import trimesh
+from trimesh.transformations import rotation_matrix as rotvec2T
+from scripts.subdivide_box import subdivide_mesh
+
+
+def construct_tetrahedron(edge_length):
+
+    # Vertices
+    vertices = np.array(
+        [
+            [0, 0, 0],
+            [edge_length, 0, 0],
+            [edge_length / 2, edge_length * np.sin(np.pi / 3), 0],
+            [
+                edge_length / 2,
+                edge_length / 2 * np.tan(np.pi / 6),
+                np.sqrt(edge_length**2 - (edge_length / 2 * (np.tan(np.pi / 3) - np.tan(np.pi / 6))) ** 2),
+            ],
+        ]
+    )
+
+    # # Define the vertices of a unit tetrahedron
+    # vertices = edge_length * (
+    #     np.array(
+    #         [
+    #             [1, 1, 1],
+    #             [-1, -1, 1],
+    #             [-1, 1, -1],
+    #             [1, -1, -1],
+    #         ]
+    #     )  # Vertex 1  # Vertex 2  # Vertex 3  # Vertex 4
+    #     / np.sqrt(2)
+    #     / 2
+    # )  # Scale to ensure unit side lengths
+
+    # Define the faces (triangular surfaces) of the tetrahedron
+    faces = np.array(
+        [
+            [1, 0, 2],
+            [0, 1, 3],
+            [2, 0, 3],
+            [1, 2, 3],
+        ]
+    )  # Face 1  # Face 2  # Face 3  # Face 4
+
+    # Create the mesh
+    tetrahedron = trimesh.Trimesh(vertices=vertices, faces=faces)
+
+    # Center at xy plane
+    tetrahedron.apply_translation([-tetrahedron.centroid[0], -tetrahedron.centroid[1], 0])
+
+    # Check edges
+    assert np.allclose(
+        [
+            np.linalg.norm(tetrahedron.vertices[edge[0]] - tetrahedron.vertices[edge[1]])
+            for edge in tetrahedron.edges_unique
+        ],
+        edge_length,
+    )
+
+    # Subdivide vertices
+    tetrahedron = tetrahedron.subdivide().subdivide().subdivide().subdivide().subdivide()
+
+    # Check watertight
+    assert tetrahedron.is_watertight
+
+    return tetrahedron
+
 if __name__ == "__main__":
 
     # subdivide_box = subdivide_mesh(box, 6)

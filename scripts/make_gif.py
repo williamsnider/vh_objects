@@ -361,7 +361,7 @@ if __name__ == "__main__":
     overall_dir = Path(base_dir, "sample_shapes/stl/")
 
     fname_stl_all = list(overall_dir.rglob("*.stl"))
-    fname_stl_all = [f for f in fname_stl_all if "axial_component" in str(f)]
+    fname_stl_all = [f for f in fname_stl_all if "torso" in str(f)]
 
     # Use a multiprocessing pool
     with Pool() as pool:
