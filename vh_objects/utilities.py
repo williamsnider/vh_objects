@@ -220,7 +220,7 @@ def calc_hemisphere_controlpoints(base_cp, tan_vec, endpoint, poly, x, morph_to_
     cp_shift = cp_scale + vec_rotated * (cp_T[:, 0].reshape(-1, 1, 1)) - np.array([x, 0, 0])
     result = (cp_shift) @ R.T + endpoint
 
-    from scripts.sheets import plot_arr
+    from scripts.sheets_utilities import plot_arr
 
     # plot_arr(out_cp)
     assert np.all(np.isclose(result[-1], base_cp)), "base_cp not aligned with result[-1]"

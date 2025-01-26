@@ -17,7 +17,7 @@ from vh_objects.utilities import (
     calc_mesh_boolean_and_edges,
     angle_between,
 )
-from scripts.sheets import construct_sheet, bend_sheet, make_base_cp, plot_arr
+from scripts.sheets_utilities import construct_sheet, bend_sheet, make_base_cp, plot_arr
 import trimesh
 from scipy.spatial.transform.rotation import Rotation
 from vh_objects.shaft import Shaft

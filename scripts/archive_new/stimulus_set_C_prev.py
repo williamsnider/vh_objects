@@ -17,7 +17,7 @@ from objects.utilities import (
     calc_mesh_boolean_and_edges,
     angle_between,
 )
-from scripts.sheets import construct_sheet, bend_sheet, make_base_cp
+from scripts.sheets_utilities import construct_sheet, bend_sheet, make_base_cp
 import trimesh
 from scipy.spatial.transform.rotation import Rotation
 from objects.shaft import Shaft
@@ -41,7 +41,7 @@ from scripts.archive_new.stimulus_set_params import (
     BOX_TRANSLATION,
     TERMINATION_RADIUS,
 )
-from scripts.stimulus_set_common import mesh_dict, volumetric, thin
+from scripts.stim_set_common import mesh_dict, volumetric, thin
 
 FAIRING_DISTANCE = 2
 POST_Z_SHIFT = 0

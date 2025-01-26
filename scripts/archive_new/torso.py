@@ -1,6 +1,6 @@
 # Torsos
 from objects.shaft import Shaft
-from scripts.stimulus_set_E import (
+from scripts.sheets import (
     CAPSULE_RADIUS,
     CAPSULE_LENGTH,
     FLATTENED_THICKNESS,
@@ -153,7 +153,7 @@ sf_sphere_difference.visual.face_colors = color_difference
 comp_dict["sf_sphere_difference"] = sf_sphere_difference
 
 
-from scripts.stimulus_set_common import construct_sheet
+from scripts.stim_set_common import construct_sheet
 from objects.utilities import make_surface, make_mesh
 
 t = np.linspace(0, 2 * np.pi, NUM_CP_PER_BASE_SHEET, endpoint=False).reshape(-1, 1)
@@ -179,7 +179,7 @@ comp_dict["sf_round_flat_difference"].visual.face_colors = color_difference
 #     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
 # )
 
-from scripts.stimulus_set_E import clip_along_axis, construct_cp_from_cs_func, construct_rounded_cs
+from scripts.sheets import clip_along_axis, construct_cp_from_cs_func, construct_rounded_cs
 
 sf_capsule_base_shaft_K0 = Shaft(
     2 * sf_radius,

@@ -72,7 +72,7 @@ def test_voxel_grids_are_duplicates(big_voxel1, big_voxel2, threshold):
     return are_duplicates, overlap_fraction
 
 
-def find_duplicates_in_dict(voxel_dict, threshold):
+def find_duplicates_in_dict(voxel_dict, threshold, name="meshes"):
 
     mesh_names = list(voxel_dict.keys())
 
@@ -122,6 +122,18 @@ def find_duplicates_in_dict(voxel_dict, threshold):
     # duplicate_meshes.sort()
     for i in range(len(duplicate_meshes_sorted)):
         print(duplicate_pairs_sorted[i][0], duplicate_pairs_sorted[i][1], overlap_fractions_sorted[i], sep="\t")
+
+    # Create dataframe showing duplicates and their overlap_fraction
+    import pandas as pd
+
+    data_list = []
+    for i in range(len(duplicate_meshes_sorted)):
+        data_list.append([duplicate_pairs_sorted[i][0], duplicate_pairs_sorted[i][1], overlap_fractions_sorted[i]])
+    df = pd.DataFrame(data_list, columns=["Mesh1", "Mesh2", "Overlap Fraction"])
+    print(df)
+
+    savepath = Path(Path(__file__).parent, f"duplicate_pairs_{name}.csv")
+    df.to_csv(savepath, index=False)
 
 
 def test_meshes_are_duplicates(mesh1, mesh2, pitch, threshold):
@@ -316,7 +328,7 @@ def recurse_stl_directory_for_duplicates(dirname, pitch, bounds, zrotation=8, th
     print(f"Size of voxel dict: {size} MB which is {size / len(voxel_dict)} MB per mesh")
 
     # Find duplicates
-    find_duplicates_in_dict(voxel_dict, threshold)
+    find_duplicates_in_dict(voxel_dict, threshold, dirname.stem)
 
 
 if __name__ == "__main__":
@@ -327,8 +339,8 @@ if __name__ == "__main__":
 
     dirnames = [
         # Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/texture"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component"),
         Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/sheet"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/medial_axis"),
     ]
 
     for dirname in dirnames:

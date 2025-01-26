@@ -161,7 +161,7 @@ def create_entity_tube(entity_verts, radius):
 
     ac = AxialComponent(b, cs_list)
 
-    from scripts.sheets import plot_arr
+    from scripts.sheets_utilities import plot_arr
 
     # plot_arr(ac.controlpoints[2:-2])
 
@@ -357,18 +357,18 @@ save_list = []
 if __name__ == "__main__":
 
     fname_list = [
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component/F154.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component/F161.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component/F171.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component/F017.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component/F030.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_000.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_001.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_002.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_003.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_057.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_092.stl"),
-        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/torso_127.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/medial_axis/G013.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/medial_axis/G044.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/medial_axis/G151.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/medial_axis/G251.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/medial_axis/G261.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/G600.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/G601.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/G602.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/G603.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/G622.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/G657.stl"),
+        Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/G746.stl"),
     ]
     # torso_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component")
     # fname_list = list(torso_dir.glob("*.stl"))

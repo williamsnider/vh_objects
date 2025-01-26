@@ -367,7 +367,7 @@ if __name__ == "__main__":
 
     base_dir = Path(__file__).parents[1]
     # base_dir = Path("/home/williamsnider/Code/vh_objects")
-    overall_dir = Path(base_dir, "sample_shapes/stl/")
+    overall_dir = Path(base_dir, "sample_shapes/stl/texture")
 
     fname_stl_all = list(overall_dir.rglob("*.stl"))
     # fname_stl_all = [f for f in fname_stl_all if "torso" in str(f)]

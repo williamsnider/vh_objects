@@ -2,9 +2,9 @@
 from vh_objects.shaft import Shaft
 import trimesh
 import numpy as np
-from scripts.stim_set_common import create_scene, load_cap, UU, VV, export_shape, slightly_deform_mesh
+from scripts.stim_set_common import create_scene, load_cap, UU, VV, export_shape, slightly_deform_mesh, STL_DIR
 from scipy.spatial.transform import Rotation
-from scripts.sheets import make_surface, make_mesh, construct_sheet
+from scripts.sheets_utilities import make_surface, make_mesh, construct_sheet
 from vh_objects.shape import Shape
 from vh_objects.utilities import calc_mesh_boolean_and_edges, fuse_meshes, fair_mesh
 from trimesh.transformations import rotation_matrix as rotvec2T
@@ -158,7 +158,7 @@ torso_cylinder_K1.mesh.apply_translation([0, 0, -torso_cylinder_K1.mesh.bounds[0
 # torso_dumbbell_K1.mesh.apply_translation([0, 0, -torso_dumbbell_K1.mesh.bounds[0, 2]])
 
 # dumbbell K0
-sphere1 = trimesh.creation.icosphere(subdivisions=5, radius=torso_radius)
+sphere1 = trimesh.creation.icosphere(subdivisions=5, radius=1.25 * torso_radius)
 sphere1.apply_translation([0, 0, -sphere1.bounds[0, 2]])  # align bottom to origin
 sphere2 = sphere1.copy()
 sphere2.apply_translation([0, 0, torso_length - 2 * torso_radius])  # align top_to_origin
@@ -278,7 +278,7 @@ sf_sphere_difference.visual.face_colors = color_difference
 
 # Size meshes
 
-size_ico = trimesh.creation.icosphere(subdivisions=5, radius=torso_radius)
+size_ico = trimesh.creation.icosphere(subdivisions=5, radius=torso_radius * 1.5)
 box_edge = 2.0 * torso_radius
 # size_cube = load_subdivided_box([box_edge, box_edge, box_edge], 10)
 size_cube = trimesh.creation.box([box_edge, box_edge, box_edge])
@@ -508,10 +508,10 @@ back_origin = np.array([0, 0, torso_radius])
 count = 0
 
 for base_torso in [
-    "torso_cone_K0",
     "torso_football_K0",
     "torso_cylinder_K0",
     "torso_dumbbell_K0",
+    "torso_cone_K0",
 ]:
 
     # Calculate the frontright and backright transformation matrices
@@ -734,6 +734,7 @@ for base_torso in [
 
             mesh_list = slightly_deform_mesh(mesh_list)
             mesh_list = slightly_deform_mesh(mesh_list)
+            mesh_list = slightly_deform_mesh(mesh_list)
 
             # # Store dumbbell so it can be rotated below
             # if base_torso == "torso_dumbbell_K0":
@@ -937,12 +938,23 @@ for mesh_name in size_meshes:
             raise ValueError
 
 
-save_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso")
+save_dir = Path(STL_DIR, "torso")
+start_idx = 600
 for i, s in enumerate(s_list):
+    label = "G" + str(start_idx + i).zfill(3)
+    try:
+        export_shape(s, save_dir, label)
+    except:
+        print(f"Failed to save {label}")
+        continue
 
-    if calc_dist_from_z_axis(s.mesh) > 22.6:
-        print(calc_dist_from_z_axis(s.mesh))
-        s.mesh.show()
-        raise ValueError
 
-    export_shape(s, save_dir, f"torso_{str(i).zfill(3)}")
+# save_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso")
+# for i, s in enumerate(s_list):
+
+#     if calc_dist_from_z_axis(s.mesh) > 22.6:
+#         print(calc_dist_from_z_axis(s.mesh))
+#         s.mesh.show()
+#         raise ValueError
+
+#     export_shape(s, save_dir, f"torso_{str(i).zfill(3)}")

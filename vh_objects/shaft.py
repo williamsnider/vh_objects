@@ -335,7 +335,7 @@ if __name__ == "__main__":
     )
     shaft1.mesh.visual.vertex_colors = np.array([255, 255, 0, 50])
 
-    from scripts.sheets import plot_arr
+    from scripts.sheets_utilities import plot_arr
 
     plot_arr(shaft1.cp)
     shaft1.mesh.show()

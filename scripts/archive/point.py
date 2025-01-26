@@ -1,6 +1,6 @@
 # Make a point
 import numpy as np
-from scripts.sheets import plot_arr
+from scripts.sheets_utilities import plot_arr
 from objects.utilities import make_surface, make_mesh, approximate_arc, calc_hemisphere_controlpoints
 
 SHEET_THICKNESS = 3

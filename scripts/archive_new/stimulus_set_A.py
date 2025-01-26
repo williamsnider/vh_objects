@@ -4,7 +4,7 @@ from objects.shape import Shape
 from scipy.spatial.transform.rotation import Rotation
 from multiprocessing import Pool
 from tqdm import tqdm
-from scripts.stimulus_set_common import mesh_dict
+from scripts.stim_set_common import mesh_dict
 from pathlib import Path
 from scripts.archive_new.stimulus_set_params import (
     SEGMENT_LENGTH,
@@ -52,7 +52,7 @@ def construct_shapes(inputs):
     # L1.apply_transform(L1_T)
 
     # Handle single limb case
-    from scripts.stimulus_set_common import A_APPENDAGE_LENGTH
+    from scripts.stim_set_common import A_APPENDAGE_LENGTH
     if L2_name == None:
         mesh_list = [L1]
         T_list = [L1_T]

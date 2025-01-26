@@ -17,10 +17,10 @@ from objects.utilities import (
 )
 from objects.parameters import INTERFACE_PATH, INTERFACE_SHIFT
 from objects.interface import load_interface
-from scripts.sheets import construct_sheet, bend_sheet, make_base_cp
+from scripts.sheets_utilities import construct_sheet, bend_sheet, make_base_cp
 from scripts.hemi import calc_sphere_controlpoints
 import trimesh
-from scripts.sheets import plot_arr
+from scripts.sheets_utilities import plot_arr
 from scipy.spatial.transform.rotation import Rotation
 from pathlib import Path
 from scipy.optimize import minimize, basinhopping
