@@ -1,6 +1,6 @@
 Order of things to run to recreate the stimulus set:
 
-1. switch to git commit:
+1. switch to git commit: 9b62673
 2. run medial_axis.py
 3. run sheets.py
 4. run torso.py
