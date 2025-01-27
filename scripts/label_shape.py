@@ -23,6 +23,7 @@ T_label_2[2, 3] = cap.bounds[0][2] + LABEL_DEPTH / 2
 # Load all meshes
 shapes_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl")
 stl_list = list(shapes_dir.rglob("*.stl"))
+stl_list = [stl for stl in stl_list if ("texture" in str(stl)) or ("torso" in str(stl))]
 
 # Check no duplicates file stems
 stems = [stl.stem for stl in stl_list]

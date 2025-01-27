@@ -158,7 +158,7 @@ torso_cylinder_K1.mesh.apply_translation([0, 0, -torso_cylinder_K1.mesh.bounds[0
 # torso_dumbbell_K1.mesh.apply_translation([0, 0, -torso_dumbbell_K1.mesh.bounds[0, 2]])
 
 # dumbbell K0
-sphere1 = trimesh.creation.icosphere(subdivisions=5, radius=1.25 * torso_radius)
+sphere1 = trimesh.creation.icosphere(subdivisions=5, radius=torso_radius)
 sphere1.apply_translation([0, 0, -sphere1.bounds[0, 2]])  # align bottom to origin
 sphere2 = sphere1.copy()
 sphere2.apply_translation([0, 0, torso_length - 2 * torso_radius])  # align top_to_origin
@@ -217,8 +217,8 @@ color_union = [0, 0, 255, 255]
 color_difference = [255, 0, 0, 255]
 NUM_CP_PER_BASE_SHEET = 50
 NUM_CS_PER_SHEET = 11
-uu = 30
-vv = 30
+uu = 50
+vv = 50
 
 # Point
 sf_point = Shaft(
@@ -230,6 +230,8 @@ sf_point = Shaft(
     lengthtype="one_hemi",
     num_cs=NUM_CS,
     num_cp_per_cs=NUM_CP_PER_CROSS_SECTION,
+    UU=uu,
+    VV=vv,
 )
 sf_point.mesh.apply_transform(T_point_z)
 sf_point.mesh.visual.face_colors = [0, 0, 255, 255]
@@ -251,7 +253,7 @@ cp = construct_sheet(circle_cp, sheet_thickness=circle_thickness, num_cs=NUM_CS_
 cp += mean_xyz.reshape(1, 1, 3)  # Shift back to original position
 cp[:, :, 2] -= cp[:, :, 2].min()  # Maybe a better way to do this
 surf = make_surface(cp)
-sf_ridge_vert_union = make_mesh(surf, UU, VV)
+sf_ridge_vert_union = make_mesh(surf, 25, 25)
 sf_ridge_vert_union.apply_translation(sf_ridge_vert_union.centroid * -1)
 sf_ridge_vert_union.apply_transform(rotvec2T(np.pi / 2, [0, 0, 1]))
 sf_ridge_vert_union.visual.face_colors = color_union
@@ -269,16 +271,20 @@ sf_ridge_hori_difference.visual.face_colors = color_difference
 
 
 # Sphere
-sf_sphere_union = trimesh.creation.icosphere(subdivisions=5, radius=sf_radius)
+sf_sphere_union = trimesh.creation.icosphere(subdivisions=4, radius=sf_radius)
 sf_sphere_union.visual.face_colors = color_union
 
 sf_sphere_difference = sf_sphere_union.copy()
 sf_sphere_difference.visual.face_colors = color_difference
 
 
+sf_ridge_vert_difference.apply_translation([0, 0, -0.25])  ## Shift up slightly to improve fusion
+sf_sphere_difference.apply_translation([0, 0, -0.25])  ## Shift down slightly to improve fusion
+print("Shifting sf_ridge_vert_difference up by 0.25")
+
 # Size meshes
 
-size_ico = trimesh.creation.icosphere(subdivisions=5, radius=torso_radius * 1.5)
+size_ico = trimesh.creation.icosphere(subdivisions=5, radius=torso_radius * 1.25)
 box_edge = 2.0 * torso_radius
 # size_cube = load_subdivided_box([box_edge, box_edge, box_edge], 10)
 size_cube = trimesh.creation.box([box_edge, box_edge, box_edge])

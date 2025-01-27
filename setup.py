@@ -10,6 +10,6 @@ setup(
         "pyrender @ git+https://github.com/williamsnider/pyrender-fork.git",
         "numpngw @ git+https://github.com/WarrenWeckesser/numpngw.git",
         "opencv-python",
-        "manifold3d==2.2.2",
+        "manifold3d==2.3.0",
     ],
 )

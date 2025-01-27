@@ -133,6 +133,8 @@ class Shaft:
         truncate_hemi1=False,
         base_cs=None,
         base_cs_ellipse_factors=[1, 1],
+        UU=100,
+        VV=100,
     ):
         self.length = length
         self.r1 = r1
@@ -144,6 +146,8 @@ class Shaft:
         self.num_cp_per_cs = num_cp_per_cs
         self.truncacte_hemi1 = truncate_hemi1
         self.base_cs_ellipse_factors = base_cs_ellipse_factors
+        self.UU = UU
+        self.VV = VV
 
         success = self.calc_optimal_spacing()
         if success == False:
@@ -266,7 +270,7 @@ class Shaft:
             cp[i] = T_cs[:, :3]
 
         surf = make_surface(cp)
-        mesh = make_mesh(surf, 100, 100)
+        mesh = make_mesh(surf, self.UU, self.VV)
 
         return mesh, cp
 

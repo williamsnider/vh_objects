@@ -127,24 +127,28 @@ def sort_points_circle(points):
     return points[sorted_indices]
 
 
-def create_entity_tube(entity_verts, radius):
+def create_entity_tube(sub_verts, radius):
 
-    sorted_points = sort_points_circle(entity_verts)
-    sorted_points = np.vstack([sorted_points, sorted_points[0]])  # Close loop
+    # nodes = entity.nodes
+
+    sorted_points = sub_verts
+    # sorted_points = sort_points_circle(entity_verts)
+    # sorted_points = np.vstack([sorted_points, sorted_points[0]])  # Close loop
 
     from vh_objects.backbone import Backbone
-
-    b = Backbone(controlpoints=sorted_points, reparameterize=True)
 
     # # Plot in 2D
     # import matplotlib.pyplot as plt
 
     # fig, ax = plt.subplots()
-    # t = np.linspace(0, 1, 100)
-    # p = b.r(t)
-    # ax.plot(p[:, 0], p[:, 1], "o-")
+    # # t = np.linspace(0, 1, 100)
+    # # p = b.r(t)
+    # # ax.plot(p[:, 0], p[:, 1], "o-")
+    # ax.plot(sorted_points[:, 0], sorted_points[:, 1], "o-")
     # ax.set_aspect("equal")
     # plt.show()
+
+    b = Backbone(controlpoints=sorted_points, reparameterize=True)
 
     from vh_objects.cross_section import CrossSection
 
@@ -254,6 +258,7 @@ def apply_linear_texture_to_mesh(mesh, tube_radius, tube_spacing, operation, zmi
 
     # Slice mesh to identify sections to apply texture
     plane_normal = np.array([0, 0, -1])
+    plane_normal = plane_normal / np.linalg.norm(plane_normal)
     section_list = []
     for z in np.arange(-20, mesh.bounds[1, 2], tube_spacing):
         plane_origin = np.array([0, 0, z])
@@ -266,9 +271,10 @@ def apply_linear_texture_to_mesh(mesh, tube_radius, tube_spacing, operation, zmi
     for section in section_list:
         for i in range(len(section.entities)):
             sub_verts = section.vertices[section.entities[i].points]
+            entity = section.entities[i]
 
             # Skip small sections
-            if len(sub_verts) < 10:
+            if len(sub_verts) < 20:
                 continue
 
             # Skip sections that are solely within the exclusion region (i.e. the post)
@@ -278,7 +284,6 @@ def apply_linear_texture_to_mesh(mesh, tube_radius, tube_spacing, operation, zmi
                 or np.any(sub_verts[:, 2] < -20)
             ):
                 continue
-
             etube = create_entity_tube(sub_verts, tube_radius)
             etube_list.append(etube)
 
@@ -292,6 +297,7 @@ def apply_linear_texture_to_mesh(mesh, tube_radius, tube_spacing, operation, zmi
         agg_verts.extend((t.vertices).tolist())
 
     agg_mesh = trimesh.Trimesh(vertices=agg_verts, faces=agg_faces, process=True)
+    # agg_mesh.show()
 
     # # Apply the operation
     # if operation == "union":
@@ -370,14 +376,6 @@ if __name__ == "__main__":
         Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/G657.stl"),
         Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/torso/G746.stl"),
     ]
-    # torso_dir = Path("/home/williamsnider/Code/vh_objects/sample_shapes/stl/axial_component")
-    # fname_list = list(torso_dir.glob("*.stl"))
-    # fname_list.sort()
-    # fname_list = fname_list[:12]
-
-    # input_mesh = trimesh.load(fname_list[0])
-    # voxel_size = 1
-    # apply_voxelization_texture_to_mesh(input_mesh, voxel_size, 5, 5)
 
     for fname in fname_list:
         mesh = trimesh.load(fname)

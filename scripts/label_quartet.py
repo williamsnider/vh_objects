@@ -26,9 +26,12 @@ def apply_label(base_mesh, label_as_meshes, T, operation="difference"):
 
     label_as_meshes = [mesh.copy().apply_transform(T) for mesh in label_as_meshes]
 
-    for label_part in label_as_meshes:
-        base_mesh = trimesh.boolean.difference([base_mesh, label_part])
-        # base_mesh, _ = calc_mesh_boolean_and_edges(base_mesh, label_part, operation=operation)
+    meshes_to_combine = [base_mesh.copy()]
+    meshes_to_combine.extend(label_as_meshes)
+    base_mesh = trimesh.boolean.difference(meshes_to_combine)
+    # for label_part in label_as_meshes:
+    #     base_mesh = trimesh.boolean.difference([base_mesh, label_part])
+    #     # base_mesh, _ = calc_mesh_boolean_and_edges(base_mesh, label_part, operation=operation)
 
     return base_mesh
 
