@@ -71,6 +71,13 @@ def label_quartet(stl_path, label, label_depth, font_height):
     for T in [T1, T2, T3, T4, T5]:
         quartet = apply_label(quartet, label_as_meshes, T)
 
+    # Rotate quartet to be flat in XY plane, with up-square in +X direction
+    T = trimesh.transformations.rotation_matrix(np.pi / 2, [0, 0, 1]) @ trimesh.transformations.rotation_matrix(
+        np.pi / 2, [1, 0, 0]
+    )
+    T[2, 3] -= 60  # Shift down so quartet's xy plane aligns with origin of shapes (end of cap)
+    quartet.apply_transform(T)
+
     return quartet
 
 
@@ -94,7 +101,7 @@ if __name__ == "__main__":
 
     num_processes = 8  # You can set this to the number of CPU cores or desired parallelism level
     with ProcessPoolExecutor(max_workers=num_processes) as executor:
-        executor.map(process_quartet, range(150))
+        executor.map(process_quartet, range(175))
 
 
 # if __name__ == "__main__":
