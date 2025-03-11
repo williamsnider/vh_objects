@@ -6,10 +6,12 @@ setup(
     install_requires=[
         "splipy",
         "triangle",
-        "pyglet==1.5",
-        "pyrender @ git+https://github.com/williamsnider/pyrender-fork.git",
+        "pyglet<2",
+        # "pyrender @ git+https://github.com/williamsnider/pyrender-fork.git",
+        "pyrender",
         "numpngw @ git+https://github.com/WarrenWeckesser/numpngw.git",
         "opencv-python",
         "manifold3d==2.3.0",
+        "tqdm",
     ],
 )

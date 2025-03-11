@@ -95,6 +95,10 @@ pip install -e .
 # Received ImportError: libscip.so.9.0: cannot open shared object file: No such file or directory, so installed SCIP from source https://scipopt.org/index.php#download using cmake
 # Added location of libscip.so.9.0 to LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
+# Alternatively, try removing scip from conda environment
+conda deactivate
+conda remove -n vh_objects_venv scip
 ```
 
 
