@@ -9,6 +9,9 @@ import pyrender
 import scipy
 import cv2
 from trimesh.transformations import rotation_matrix as rotvec2T
+import multiprocessing
+from multiprocessing import Pool
+from tqdm import tqdm
 
 
 def calc_dist_from_z_axis(mesh):
@@ -87,7 +90,7 @@ def make_gif(fname_stl):
     # Save the images as a GIF
     fname_gif = Path(fname_stl.parents[1], "gifs", fname_stl.parts[-2], fname_stl.name.replace(".stl", ".gif"))
     if fname_gif.parents[0].exists() is False:
-        fname_gif.parents[0].mkdir(parents=True)
+        fname_gif.parents[0].mkdir(parents=True, exist_ok=True)
     imageio.mimsave(str(fname_gif), images, fps=10)
 
     plt.close(fig)
@@ -144,7 +147,7 @@ def make_gif_pyrender(fname_stl):
     # Save the images as a GIF
     fname_gif = Path(fname_stl.parents[1], "gifs", fname_stl.parts[-2], fname_stl.name.replace(".stl", ".gif"))
     if fname_gif.parents[0].exists() is False:
-        fname_gif.parents[0].mkdir(parents=True)
+        fname_gif.parents[0].mkdir(parents=True, exist_ok=True)
     imageio.mimsave("rotating_model_pyrender.gif", images, fps=10)
 
     # Clean up the renderer
@@ -156,8 +159,6 @@ def make_gif_pyvista(fname_stl):
 
     import pyvista as pv
     import scipy.spatial
-    import pickle
-    import trimesh.exchange
 
     tri_mesh = trimesh.load_mesh(fname_stl)
 
@@ -175,9 +176,19 @@ def make_gif_pyvista(fname_stl):
         show_edges=False,
     )
 
-    fname_gif = Path(fname_stl.parents[2], "gif", fname_stl.parts[-2], fname_stl.name.replace(".stl", ".gif"))
+    # Replace fname parts stl->gif
+    fname_parts = list(fname_stl.parts)
+    fname_gif_parts = []
+    for part in fname_parts:
+        if part.endswith(".stl"):
+            fname_gif_parts.append(part.replace(".stl", ".gif"))
+        elif part == "stl":
+            fname_gif_parts.append("gif")
+        else:
+            fname_gif_parts.append(part)
+    fname_gif = Path(*fname_gif_parts)
     if fname_gif.parents[0].exists() is False:
-        fname_gif.parents[0].mkdir(parents=True)
+        fname_gif.parents[0].mkdir(parents=True, exist_ok=True)
     plotter.open_gif(str(fname_gif), fps=FPS)
 
     # Write a frame. This triggers a render.
@@ -229,7 +240,7 @@ def combine_gif_and_image(fname_gif):
     # Save the frames as a new GIF
     fname_gif_combined = Path(fname_gif.parents[2], "gifs_combined", fname_gif.parts[-2], fname_gif.name)
     if fname_gif_combined.parents[0].exists() is False:
-        fname_gif_combined.parents[0].mkdir(parents=True)
+        fname_gif_combined.parents[0].mkdir(parents=True, exist_ok=True)
     frames[0].save(fname_gif_combined, save_all=True, append_images=frames[1:], loop=0, duration=100)
 
 
@@ -351,34 +362,37 @@ def save_mesh_as_png(fname_stl):
 
 
 # Use multiprocessing to go through list
-import multiprocessing
-from multiprocessing import Pool
-from tqdm import tqdm
 
 
 def process_file(fname_stl):
     size_check(fname_stl)
-    fname_png = save_mesh_as_png(fname_stl)
+    # fname_png = save_mesh_as_png(fname_stl)
     fname_gif = make_gif_pyvista(fname_stl)
     # # combine_gif_and_image(fname_gif)
 
 
-if __name__ == "__main__":
+def make_gifs_of_stls(stl_dir):
+    """
+    Make gifs of all stls in the list fname_stl_all.
+    """
+    fname_stl_all = list(stl_dir.rglob("*.stl"))
 
-    base_dir = Path(__file__).parents[1]
-    # base_dir = Path("/home/williamsnider/Code/vh_objects")
-    overall_dir = Path(base_dir, "sample_shapes/stl/texture")
-
-    fname_stl_all = list(overall_dir.rglob("*.stl"))
-    # fname_stl_all = [f for f in fname_stl_all if "torso" in str(f)]
-
-    # Use a multiprocessing pool
     with Pool() as pool:
         # Use tqdm to display the progress bar
         for _ in tqdm(
             pool.imap_unordered(process_file, fname_stl_all), total=len(fname_stl_all), desc="Processing STL files"
         ):
             pass
+
+
+if __name__ == "__main__":
+
+    # base_dir = Path(__file__).parents[1]
+    # overall_dir = Path(base_dir, "sample_shapes/stl/texture")
+
+    overall_dir = Path("/home/oconnorlab/Downloads/stl_rotated_correctly/stl")
+
+    make_gifs_of_stls(overall_dir)
 
     # for fname_stl in fname_stl_all:
     #     process_file(fname_stl)
